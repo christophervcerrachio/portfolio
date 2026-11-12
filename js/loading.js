@@ -17,10 +17,10 @@
 
 // (how far the load has come at each of the walk's stages: walk.js tl(), countryside.js load())
 const STEPS = [
-  ['scene load: start', 0.06], ['scene load: models', 0.3], ['scene load: world', 0.42],
-  ['scene load: meadow, trees, stones', 0.52], ['scene load: land, woods', 0.6], ['scene load: built', 0.68],
-  ['first view in', 0.74], ['shaders: start', 0.78], ['shaders: sky compiled', 0.82], ['shaders: far compiled', 0.86],
-  ['shaders: land compiled', 0.92], ['shaders: the look round drawn', 0.97], ['veil lifted', 1],
+  ['scene load: start', 0.06], ['scene load: models', 0.24], ['scene load: world', 0.34],
+  ['scene load: meadow, trees, stones', 0.42], ['scene load: land, woods', 0.48], ['scene load: built', 0.54],
+  ['programs: made', 0.76], ['first view in', 0.84], ['shaders: start', 0.9], ['shaders: land compiled', 0.94],
+  ['shaders: the look round drawn', 0.98], ['veil lifted', 1],
 ];
 const STEP = new Map(STEPS);
 // (each look's pictures: its lines for the whole screen - hardware.js STYLES)

@@ -332,9 +332,13 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // ---- the far trees as pictures (impostors): past MID m each tree is one card facing the camera, its picture drawn once
   // from the tree's own light copy, four ways round. The light copies there had been some 35 million triangles a frame,
   // most of the woods' cost (measured 8 Nov 2026 at the spawn: the woods 8-12 ms of a frame, vertex bound).
-  group.userData.bake = (renderer, lights) => {
+  group.userData.bake = (renderer, lights, fog = null) => {
     const COLS = 4, CW = 256, CH = 384, GUT = 32;   // (GUT px empty either side of each view: up to mip 4 none bleeds)
     const scene = new THREE.Scene();
+    // (the land's own haze set here too - at these few metres it changes no pixel: with it the trees are drawn by the
+    // very programs the land draws them with, made already; without, each kind's were made again here, for this
+    // picture alone, while the first frame waited)
+    scene.fog = fog;
     for (const l of lights) { const c = l.clone(); scene.add(c); if (c.isDirectionalLight) { c.position.set(-0.45, 0.6, 1).multiplyScalar(100); c.target.position.set(0, 0, 0); scene.add(c.target); } }
     const prevRT = renderer.getRenderTarget(), prevVP = new THREE.Vector4(), prevSc = new THREE.Vector4(), scOn = renderer.getScissorTest();
     renderer.getViewport(prevVP); renderer.getScissor(prevSc);

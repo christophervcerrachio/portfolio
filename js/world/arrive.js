@@ -25,7 +25,9 @@ const A = {
   queue: [], rising: [],
   sent: new Set(),                 // (pictures already on the card: their source's uuid)
   shadowMade: new Set(),           // (depth programs made: the depth material's uuid and the kind of object)
-  budget: { tex: 24e6, geo: 32e6, compiles: 6 },
+  // (a frame's share: programs begun; pictures sent - for so many ms of the frame, and no more than so many bytes;
+  // triangles let through, in bytes: they go to the card as the next frame draws them)
+  budget: { ms: 3, tex: 24e6, geo: 12e6, compiles: 6 },
   // the opening wave: what waits for the walk to be shown rises from the walker outward at this speed (m/s), the last
   // of it at most this long after the first (s)
   wave: { speed: 1400, most: 3.2 },
@@ -53,9 +55,10 @@ export function openArrivals(pos) {
 export const arrivalsOpen = () => A.open;
 
 /** The view's programs for `obj` made in the background, as the scene will draw it: a promise, resolved when the
- *  card has them. o: { camera, scene } to make them as another scene draws them (the sky's, the far land's). */
+ *  card has them. o: { camera, scene } to make them as another scene draws them (the sky's, the far land's);
+ *  target: the picture they are drawn into, where it is not the scene's own (the sky's panorama). */
 export function compileView(obj, o = {}) {
-  const r = A.renderer, rt = A.target?.(), cam = o.camera ?? A.cam?.();
+  const r = A.renderer, rt = o.target ?? A.target?.(), cam = o.camera ?? A.cam?.();
   if (!r || !rt || !cam || !r.compileAsync) return Promise.resolve();
   const prev = r.getRenderTarget();
   r.setRenderTarget(rt);
@@ -193,6 +196,7 @@ export function pumpArrivals(pos, now = performance.now()) {
   // (nearest first; sorted again every few frames, or when the walker has moved on)
   if (++A.sorted % 8 === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
   let geo = 0, tex = 0, began = 0;
+  const t0 = performance.now();
   for (const a of A.queue) {
     if (a.cancel?.()) { a.stage = 9; a.res(); continue; }
     if (a.stage === 0) {
@@ -210,7 +214,7 @@ export function pumpArrivals(pos, now = performance.now()) {
         if (!pictureReady(t)) { if (now - (a.waitPic ??= now) < 10000) break; a.tex.shift(); continue; }
         if (A.sent.has(keyOf(t))) { a.tex.shift(); continue; }
         const b = pictureBytes(t);
-        if (tex > 0 && tex + b > A.budget.tex) break;
+        if (tex > 0 && (tex + b > A.budget.tex || performance.now() - t0 > A.budget.ms)) break;
         try { A.renderer.initTexture(t); } catch { /* (drawn as it can be, then) */ }
         A.sent.add(keyOf(t)); tex += b; a.tex.shift();
       }

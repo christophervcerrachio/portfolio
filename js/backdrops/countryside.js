@@ -648,6 +648,9 @@ export class CountrysideScene {
     }
     this._skyRange();
   }
+  /** The scene's own pictures made (its picture, the weather's map, the sky's panorama) before anything is drawn:
+   *  what its programs are made for - walk.js prime(). */
+  prepare(renderer) { this._targets(renderer); }
   _targets(renderer) {
     if (this.rt || !this.size) return;
     this.hdr = renderer.extensions.has('EXT_color_buffer_float');    // linear light with its highlights, where it can be drawn
@@ -790,7 +793,7 @@ export class CountrysideScene {
     this.meadow.userData.update(this.cam.position, inView, L.zoom);
     this.groves.userData.update?.(this.cam.position, L.zoom, this.cam, this.shadow && this.light.sun > 0.03 ? this.shadow.cam : null);
     // (the far trees' pictures, drawn once the models are in: woods.js impostors)
-    if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight)); }
+    if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight), this.land.fog); }
     this.woods?.userData.update(this.cam.position, this.cam);
     if (this._culls) for (const c of this._culls) c(this.cam.position);
     this.cityProps?.userData.update(this.cam.position);

@@ -78,7 +78,7 @@ export async function initWalk(container, opts = {}) {
   s.setFade(1);
   // (what comes in once the walk has begun - world/arrive.js: made for the scene's own picture, rising into place)
   setupArrivals({ renderer, scene: s.land, camera: () => s.cam, target: () => s.rt, shadow: () => s.shadow, still: still || noRise,
-    budget: GFX.style ? { tex: 12e6, geo: 16e6, compiles: 4 } : null });
+    budget: GFX.style ? { ms: 4, tex: 12e6, geo: 8e6, compiles: 4 } : null });
   // ---- the loading picture (index.html .walk-load, loading.js): the walk's own evening, its woods and landmarks rising
   // out of the ground as the first view's files come in. It lifts once that first view is in - the land and its
   // pictures, the woods, the sky - with its shaders made and a second of its frames run (and measured: below). The rest
@@ -102,8 +102,8 @@ export async function initWalk(container, opts = {}) {
   let settledAt = null;
   function veilCheck(now) {
     if (!veilUp) return;
-    // (the first view in: the scene built from its files, the ground's close tiles laid)
-    const settled = s.ready && groundLoaded();
+    // (the first view in: the scene built from its files, its programs made, the ground's close tiles laid)
+    const settled = primed && s.ready && groundLoaded();
     framesSince = settled ? framesSince + 1 : 0;
     if (settled && settledAt === null) tl('first view in');
     // (once the first view is in and has drawn a second, every shader made, with every texture and model it will use;
@@ -156,7 +156,27 @@ export async function initWalk(container, opts = {}) {
   // (every shader the first view will draw made before the picture lifts, in the background and for the picture it is
   // drawn into (world/arrive.js compileView): a wood of a kind not yet seen, or the gold birches, coming into view had
   // stopped the frame for a fifth of a second while the card built its program)
-  let warmed = false, warming = false;
+  let warmed = false, warming = !still, primed = still;
+  // (and before any of the first view is drawn at all: its programs made in the background - the sky's and its
+  // clouds', the far land's, the land's, the sun's depth copies', the picture's own last pass. Until v0.0.38 the first
+  // frame made them as it drew, one after another, and the page stood still for it - 12 s on a first visit with a
+  // desktop card, the longest single wait of the load. Made in the background they are made side by side, and the
+  // loading picture goes on moving. Nothing is drawn meanwhile (warming))
+  async function prime() {
+    tl('programs: start');
+    try {
+      s.prepare(renderer);
+      await Promise.all([
+        compileView(s.sky.marchScene, { camera: s.sky.ortho, scene: s.sky.marchScene, target: s.sky.rt }),
+        compileView(s.skyScene, { camera: s.cam, scene: s.skyScene }),
+        compileView(s.farScene, { camera: s.farCam ?? s.cam, scene: s.farScene }),
+        compileView(s.land), compileShadow(s.land),
+        renderer.compileAsync(stage, camera).catch(() => {}),
+      ]);
+    } catch (e) { console.warn('programs', e); }
+    tl('programs: made');
+    primed = true; warming = false;
+  }
   // (once the picture has lifted: the rest asked for, the opening's wave set off, and the cities loaded)
   function open() {
     const at = s.freeCam.on ? s.freeCam.pos : s.at;
@@ -221,6 +241,7 @@ export async function initWalk(container, opts = {}) {
   tl('scene load: start');
   const loaded = s.load(base, tl).then(() => {
     tl('scene load: built'); s.setFree(true);
+    if (!still) prime();
     // (a change of graphics in the menu loads the walk again: the walker put back where he stood, looking the way he looked)
     try {
       const kept = sessionStorage.getItem('career-pose');
