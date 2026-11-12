@@ -2,7 +2,8 @@
 // moored boats; the granite arches over the canals, some with their chain towers; the timber bridges on piles; the
 // Ioannovsky bridge into the fortress. userData.deckAt(x, z): the deck's height there for the walker, or null.
 import * as THREE from 'three';
-import { loadInTurn } from './reveal.js';
+import { loadInTurn, breathe } from './reveal.js';
+import { arrive } from './arrive.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
 
@@ -23,7 +24,7 @@ export function buildCityBridges(U, { base = '' } = {}) {
   fetch(base + DIR + 'city-bridges.json').then((r) => r.json()).then((J) => {
     decks = J.bridges.map((b) => { const dx = b.b[0] - b.a[0], dz = b.b[1] - b.a[1], L = Math.hypot(dx, dz); return { ...b, ux: dx / L, uz: dz / L, L }; });
   }).catch(() => {});
-  loadInTurn(base + DIR + 'city-bridges.glb').then((g) => {
+  loadInTurn(base + DIR + 'city-bridges.glb').then(async (g) => {
     g.scene.traverse((o) => {
       if (!o.isMesh) return;
       o.material.side = THREE.FrontSide;
@@ -38,15 +39,22 @@ export function buildCityBridges(U, { base = '' } = {}) {
     g.scene.updateMatrixWorld(true);
     const parts = [];
     g.scene.traverse((o) => { if (o.isMesh) parts.push(o); });
-    for (const o of parts) for (const m of splitByCells(o, 800)) { if (m === o) { m.matrixAutoUpdate = false; m.matrix.copy(o.matrixWorld); } group.add(m); }
+    // (cut a few thousand triangles at a time between frames; each piece then comes in and rises out of the water, the
+    // nearest first: arrive.js)
+    for (const o of parts) for (const m of await splitByCells(o, 800, breathe)) {
+      if (m === o) { m.matrixAutoUpdate = false; m.matrix.copy(o.matrixWorld); }
+      arrive(m, { parent: group, batch: 'city-bridges', wave: 2200 });
+    }
   }).catch(() => {});
   return group;
 }
 
 /** A mesh cut into pieces by where its triangles stand (cells of `cell` m, by each triangle's middle in the world),
  *  each piece with the mesh's own place, material and name, and its own bounds - so each is drawn only when it is in
- *  the view and within reach (farcull.js). The mesh must have been placed (updateMatrixWorld). */
-export function splitByCells(mesh, cell) {
+ *  the view and within reach (farcull.js). The mesh must have been placed (updateMatrixWorld). With `pause` (reveal.js
+ *  breathe), awaited every so many triangles, and the pieces come as a promise. */
+export function splitByCells(mesh, cell, pause = null) {
+  if (pause) return splitAsync(mesh, cell, pause);
   const g0 = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
   const P = g0.attributes.position, nT = P.count / 3, buckets = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   if (Object.values(g0.attributes).some((at) => at.isInterleavedBufferAttribute)) return [mesh];
@@ -70,5 +78,35 @@ export function splitByCells(mesh, cell) {
     out.push(m);
   }
   if (g0 !== mesh.geometry) g0.dispose();
+  return out;
+}
+
+// (the same, a few thousand triangles at a time, the frame given back between)
+async function splitAsync(mesh, cell, pause) {
+  const g0 = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
+  if (Object.values(g0.attributes).some((at) => at.isInterleavedBufferAttribute)) return [mesh];
+  await pause();
+  const P = g0.attributes.position, nT = P.count / 3, buckets = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < nT; t++) {
+    a.fromBufferAttribute(P, 3 * t).add(b.fromBufferAttribute(P, 3 * t + 1)).add(c.fromBufferAttribute(P, 3 * t + 2)).multiplyScalar(1 / 3).applyMatrix4(mesh.matrixWorld);
+    const k = Math.floor(a.x / cell) + ',' + Math.floor(a.z / cell);
+    let l = buckets.get(k); if (!l) buckets.set(k, (l = [])); l.push(t);
+    if ((t & 4095) === 4095) await pause();
+  }
+  const out = [];
+  for (const [k, list] of buckets) {
+    const g = new THREE.BufferGeometry();
+    for (const [name, at] of Object.entries(g0.attributes)) {
+      const n = at.itemSize, arr = new at.array.constructor(list.length * 3 * n);
+      list.forEach((t, i) => { for (let v = 0; v < 3 * n; v++) arr[i * 3 * n + v] = at.array[t * 3 * n + v]; });
+      g.setAttribute(name, new THREE.BufferAttribute(arr, n, at.normalized));
+    }
+    g.computeBoundingSphere(); g.computeBoundingBox();
+    const m = new THREE.Mesh(g, mesh.material);
+    m.name = (mesh.name || 'part') + '@' + k; m.castShadow = mesh.castShadow; m.receiveShadow = mesh.receiveShadow;
+    m.matrixAutoUpdate = false; m.matrix.copy(mesh.matrixWorld);
+    out.push(m);
+    await pause();
+  }
   return out;
 }

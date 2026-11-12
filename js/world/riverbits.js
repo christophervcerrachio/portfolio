@@ -2,6 +2,7 @@
 // from one pool to the next, each a sheet of water curving over its lip, streaked and white, with spray at its foot;
 // and the rocks of the rapids and the falls' lips, worn round, half in the water. All made here in code.
 import * as THREE from 'three';
+import { arrive } from './arrive.js';
 import { WIND_GLSL } from '../backdrops/wind-glsl.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { rockSkin } from './rockskin.js';
@@ -98,7 +99,8 @@ export function buildRiverBits(world, U, base = '', { detail = 3 } = {}) {
       inst.instanceMatrix.needsUpdate = true;
       inst.computeBoundingSphere();
       inst.name = 'rocks@' + k;
-      group.add(inst);
+      // (in when the walk is shown, out of the river's bed with the rest: arrive.js)
+      arrive(inst, { parent: group });
     }
   }
   return group;

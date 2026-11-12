@@ -9,8 +9,9 @@
 import * as THREE from 'three';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
+import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
-import { capImage } from '../texcap.js';
+import { loadPicture } from '../texcap.js';
 
 // (the deck's line: an arch from bank to bank, as the old timber bridges were built, humped over the water: the rise
 // enough to clear it in the middle, never less than a camber of 1/14 of the span, at most 7 m)
@@ -60,17 +61,6 @@ export function buildBridges(world, U, { base = '', stonesTo = Infinity } = {}) 
   const group = new THREE.Group(); group.name = 'bridges';
   const B = crossings(world);
   const dir = base + 'assets/world/bridges/';
-  const TL = new THREE.TextureLoader();
-  const tex = (f, srgb, rep = 1) => { const t = TL.load(dir + f, capImage); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = THREE.Texture.DEFAULT_ANISOTROPY; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.repeat.set(rep, rep); return t; };
-  // (texture coordinates in metres from the kit: one tile of log-weathered covers 1.6 m, timber-hewn 1.4 m)
-  // (a little darker than the photograph's sunlit grey: old timber over water, damp underneath)
-  const wood = (name, tile, depth, tint = 0xd2cabe) => receiveSun(parallax(new THREE.MeshStandardMaterial({ map: tex(name + '.jpg', true, 1 / tile), normalMap: tex(name + '_n.png', false, 1 / tile), color: tint, roughness: 0.92, metalness: 0 }), { depth, scale: tile }), U);
-  const MAT = {
-    log: wood('log-weathered', 1.6, 0.012, 0xb4ab9e),
-    planks: wood('log-weathered', 1.6, 0.01),
-    timber: wood('timber-hewn', 1.4, 0.012),
-    stone: receiveSun(new THREE.MeshStandardMaterial({ map: Object.assign(TL.load(base + 'assets/world/ground/rock-granite-2k.jpg', capImage), { wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, colorSpace: THREE.SRGBColorSpace }), color: 0xb8b2a8, roughness: 0.95, metalness: 0 }), U),
-  };
   // every part's placings: { module: [Matrix4] }
   // (bridge by bridge: each bridge's parts their own instanced meshes, so one out of view is not drawn - as one mesh
   // for all the world's bridges, every crib of every pier was drawn in every frame, 3 million triangles, and again in
@@ -113,12 +103,36 @@ export function buildBridges(world, U, { base = '', stonesTo = Infinity } = {}) 
       }
     }
   }
-  // the kit, as it comes: one instanced mesh for each part and each of its materials
+  // the kit: one instanced mesh for each part and each of its materials, bridge by bridge. A bridge comes in whole once
+  // its kit is in - deck, piers and icebreakers together - and rises out of the river in its place (arrive.js)
   const FILES = { 'deck-4.2': 'bridge-deck-4.2.glb', 'deck-2': 'bridge-deck-2.glb', crib: 'bridge-crib.glb', cap: 'bridge-cap.glb', icebreaker: 'bridge-icebreaker.glb' };
-  for (const [mod, file] of Object.entries(FILES)) {
+  const parts = decks.map(() => []);                   // (each bridge's meshes, as the files come)
+  // (its pictures and its kit asked for once the walk is shown - group.userData.load, countryside.js loadRest: the
+  // first view's files have the line to themselves)
+  let asked = false;
+  group.userData.load = () => {
+  if (asked) return;
+  asked = true;
+  // (each picture read once: the logs and the planks are the same timber, and had each read and sent their own copy)
+  const TEX = new Map();
+  const tex = (f, srgb, rep = 1) => {
+    const k = f + '|' + srgb + '|' + rep; let t = TEX.get(k);
+    if (!t) { t = loadPicture(dir + f); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = THREE.Texture.DEFAULT_ANISOTROPY; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.repeat.set(rep, rep); TEX.set(k, t); }
+    return t;
+  };
+  // (texture coordinates in metres from the kit: one tile of log-weathered covers 1.6 m, timber-hewn 1.4 m)
+  // (a little darker than the photograph's sunlit grey: old timber over water, damp underneath)
+  const wood = (name, tile, depth, tint = 0xd2cabe) => receiveSun(parallax(new THREE.MeshStandardMaterial({ map: tex(name + '.jpg', true, 1 / tile), normalMap: tex(name + '_n.png', false, 1 / tile), color: tint, roughness: 0.92, metalness: 0 }), { depth, scale: tile }), U);
+  const MAT = {
+    log: wood('log-weathered', 1.6, 0.012, 0xb4ab9e),
+    planks: wood('log-weathered', 1.6, 0.01),
+    timber: wood('timber-hewn', 1.4, 0.012),
+    stone: receiveSun(new THREE.MeshStandardMaterial({ map: Object.assign(loadPicture(base + 'assets/world/ground/rock-granite-2k.jpg'), { wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, colorSpace: THREE.SRGBColorSpace }), color: 0xb8b2a8, roughness: 0.95, metalness: 0 }), U),
+  };
+  Promise.all(Object.entries(FILES).map(([mod, file]) => {
     const per = P[mod];
-    if (!per?.length) continue;
-    gltfLoader().loadAsync(dir + file).then((g) => {
+    if (!per?.length) return null;
+    return gltfLoader().loadAsync(dir + file).then((g) => {
       g.scene.updateMatrixWorld(true);
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
@@ -134,7 +148,7 @@ export function buildBridges(world, U, { base = '', stonesTo = Infinity } = {}) 
           const bb = geo.boundingBox, sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
           block = new THREE.BoxGeometry(sz.x * 0.94, sz.y, sz.z * 0.94).translate(c.x, c.y, c.z);
         }
-        per.forEach((ms) => {
+        per.forEach((ms, k) => {
           if (!ms?.length) return;
           const make = (g, nm) => {
             const im = new THREE.InstancedMesh(g, MAT[name] ?? MAT.timber, ms.length);
@@ -142,7 +156,7 @@ export function buildBridges(world, U, { base = '', stonesTo = Infinity } = {}) 
             im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
             im.name = nm; im.castShadow = im.receiveShadow = true;
             im.matrixAutoUpdate = false;
-            group.add(im);
+            parts[k].push(im);
             return im;
           };
           const im = make(geo, 'bridge-' + mod + '-' + name);
@@ -150,7 +164,10 @@ export function buildBridges(world, U, { base = '', stonesTo = Infinity } = {}) 
         });
       });
     }).catch((e) => console.warn('bridges: ' + file, e));
-  }
+  })).then(() => {
+    parts.forEach((list, k) => { if (list.length) arrive(list, { parent: group, x: (decks[k].a[0] + decks[k].b[0]) / 2, z: (decks[k].a[1] + decks[k].b[1]) / 2 }); });
+  });
+  };
   // the walker on a bridge: the deck's height there, or null
   group.userData.deckAt = (x, z) => {
     for (const d of decks) {

@@ -17,6 +17,7 @@
 // highest ground under it, its footing run down into the lowest - or to the nearest such place, or it is left out and
 // said so (userData.left). dev\world\world_audit.py measures the result from outside, on the page's own placements.
 import * as THREE from 'three';
+import { arrive } from './arrive.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
@@ -565,7 +566,7 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       if (best) {
         const face = Math.atan2(best.x - x0, best.z - z0);          // (its sails look away from the yards)
         const it = set('mill', best.x, best.z, face, 1, { reach: 12, gap: 8, way: 8, fall: 0.6 });
-        if (it) { animate.push({ kind: 'sails', x: it.x, y: it.y, z: it.z, ry: face }); clear(it.x, it.z, 14); }
+        if (it) { animate.push({ kind: 'sails', x: it.x, y: it.y, z: it.z, ry: face, place: PLACE }); clear(it.x, it.z, 14); }
       } else left.push({ kit: 'mill', place: PLACE, x: Math.round(x0), z: Math.round(z0), why: 'no clear rise' });
     } else {
       // the church: past the last plots, where the ground is evenest; its altar to the east (the world's -x), so its
@@ -718,6 +719,9 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   // (each place's copies of a kit as their own piece, with its bounds: a village 2 km off behind the walker is not
   // sent to the card - every kit had been one piece the whole map wide, drawn from anywhere, measured 11 Nov 2026)
   const byPlace = (list) => { const by = new Map(); for (const o of list) { let l = by.get(o.place); if (!l) by.set(o.place, (l = [])); l.push(o); } return by; };
+  // (each place comes in whole when the walk is shown - its houses, barns, fences and the mill's sails together - and
+  // rises out of the ground, the nearest places first: arrive.js)
+  const atPlace = new Map(), toPlace = (place, o) => { let l = atPlace.get(place); if (!l) atPlace.set(place, (l = [])); l.push(o); };
   for (const [k, list] of Object.entries(lists)) {
     // (a kit whose model's outline is known is set down by it: the stand-in is not shown unless the model fails to come)
     const modeled = (MODELED[k] ?? []).some((f) => shapes[stem(f.file)]);
@@ -726,7 +730,7 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       l.forEach((o, i) => inst.setMatrixAt(i, placing(o)));
       inst.instanceMatrix.needsUpdate = true; inst.computeBoundingSphere(); inst.name = 'poi-' + k; inst.userData.place = place;
       if (modeled) { inst.visible = false; inst.userData.replaced = true; inst.userData.drawTo = -Infinity; }
-      group.add(inst);
+      toPlace(place, inst);
     }
   }
   const sailGeo = windmillSails();
@@ -734,20 +738,25 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     const m = new THREE.Mesh(sailGeo, MAT);
     m.position.set(a.x + Math.sin(a.ry) * 2.4, a.y + MILL.hub, a.z + Math.cos(a.ry) * 2.4); m.rotation.y = a.ry;
     m.name = 'poi-sails';
-    group.add(m); sails.push(m);
+    toPlace(a.place ?? '-', m); sails.push(m);
   }
+  for (const list of atPlace.values()) arrive(list, { parent: group });
+  // (the stand-ins of every place, before they are in: what the models that come take over - loadModels, below)
+  const standIns = (kitName) => [...atPlace.values()].flat().filter((c) => c.name === 'poi-' + kitName);
   group.userData.solid = [];
   group.userData.left = left;
   group.userData.skipped = skipped;
   group.userData.MODELED = MODELED;
   group.userData.loadModels = async (base) => {
     const turn = new THREE.Matrix4();
+    // (a model's copies of each place come in together, and rise in their place: arrive.js)
+    const byModelPlace = new Map();
     await Promise.all(Object.entries(MODELED).map(async ([kitName, files]) => {
       const list = lists[kitName];
       if (!list?.length) return;
       const got = await Promise.all(files.map((f) => gltfLoader().loadAsync(base + 'assets/world/models/' + f.file).then((g) => ({ ...f, g })).catch(() => null)));
       const ok = got.filter(Boolean);
-      const stands = group.children.filter((c) => c.name === 'poi-' + kitName);
+      const stands = standIns(kitName);
       // (not made, or it did not come: the stand-in is shown)
       if (!ok.length) { for (const st of stands) { st.visible = true; st.userData.replaced = false; st.userData.drawTo = undefined; } return; }
       // (which of the kit's files each copy takes: by its place, among the files whose outline it was set down by -
@@ -770,13 +779,14 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
             l.forEach((o, i) => inst.setMatrixAt(i, placing(o).multiply(turn.makeRotationY(f.yaw ?? 0))));
             inst.instanceMatrix.needsUpdate = true; inst.computeBoundingSphere(); inst.name = 'model-' + kitName + '-' + vi;
             inst.userData.place = place; inst.userData.file = f.file;
-            group.add(inst);
+            (byModelPlace.get(place) ?? byModelPlace.set(place, []).get(place)).push(inst);
           }
         });
       });
       // (the stand-ins of the kit away for good: replaced says so to the audits, drawTo keeps farcull.js from showing them)
       for (const st of stands) { st.visible = false; st.userData.replaced = true; st.userData.drawTo = -Infinity; }
     }));
+    for (const list of byModelPlace.values()) arrive(list, { parent: group });
   };
   group.userData.update = (cam, t) => {
     for (const m of sails) m.rotation.z = -t * 0.6;

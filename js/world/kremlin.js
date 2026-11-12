@@ -3,8 +3,9 @@
 // with its swallow-tail merlons and the wall walk, built here along the ring. Textures: ComfyUI's tiles of the Kremlin's
 // brick and white stone (detail-pass).
 import * as THREE from 'three';
+import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
-import { capImage } from '../texcap.js';
+import { loadPicture } from '../texcap.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
 import { lightCopies, standAt } from './citymarks.js';
@@ -16,7 +17,7 @@ const WALL = { h: 12.0, hRed: 17.0, thick: 4.5, merlon: { w: 2.0, h: 2.4, t: 0.7
 const RED_SQUARE = new Set(['konstantino-eleninskaya', 'nabatnaya', 'tsarskaya', 'spasskaya', 'senatskaya', 'nikolskaya', 'corner-arsenalnaya']);
 
 function tileTex(base, name, rep) {
-  const t = new THREE.TextureLoader().load(base + DIR + name, capImage);
+  const t = loadPicture(base + DIR + name);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = THREE.Texture.DEFAULT_ANISOTROPY;
   if (rep) t.repeat.set(rep, rep);
   return t;
@@ -106,6 +107,8 @@ export function planKremlin(plans, shapes, K) {
 export function buildKremlin(world, U, { base = '', light = false, K: K0 = null, shapes = {} } = {}) {
   const group = new THREE.Group(); group.name = 'kremlin';
   const solid = []; group.userData.solid = solid;
+  let asked = false, start = null;
+  group.userData.load = () => { if (asked) return; asked = true; start?.(); };
   // (light: a machine that draws the walk as an older console did reads the palaces' and cathedrals' light copies,
   // never the full models, and no stone in relief - citymarks.js lightCopies, hardware.js marks)
   Promise.all([K0 ?? fetch(base + DIR + 'kremlin.json').then((r) => r.json()), light ? lightCopies(base) : {}]).then(([K, LIGHT]) => {
@@ -127,7 +130,9 @@ export function buildKremlin(world, U, { base = '', light = false, K: K0 = null,
         WU.uRed.value[0].set(...a0); WU.uRed.value[1].set(...b0); WU.uRed.value[2].set(b0[0] + nx * O, b0[1] + nz * O); WU.uRed.value[3].set(a0[0] + nx * O, a0[1] + nz * O);
       }
     }
-    // ---- the towers
+    // ---- the towers and the buildings: asked for once the walk is shown (group.userData.load, countryside.js
+    // loadRest), so the first view's files have the line to themselves
+    const models = () => {
     for (const t of T) {
       gltfLoader().loadAsync(base + DIR + t.glb).then((g) => {
         const m = g.scene;
@@ -145,7 +150,7 @@ export function buildKremlin(world, U, { base = '', light = false, K: K0 = null,
         m.rotation.y = KP.towers.find((o) => o.t === t)?.yaw ?? Math.atan2(t.x - KP.cx, t.z - KP.cz);
         m.position.set(t.x, standAt(world, shapes[stem(t.glb)], { x: t.x, z: t.z, yaw: m.rotation.y }), t.z);
         m.name = 'kremlin-' + t.name;
-        group.add(m);
+        arrive(m, { parent: group });                    // (rises in its place when it is in: arrive.js)
       }).catch(() => {});
     }
     // ---- the buildings inside, and St Basil's on Red Square (dev\world\kremlin\inner.py, landmark-models, built in
@@ -170,9 +175,11 @@ export function buildKremlin(world, U, { base = '', light = false, K: K0 = null,
         m.position.set(b.x, standAt(world, shapes[stem(b.glb)], b), b.z);
         m.name = 'kremlin-' + b.name;
         m.updateMatrixWorld(true);
-        group.add(m);
+        arrive(m, { parent: group });
       }).catch(() => {});
     }
+    };
+    if (asked) models(); else start = models;
     // ---- the wall: from each tower to the next round the ring, a body of brick, the wall walk, merlons on both edges
     const pos = [], uv = [], idx = [], mer = [];
     const M = WALL.merlon, mGeo = merlonGeometry(M);
@@ -209,11 +216,11 @@ export function buildKremlin(world, U, { base = '', light = false, K: K0 = null,
     wg.setIndex(idx); wg.computeVertexNormals();
     const wall = new THREE.Mesh(wg, brick); wall.name = 'kremlin-wall';
     brick.side = THREE.DoubleSide;
-    group.add(wall);
     const mi = new THREE.InstancedMesh(mGeo, brick, mer.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
     mer.forEach(([x, y, z, yaw], i) => mi.setMatrixAt(i, m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(up, yaw + Math.PI / 2), new THREE.Vector3(1, 1, 1))));
     mi.instanceMatrix.needsUpdate = true; mi.name = 'kremlin-merlons';
-    group.add(mi);
+    // (the wall and its merlons together, all round the ring)
+    arrive([wall, mi], { parent: group });
   }).catch(() => {});
   return group;
 }

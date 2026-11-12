@@ -65,6 +65,7 @@ float scaleW = length(placeM[1].xyz);
 float Hm = uModelH * scaleW;                                  // this copy's height, in metres
 vSunVis = sunThrough(rootW + vec3(0.0, Hm * 0.6, 0.0));       // (the clouds' shadow is far bigger than a tree)
 float seedW = fract(sin(dot(rootW.xz, vec2(12.9898, 78.233))) * 43758.5453);
+float riseW = riseAt(rootW.xz, seedW);                        // (the opening: risen out of the ground, wind-glsl.js)
 float t = clamp((wp.y - rootW.y) / Hm, 0.0, 1.3);
 // (a tree's own wind, slower than the grass's. The grass's wind flutters at a stem's pace and quickens in a gust; a
 // trunk sways at a second or two a swing, bends well over in a gust and comes back slowly, its crown leaning, not
@@ -100,6 +101,7 @@ off += vec3(uWindDir.x, 0.1, uWindDir.y) * bough * t * t * uBough * Hm * (0.005 
   wp.xyz = baseW + rel;
 #endif
 wp.xyz += off;
+wp.y -= (1.0 - riseW) * (Hm * 1.05 + 0.6);
 vWPos = wp.xyz;
 mvPosition = viewMatrix * wp;
 gl_Position = projectionMatrix * mvPosition;

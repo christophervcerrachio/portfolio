@@ -8,7 +8,7 @@
 // tile is in.
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
-import { gate, allowed } from './reveal.js';
+import { gate, allowed, breathe } from './reveal.js';
 
 const DIR = 'assets/world/cities/';
 const MAX = 2;                            // (files being read at once, all cities and kinds together)
@@ -44,7 +44,7 @@ export function materialLibrary(url, dress) {
  * library: a promise of { name: material }; each(mesh): the caller's own flags for a mesh as it comes in;
  * changed(): called when tiles came or went (the sun's pictures gather their casters again).
  */
-export function tileStream({ base = '', city, kind, near = 1200, keep = 300, group, library = null, each = null, changed = null }) {
+export function tileStream({ base = '', city, kind, near = 1200, keep = 300, group, library = null, each = null, changed = null, standIn = null }) {
   const tiles = new Map();
   let T = 400;
   const st = { ready: false, tiles, loaded: 0, bytes: 0 };
@@ -72,22 +72,28 @@ export function tileStream({ base = '', city, kind, near = 1200, keep = 300, gro
         if (own) { o.material.dispose?.(); o.material = own; }
         o.matrixAutoUpdate = false;
         each?.(o);
-        o.geometry.computeBoundingSphere();
-        const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
-        gate(o, c.x, c.z); o.visible = false;
+        // (its bounds as the file gives them: the model loader takes them from the file's own extents, never from
+        // the triangles - a sum over every vertex of every mesh, the longest part of a tile's coming in)
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
         letGo(o.geometry);
         meshes.push(o);
       });
       g.scene.name = `${city}-${kind}-${t.key}`;
       g.scene.matrixAutoUpdate = false;
-      t.scene = g.scene; t.meshes = meshes; t.state = 2; t.shown = false;
-      group.add(g.scene);
+      // (the tile comes in whole, through the gate (reveal.js, arrive.js): its programs made in the background, its
+      // pictures and triangles sent up within a frame's budget; and it rises out of the ground - unless its plain boxes
+      // stood there already (standIn), when it takes their place where it stands)
+      const scene = g.scene;
+      scene.visible = false;
+      gate(scene, t.x, t.z, { rise: () => !standIn?.(t.key), cancel: () => !scene.parent, batch: city + '-' + kind, wave: 1800 });
+      t.scene = scene; t.meshes = meshes; t.state = 2; t.shown = false;
+      group.add(scene);
       st.loaded++; st.bytes += t.bytes;
       changed?.();
     } catch { t.state = 3; }              // (not there: not asked for again)
   }
   function drop(t) {
-    for (const o of t.meshes) { allowed(o, false); o.geometry.dispose(); }
+    for (const o of t.meshes) o.geometry.dispose();
     group.remove(t.scene);
     t.scene = null; t.meshes = null; t.state = 0; t.shown = false;
     st.loaded--; st.bytes -= t.bytes;
@@ -104,9 +110,9 @@ export function tileStream({ base = '', city, kind, near = 1200, keep = 300, gro
       else if (t.state === 1 && d > near + keep) { t.state = 0; wanted.delete(t); }
       else if (t.state === 2) {
         if (d > near + keep) { drop(t); continue; }
-        let all = true;
-        for (const o of t.meshes) { if (o.userData.gate) { o.visible = allowed(o, true); if (!o.visible) all = false; } }
-        t.shown = all;
+        if (t.scene.userData.gate) t.scene.visible = allowed(t.scene, true);
+        else t.scene.visible = true;
+        t.shown = t.scene.visible;
       }
     }
     next();
@@ -158,17 +164,34 @@ export function farBoxes({ base = '', city, group, far = Infinity, inTile, dress
       else if (o.material !== mat) { o.material.dispose?.(); o.material = mat; }
       o.matrixAutoUpdate = false;
       o.userData.noCast = true;           // (a far box throws no shadow: the sun's pictures reach a few hundred metres)
-      o.geometry.computeBoundingSphere();
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
       const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
       boxes.push({ o, key: o.name.replace(/^far[._]/, ''), x: c.x, z: c.z, r: o.geometry.boundingSphere.radius });
       o.visible = false;
-      slim(o.geometry);
+      o.userData.slimmed = false;
     });
     g.scene.name = 'far-' + city;
     group.add(g.scene);
+    // (the boxes' colours made small and their copies in the page let go, a few at a time between frames; each then
+    // comes in through the gate - the city's skyline rising out of the ground in a wave from its nearest edge:
+    // arrive.js)
+    (async () => {
+      for (const b of boxes) { slim(b.o.geometry); gate(b.o, b.x, b.z, { batch: 'far-' + city, wave: 2200 }); b.o.userData.slimmed = true; await breathe(); }
+    })();
   }).catch(() => {});
   st.update = (pos) => {
-    for (const b of boxes) b.o.visible = !inTile(b.key) && (far === Infinity || Math.hypot(b.x - pos.x, b.z - pos.z) - b.r < far);
+    for (const b of boxes) {
+      if (!b.o.userData.slimmed) { b.o.visible = false; continue; }
+      const want = !inTile(b.key) && (far === Infinity || Math.hypot(b.x - pos.x, b.z - pos.z) - b.r < far);
+      b.o.visible = b.o.userData.gate ? allowed(b.o, want) : want;
+    }
+  };
+  /** Whether the tile 'i_j''s box stands in the view now (a tile of houses coming in takes its place where it stands). */
+  const byKey = new Map();
+  st.visible = (key) => {
+    if (!byKey.size) for (const b of boxes) byKey.set(b.key, b);
+    const b = byKey.get(key);
+    return !!b && b.o.visible;
   };
   return st;
 }

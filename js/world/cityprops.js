@@ -11,6 +11,9 @@
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
 import { tileStream } from './citytiles.js';
+import { arrive } from './arrive.js';
+import { breathe } from './reveal.js';
+import { packProps } from './props-pack.js';
 import { DefaultLoadingManager as LM } from 'three';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { placeCopies } from '../backdrops/models.js';
@@ -27,6 +30,21 @@ const KINDS = { fountain: 'prop-fountain', bench: 'prop-bench', lamp: 'prop-lamp
   // dev\world\canals.py)
   railing: 'prop-railing', 'canal-gate': 'prop-canal-gate',
   'portico-1': 'prop-portico-1', 'portico-2': 'prop-portico-2', 'fence-grey': 'prop-fence-grey', 'fence-green': 'prop-fence-green' };
+
+/** A city's furniture lists, read and packed off the page's own thread (props-worker.js): a promise of packProps's
+ *  result, or null. Where no worker can be made, read and packed here. */
+function readProps(url, porticos) {
+  const abs = (u) => (u ? new URL(u, location.href).href : null);
+  return new Promise((res) => {
+    let w = null;
+    const here = () => Promise.all([fetch(url).then((r) => r.json()), porticos ? fetch(porticos).then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : {}])
+      .then(([J, P]) => res(packProps(J, P, TILE))).catch(() => res(null));
+    try { w = new Worker(new URL('./props-worker.js', import.meta.url), { type: 'module' }); } catch { here(); return; }
+    w.onmessage = (e) => { w.terminate(); if (e.data?.error) here(); else res(e.data); };
+    w.onerror = () => { w.terminate(); here(); };
+    w.postMessage({ url: abs(url), porticos: abs(porticos), tile: TILE });
+  });
+}
 
 /** The parts of a model: each mesh's geometry with its node's transform applied, and its material. */
 async function partsOf(url, U) {
@@ -184,57 +202,64 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       streams.push(tileStream({ base, city, kind: 'g', near: yardNear, group, library, changed,
         each: (o) => { if (!/hedge|gwall|coping/.test((o.material.name || '').toLowerCase())) o.userData.noCast = true; } }));
     }
-    // (the porticos, from the city's houses (city_blender.py): Moscow's mansions only)
-    const porticos = city === 'moscow' ? fetch(base + DIR + city + '-porticos.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : Promise.resolve({});
-    Promise.all([fetch(base + DIR + city + '-props.json').then((r) => r.json()), ready, porticos]).then(([J, , P]) => {
-      for (const [kind, list] of Object.entries({ ...J, portico: P.portico })) {
-        if (kind === 'about' || !Array.isArray(list)) continue;
-        // (the trees: drawn with the woods' own, their full copy near, their light copy and their card further off -
-        // world/woods.js addTrees; without the woods, as before: in full, tile by tile)
-        if (kind === 'tree') {
-          if (addTrees) addTrees(list.map((it) => ({ x: it[0], y: it[1] ?? heightAt?.(it[0], it[2]) ?? 0, z: it[2], yaw: it[3], scale: it[4], kind: it[5] })));
-          else for (const it of list) tileOf(it[0], it[2]).treeItems.push(it);
-          continue;
+    // (the lists read and sorted into tiles in a worker - props-worker.js: Moscow's alone is 12 MB - and the porticos
+    // from the city's houses (city_blender.py: Moscow's mansions only) with them)
+    const lists = readProps(base + DIR + city + '-props.json', city === 'moscow' ? base + DIR + city + '-porticos.json' : null);
+    Promise.all([lists, ready]).then(async ([R]) => {
+      if (!R) return;
+      // (the trees: drawn with the woods' own, their full copy near, their light copy and their card further off -
+      // world/woods.js addTrees, a few thousand at a time between frames; without the woods, as before: in full, tile
+      // by tile)
+      const T = R.trees, names = T.names;
+      if (addTrees) {
+        for (let s = 0, n = T.kind.length; s < n; s += 3000) {
+          const items = [];
+          for (let k = s; k < Math.min(n, s + 3000); k++) {
+            const o = k * 5, y = T.data[o + 1];
+            items.push({ x: T.data[o], y: Number.isNaN(y) ? heightAt?.(T.data[o], T.data[o + 2]) ?? 0 : y, z: T.data[o + 2], yaw: T.data[o + 3], scale: T.data[o + 4], kind: names[T.kind[k]] });
+          }
+          addTrees(items);
+          await breathe();
         }
-        // (the shops: one list, each naming its model: bakery, bootmaker, grocer; the porticos theirs, one or two
-        // storeys; the fences grey or green, by the stretch they stand in - a whole gap's fence the same)
-        const lists = kind === 'shop' ? list.reduce((m, it) => ((m[it[4]] ??= []).push(it), m), {})
-          : kind === 'portico' ? list.reduce((m, it) => ((m[it[6]] ??= []).push(it), m), {})
-          : kind === 'fence' ? list.reduce((m, it) => ((m[(Math.floor(it[0] / 12) * 7 + Math.floor(it[2] / 12) * 13) % 3 === 0 ? 'fence-green' : 'fence-grey'] ??= []).push(it), m), {})
-          : { [kind]: list };
-        for (const [k, l2] of Object.entries(lists)) place(k, l2);
+      } else {
+        for (let k = 0; k < T.kind.length; k++) {
+          const o = k * 5, y = T.data[o + 1];
+          tileOf(T.data[o], T.data[o + 2]).treeItems.push([T.data[o], Number.isNaN(y) ? null : y, T.data[o + 2], T.data[o + 3], T.data[o + 4], names[T.kind[k]]]);
+        }
       }
-      // (a tile's furniture is only listed here; its meshes are made when the walker first comes near it and let go
-      // when he has left - build and unbuild, below. Made all at once at the start, both cities' 4,700 tiles were
-      // 160,000 instanced meshes that nothing drew: 225 MB of the page's memory (measured 11 Nov 2026), and the
-      // longest single step of the load)
-      function place(kind, list) {
+      for (const { kind, data, tiles: runs } of R.kinds) {
         const parts = models_[kind];
-        if (!parts) return;
+        if (!parts) continue;
         const lite = light_[kind], reach = REACH[kind] ?? 1;
-        for (const it of list) {
-          const t = tileOf(it[0], it[2]);
-          let l = t.lists.find((e) => e.kind === kind && e.city === city);
-          if (!l) { t.lists.push((l = { kind, city, items: [] })); if (reach < 1 || lite) t.lesser = true; }
-          l.items.push(it);
+        // (a tile's furniture is only listed here - its part of the block; its meshes are made when the walker first
+        // comes near it and let go when he has left: build and unbuild, below. Made all at once at the start, both
+        // cities' 4,700 tiles were 160,000 instanced meshes that nothing drew: 225 MB of the page's memory)
+        for (let r = 0; r < runs.length; r += 4) {
+          const t = tileOf((runs[r] + 0.5) * TILE, (runs[r + 1] + 0.5) * TILE);
+          t.lists.push({ kind, city, data: data.subarray(runs[r + 2] * 6, (runs[r + 2] + runs[r + 3]) * 6) });
+          if (reach < 1 || lite) t.lesser = true;
         }
         if (!sampled.has(kind)) {
           sampled.add(kind);
           for (const part of [...parts, ...(lite ?? [])]) { const m = new THREE.InstancedMesh(part.geo, part.mat, 1); m.frustumCulled = false; m.userData.noCast = true; samples.add(m); }
         }
+        await breathe();
       }
     }).catch(() => {});
   }
   /** A tile's furniture made: one instanced mesh for each part of each model that stands in it (and of its light copy). */
   function build(t) {
-    for (const { kind, city, items } of t.lists) {
-      const parts = models_[kind], lite = light_[kind];
+    for (const { kind, city, data } of t.lists) {
+      const parts = models_[kind], lite = light_[kind], count = data.length / 6;
       for (const [part, lod] of [...parts.map((p) => [p, lite ? 0 : undefined]), ...(lite ?? []).map((p) => [p, 1])]) {
-        const mesh = new THREE.InstancedMesh(part.geo, part.mat, items.length);
-        // (a y of null: on the ground where it stands - the estate's, laid out on its plan without heights)
-        // (a fence piece stretched along its length to its stretch, a portico to its bays and storeys: [4] along, [5] up)
-        items.forEach((it, n) => { q.setFromAxisAngle(up, it[3] ?? 0); sc.set(typeof it[4] === 'number' ? it[4] : 1, typeof it[5] === 'number' ? it[5] : 1, 1);
-          mesh.setMatrixAt(n, mtx.compose(p.set(it[0], it[1] ?? heightAt?.(it[0], it[2]) ?? 0, it[2]), q, sc)); });
+        const mesh = new THREE.InstancedMesh(part.geo, part.mat, count);
+        // (a y of none: on the ground where it stands - the estate's, laid out on its plan without heights)
+        // (a fence piece stretched along its length to its stretch, a portico to its bays and storeys: along, up)
+        for (let n = 0; n < count; n++) {
+          const o = n * 6, y = data[o + 1];
+          q.setFromAxisAngle(up, data[o + 3]); sc.set(data[o + 4], data[o + 5], 1);
+          mesh.setMatrixAt(n, mtx.compose(p.set(data[o], Number.isNaN(y) ? heightAt?.(data[o], data[o + 2]) ?? 0 : y, data[o + 2]), q, sc));
+        }
         mesh.instanceMatrix.needsUpdate = true;
         mesh.computeBoundingSphere();
         mesh.name = city + '.' + kind;
@@ -265,7 +290,8 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       const want = d < near;
       if (want && !t.built) { todo.push([d, t]); continue; }
       if (!want && t.built && d > near + TILE) unbuild(t);
-      if (want && !t.g.parent) group.add(t.g);
+      if (t.arriving) { /* (its arrival adds it) */ }
+      else if (want && !t.g.parent) group.add(t.g);
       else if (!want && t.g.parent) group.remove(t.g);
       // (the small things of a tile in view, each to its own reach: REACH)
       // (and of a model with a light copy, the full one in the tiles close by, the light one beyond)
@@ -293,7 +319,12 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
           const r = m.userData.reach, l = m.userData.lod;
           if (r !== undefined) m.visible = (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full));
         }
-        if (!t.g.parent) group.add(t.g);
+        // (the tile's furniture comes in together and rises out of the ground in its place: arrive.js. While it comes in
+        // the tile is the arrival's, not the frame's to add or take away)
+        if (!t.g.parent && !t.arriving) {
+          t.arriving = true;
+          arrive(t.g, { parent: group, x: t.c[0], z: t.c[1], batch: 'props', wave: 1500, cancel: () => !t.built }).then(() => { t.arriving = false; });
+        }
       }
     }
   };

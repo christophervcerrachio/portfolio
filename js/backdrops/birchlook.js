@@ -7,6 +7,7 @@
 // trunk, black marks (the model's own, and rough bands), the dark, fissured bark at the foot of the trunk, with relief
 // that catches the light. Its size is real: each ring of the trunk knows its radius.
 import * as THREE from 'three';
+import { loadPictureAsync } from '../texcap.js';
 
 let leafTex = null;
 /** The birch leaf, drawn once: stalk at the bottom centre, tip at the top centre; alpha outside it. */
@@ -202,9 +203,9 @@ export const speciesOf = (name) => (/^spruce/.test(name) ? 'spruce' : /^pine/.te
 const spTex = {};
 /** Loads the woods' bark tiles and leaf pictures (assets/countryside/species/); what is missing is drawn as a birch's. */
 export async function loadSpecies(base) {
-  const L = new THREE.TextureLoader(), get = async (f, alpha) => {
+  const get = async (f, alpha) => {
     try {
-      const t = await L.loadAsync(base + 'assets/countryside/species/' + f);
+      const t = await loadPictureAsync(base + 'assets/countryside/species/' + f, { cap: false });
       t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
       if (!alpha) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
       return t;
@@ -223,7 +224,7 @@ export const speciesTex = (sp) => spTex[sp] ?? {};
 export const BARK = { uBarkTex: { value: null }, uBarkTile: { value: new THREE.Vector2(0.2309, 0.5961) }, uBarkOn: { value: 0 } };
 export async function loadBark(base) {
   try {
-    const t = await new THREE.TextureLoader().loadAsync(base + 'assets/countryside/bark.webp');
+    const t = await loadPictureAsync(base + 'assets/countryside/bark.webp', { cap: false });
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
     BARK.uBarkTex.value = t; BARK.uBarkOn.value = 1;
   } catch { /* (not there: the bark as drawn in code) */ }

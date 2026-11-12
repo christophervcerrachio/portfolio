@@ -15,7 +15,7 @@ import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
 import { makeWeather } from './weather.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
 import { loadBark, loadSpecies } from './birchlook.js';
-import { loadWorld, buildLand } from '../world/terrain.js';
+import { loadWorld, buildLand, preloadGround } from '../world/terrain.js';
 import { buildPaths } from '../world/paths.js';
 import { buildWayStones } from '../world/waystones.js';
 import { buildWayRibbons } from '../world/wayribbons.js';
@@ -24,7 +24,7 @@ import { buildCityMarks, planMarks } from '../world/citymarks.js';
 import { makePlans, loadPlanShapes } from '../world/plans.js';
 import { farCull } from '../world/farcull.js';
 import { buildCityBlocks } from '../world/cityblocks.js';
-import { pump as revealPump } from '../world/reveal.js';
+import { pumpArrivals } from '../world/arrive.js';
 import { buildCityBridges } from '../world/citybridges.js';
 import { buildBridges } from '../world/bridges.js';
 import { hillWays, setHillLines } from './paths.js';
@@ -372,19 +372,23 @@ export class CountrysideScene {
     this.ground = ground;
     // the workflow's models (any not there yet are simply left out)
     const dir = base + 'assets/countryside/models/', models = {};
-    await Promise.all([
+    // (everything the first view needs asked for at once - the trees' models, the world's pictures and lists, the
+    // ground's close tiles: they had come one set after another, the world's 20 MB only once the trees' 22 MB were in)
+    const modelsIn = Promise.all([
       ...MODELS.map(async ([name, opt]) => { const m = await loadModel(dir, name, opt === 'far' ? { near: false } : {}); if (m) models[name] = m; }),
       loadBark(base), loadSpecies(base),
-    ]);
-    this.models = models; tl('scene load: models');
-    this.sky = new Sky(this.U, { tier, eye: EYE });
-    this.skyScene.add(this.sky.mesh);
+    ]).then(() => tl('scene load: models'));
     // the world beyond the island, one land from Moscow to Petersburg, the spa region to Yasnaya Polyana
     // (world/terrain.js, from dev\world\build_world.py): loaded first, so the grass grows over all of it
     const MARKS = { spb: 'spb.json', estate: 'estate-landmarks.json', kmv: 'kmv-landmarks.json', 'moscow-churches': 'moscow-churches.json' };
     const lm = (f) => fetch(base + 'assets/world/landmarks/' + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    const [world, shapes, kremlinList, ...markLists] = await Promise.all([loadWorld(base, { island: ground.heightAt }), loadPlanShapes(base), lm('kremlin.json'), ...Object.values(MARKS).map(lm)]);
-    tl('scene load: world');
+    const worldIn = Promise.all([loadWorld(base, { island: ground.heightAt }), loadPlanShapes(base), lm('kremlin.json'), ...Object.values(MARKS).map(lm)])
+      .then((r) => { tl('scene load: world'); return r; });
+    preloadGround(base);
+    const [, [world, shapes, kremlinList, ...markLists]] = await Promise.all([modelsIn, worldIn]);
+    this.models = models;
+    this.sky = new Sky(this.U, { tier, eye: EYE });
+    this.skyScene.add(this.sky.mesh);
     // the true outline of everything that stands on the land (world/plans.js): the landmarks' here, from their lists,
     // before the woods plant a tree or a village is laid out; the country places' as they are set down (pois.js). The
     // walker is kept out of these outlines, the woods a crown's reach off them
@@ -479,7 +483,8 @@ export class CountrysideScene {
       const countryDeck = this.bridges.userData.deckAt;
       this.bridges.userData.deckAt = (x, z) => countryDeck(x, z) ?? this.cityBridges?.userData.deckAt(x, z);
     }
-    this.pois.userData.loadModels(base);                    // (the modelled buildings, as they are made)
+    // (the modelled buildings, the Kremlin's and the cities' landmarks, the bridges' kit: asked for once the walk is
+    // shown - loadRest)
     this.solid = [...(this.solid ?? []), ...this.pois.userData.solid];
     this.farScene = new THREE.Scene();
     this.farScene.add(this.landRings.far);
@@ -497,6 +502,16 @@ export class CountrysideScene {
     this.quad.visible = true;
     this.ready = true;
     this._window();
+  }
+
+  /** What the first view does not need, asked for once the walk is shown (walk.js): the country places' models, the
+   *  Kremlin's towers and buildings, the cities' and the estate's and the spa towns' landmarks, the bridges' kit.
+   *  Each piece rises in its place as it comes in (world/arrive.js). */
+  loadRest() {
+    if (this._rest || !this.ready) return;
+    this._rest = true;
+    this.pois?.userData.loadModels?.(this.assets);
+    for (const g of [this.bridges, this.kremlin, this.spbMarks, this.estateMarks, this.kmvMarks, this.mskMarks]) g?.userData.load?.();
   }
 
   /** The cities' houses, bridges and furniture (see load): made now, out of the scene; addLater() puts them in. */
@@ -633,6 +648,9 @@ export class CountrysideScene {
     }
     this._skyRange();
   }
+  /** The scene's own pictures made (its picture, the weather's map, the sky's panorama) before anything is drawn:
+   *  what its programs are made for - walk.js prime(). */
+  prepare(renderer) { this._targets(renderer); }
   _targets(renderer) {
     if (this.rt || !this.size) return;
     this.hdr = renderer.extensions.has('EXT_color_buffer_float');    // linear light with its highlights, where it can be drawn
@@ -775,13 +793,14 @@ export class CountrysideScene {
     this.meadow.userData.update(this.cam.position, inView, L.zoom);
     this.groves.userData.update?.(this.cam.position, L.zoom, this.cam, this.shadow && this.light.sun > 0.03 ? this.shadow.cam : null);
     // (the far trees' pictures, drawn once the models are in: woods.js impostors)
-    if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight)); }
+    if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight), this.land.fog); }
     this.woods?.userData.update(this.cam.position, this.cam);
     if (this._culls) for (const c of this._culls) c(this.cam.position);
     this.cityProps?.userData.update(this.cam.position);
     this.cityBlocks?.userData.update?.(this.cam.position);
     this.chimneySmoke?.userData.update(this.cam.position);
-    revealPump(this.cam.position);                     // (the cities' pieces shown a few MB a frame: world/reveal.js)
+    // (what has come in since the last frame let in by turns, and what is rising raised: world/arrive.js)
+    pumpArrivals(this.cam.position);
     this.pois?.userData.update(this.cam.position, this.t ?? 0);
     this.sky.aim(this.cam);
     // (nothing to follow the camera now: the drizzle planes were the only thing that needed re-placing every frame)

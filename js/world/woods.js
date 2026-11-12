@@ -86,7 +86,7 @@ function crownedFar(parts, grow) {
 // (an impostor: a card standing up at the tree's root, turned to the camera about the vertical, its picture one of four
 // views chosen by the tree's place; darker when the camera looks toward the sun, its lit side away)
 const IMPOSTOR_VERT = /* glsl */`
-uniform vec2 uSize; uniform float uBase; uniform vec3 uSunDir; uniform float uCols; uniform float uGut;
+uniform vec2 uSize; uniform float uBase; uniform vec3 uSunDir; uniform float uCols; uniform float uGut; uniform float uTime; uniform vec4 uRise;
 varying vec2 vUv; varying float vShade;
 void main() {
   vec3 root = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -96,6 +96,11 @@ void main() {
   float seed = fract(sin(dot(root.xz, vec2(12.9898, 78.233))) * 43758.5453);
   float view = floor(seed * uCols);
   vec3 p = root + right * (position.x * uSize.x * sc) + vec3(0.0, (position.y * uSize.y + uBase) * sc, 0.0);
+  // (the opening: risen out of the ground with the trees drawn in full - wind-glsl.js riseAt, the same sum)
+  if (uRise.w > 0.0) {
+    float r = clamp(((uTime - uRise.z) * uRise.w - length(root.xz - uRise.xy) + seed * 30.0) / (uRise.w * 1.25), 0.0, 1.0);
+    p.y -= pow(1.0 - r, 3.2) * (uSize.y * sc * 1.05 + 0.6);
+  }
   // (each view drawn inside its column with an empty margin either side: uGut, a share of the column)
   vUv = vec2((view + uGut + (position.x + 0.5) * (1.0 - 2.0 * uGut)) / uCols, position.y);
   vec3 sunH = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
@@ -198,7 +203,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   const extra = new Map();                             // 'ti,tj' -> [tree]
   group.userData.addTrees = (items) => {
     const M4 = new THREE.Matrix4(), P3 = new THREE.Vector3(), Q4 = new THREE.Quaternion(), S3 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
-    let n = 0;
+    let n = 0, near = false;
     for (const it of items) {
       const kind = models[it.kind] ? it.kind : null;
       if (!kind || !kinds.includes(kind)) continue;
@@ -208,8 +213,11 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
       const key = Math.floor(tree.x / TILE) + ',' + Math.floor(tree.z / TILE);
       let l = extra.get(key); if (!l) extra.set(key, (l = []));
       l.push(tree); n++;
+      if (last && Math.hypot(tree.x - last.x, tree.z - last.z) < FAR + TILE) near = true;
     }
-    last = null;                                        // (the lists made again at the next update)
+    // (the lists made again at the next update - only if any of them stands within the trees' reach of the walker:
+    // a city's trees come in a few thousand at a time, kilometres off, and each refill is the whole wood round him)
+    if (near || !last) last = null;
     return n;
   };
   const sets = {}, TONES = { '': [1, 1, 1], gold: [1.75, 1.1, 0.18] };
@@ -324,9 +332,13 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // ---- the far trees as pictures (impostors): past MID m each tree is one card facing the camera, its picture drawn once
   // from the tree's own light copy, four ways round. The light copies there had been some 35 million triangles a frame,
   // most of the woods' cost (measured 8 Nov 2026 at the spawn: the woods 8-12 ms of a frame, vertex bound).
-  group.userData.bake = (renderer, lights) => {
+  group.userData.bake = (renderer, lights, fog = null) => {
     const COLS = 4, CW = 256, CH = 384, GUT = 32;   // (GUT px empty either side of each view: up to mip 4 none bleeds)
     const scene = new THREE.Scene();
+    // (the land's own haze set here too - at these few metres it changes no pixel: with it the trees are drawn by the
+    // very programs the land draws them with, made already; without, each kind's were made again here, for this
+    // picture alone, while the first frame waited)
+    scene.fog = fog;
     for (const l of lights) { const c = l.clone(); scene.add(c); if (c.isDirectionalLight) { c.position.set(-0.45, 0.6, 1).multiplyScalar(100); c.target.position.set(0, 0, 0); scene.add(c.target); } }
     const prevRT = renderer.getRenderTarget(), prevVP = new THREE.Vector4(), prevSc = new THREE.Vector4(), scOn = renderer.getScissorTest();
     renderer.getViewport(prevVP); renderer.getScissor(prevSc);
@@ -359,7 +371,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
       renderer.setScissorTest(false);
       const tex = rt.texture;
       const mat = new THREE.ShaderMaterial({
-        uniforms: { uTex: { value: tex }, uSize: { value: new THREE.Vector2(hw * 2, h1 - h0) }, uBase: { value: h0 }, uSunDir: U.uSunDir, uCols: { value: COLS },
+        uniforms: { uTex: { value: tex }, uSize: { value: new THREE.Vector2(hw * 2, h1 - h0) }, uBase: { value: h0 }, uSunDir: U.uSunDir, uCols: { value: COLS }, uTime: U.uTime, uRise: U.uRise,
           uGut: { value: GUT / CW }, uMaxLod: { value: Math.log2(GUT) - 1 } },
         vertexShader: IMPOSTOR_VERT, fragmentShader: IMPOSTOR_FRAG, side: THREE.DoubleSide,
       });

@@ -7,6 +7,7 @@
 // own walls placed it.
 import * as THREE from 'three';
 import { interiors } from './interiors.js';
+import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 
@@ -366,15 +367,23 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       if (want && T.state === 0) {
         T.state = 1;
         fetch(base + DIR + T.city + '-relief/' + T.key + '.json').then((r) => r.json()).then((walls) => {
-          T.g = build(T, walls); hashWalls(T, walls); T.state = 2;
+          T.g = build(T, walls); hashWalls(T, walls); T.state = 2; T.fresh = true;
         }).catch(() => { T.state = 3; });
       }
       if (T.state === 2) {
-        if (want && !T.g.parent) group.add(T.g);
-        else if (!want && T.g.parent) group.remove(T.g);
+        // (a tile's mouldings come in together and settle onto their fronts - a short rise, a metre: arrive.js; while
+        // it comes in the tile is the arrival's to add)
+        if (want && !T.g.parent && T.fresh) {
+          T.fresh = false; T.arriving = true;
+          const g = T.g;
+          arrive(g, { parent: group, x: T.c[0], z: T.c[1], depth: 1.2, dur: 0.7, cancel: () => T.g !== g }).then(() => { if (T.g === g) T.arriving = false; });
+        } else if (!T.arriving) {
+          if (want && !T.g.parent) group.add(T.g);
+          else if (!want && T.g.parent) group.remove(T.g);
+        }
         // (a tile left well behind: its relief let go - built again from its list if the walker comes back; kept, the
         // relief of every street ever walked stayed in memory)
-        if (d > near + 400) { T.g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.isMesh) o.geometry.dispose(); }); T.g = null; unhashWalls(T); T.state = 0; continue; }
+        if (d > near + 400) { T.g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.isMesh) o.geometry.dispose(); }); T.g.removeFromParent(); T.g = null; T.arriving = false; unhashWalls(T); T.state = 0; continue; }
         if (want) for (const c of T.g.userData.cells) c.m.visible = Math.max(Math.abs(c.x - pos.x), Math.abs(c.z - pos.z)) < SHOW;
       }
     }

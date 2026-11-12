@@ -853,6 +853,9 @@ export const groundLoaded = () => groundU.uGOn.value > 0.5;
 const groundU = { uGT: { value: null }, uGOn: { value: 0 }, uGM: { value: GROUND.map((g) => g[1]) }, uGMean: { value: GROUND.map(() => new THREE.Vector3(0.5, 0.5, 0.5)) }, uGOk: { value: GROUND.map(() => 0) },
   // (each ground's depth for its parallax, m: grass and soil shallow, pebbles and rock deeper)
   uGDepth: { value: [0.025, 0.03, 0.04, 0.05, 0.07, 0.035, 0.04, 0.05] } };
+// (asked for once, as early as the walk can: countryside.js starts it with the world's pictures)
+let groundAsked = null;
+export const preloadGround = (base = '') => (groundAsked ??= loadGround(base));
 async function loadGround(base) {
   try {
     const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S;
@@ -883,7 +886,7 @@ export function buildLand(world, U, opts = {}) {
   const n = opts.n ?? CLIP.n, s0 = CLIP.s0, more = Math.round(Math.log2(CLIP.n / n));
   const levels = CLIP.levels + more, nearLevels = CLIP.nearLevels + more, waterTo = 9 + more;
   const CANOPY_DEF = opts.canopyAt ? `#define CANOPY_AT ${opts.canopyAt.toFixed(1)}\n` : '';
-  loadGround(opts.base ?? '');                              // (the ground tiles, once fetched: up close only)
+  preloadGround(opts.base ?? '');                           // (the ground tiles, once fetched: up close only)
   const geo = ringGeometry(n);
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
   const looks = {
