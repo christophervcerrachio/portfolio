@@ -17,7 +17,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState } from './world/arrive.js';
+import { setupArrivals, openArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
@@ -78,7 +78,7 @@ export async function initWalk(container, opts = {}) {
   s.setFade(1);
   // (what comes in once the walk has begun - world/arrive.js: made for the scene's own picture, rising into place)
   setupArrivals({ renderer, scene: s.land, camera: () => s.cam, target: () => s.rt, shadow: () => s.shadow, still: still || noRise,
-    budget: GFX.style ? { ms: 4, tex: 12e6, geo: 8e6, compiles: 4 } : null });
+    budget: GFX.style ? { ms: 4, tex: 8e6, geo: 5e6, compiles: 2 } : null });
   // ---- the loading picture (index.html .walk-load, loading.js): the walk's own evening, its woods and landmarks rising
   // out of the ground as the first view's files come in. It lifts once that first view is in - the land and its
   // pictures, the woods, the sky - with its shaders made and a second of its frames run (and measured: below). The rest
@@ -514,10 +514,18 @@ export async function initWalk(container, opts = {}) {
 
   // ---- the clock and the frames
   let clock = frozenT ?? 0, last = null, live = !still;
+  // (the frames that took long, for a look at what they carried - __walk.heavy: when (ms since the page began), the
+  // whole frame, the scene's update, its own pictures (sky, sun, the land), the show pass, and what came in: arrive.js)
+  const HEAVY = [];
   function renderAt(t) {
+    const a = performance.now();
     s.update(t);
+    const b = performance.now();
     s.prerender(renderer);
+    const c = performance.now();
     renderer.render(stage, camera);
+    const d = performance.now();
+    if (d - a > 24 && s.ready && HEAVY.length < 80) HEAVY.push({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1), pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1), came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
   }
   function tick(now) {
     requestAnimationFrame(tick);
@@ -659,7 +667,7 @@ export async function initWalk(container, opts = {}) {
     // (for tests: everything asked for is in, in its place and still - the cities loaded, no file being read, nothing
     // waiting to come in or rising)
     get allIn() { return s.ready && !veilUp && laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0; },
-    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); } };
+    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; } };
   window.__walk = api;
   window.__walkReady = true;
   return api;

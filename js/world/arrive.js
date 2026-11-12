@@ -25,9 +25,14 @@ const A = {
   queue: [], rising: [],
   sent: new Set(),                 // (pictures already on the card: their source's uuid)
   shadowMade: new Set(),           // (depth programs made: the depth material's uuid and the kind of object)
-  // (a frame's share: programs begun; pictures sent - for so many ms of the frame, and no more than so many bytes;
-  // triangles let through, in bytes: they go to the card as the next frame draws them)
-  budget: { ms: 3, tex: 24e6, geo: 12e6, compiles: 6 },
+  // (a frame's share at sixty frames a second - less of it a frame on a faster screen, more on a slower, so the same
+  // comes in each second whatever the screen: programs begun; pictures sent - for so many ms of the frame, and so
+  // many bytes; triangles let through, in bytes: they go to the card as the next frame draws them. The bytes are an
+  // allowance that fills frame by frame and is drawn on: a picture or a model larger than a frame's share still goes,
+  // whole, and the frames after it send nothing until its bytes are paid for - so a large one is followed by frames
+  // with time to spare, not by another)
+  budget: { ms: 3, tex: 12e6, geo: 6e6, compiles: 3 },
+  last: 0, texAllow: 0, geoAllow: 0,
   // the opening wave: what waits for the walk to be shown rises from the walker outward at this speed (m/s), the last
   // of it at most this long after the first (s)
   wave: { speed: 1400, most: 3.2 },
@@ -189,18 +194,29 @@ export function arrivalsState() {
   return { open: A.open, waiting: A.queue.length, rising: A.rising.length, steps, held };
 }
 
+/** What the last frame's turn let in, for the walk's own record of its heavy frames (walk.js `heavy`): ms spent here,
+ *  programs begun, pictures sent (how many, bytes, ms), things shown and their triangles' bytes. */
+export const lastPump = { ms: 0, began: 0, tex: 0, texBytes: 0, texMs: 0, shown: 0, geo: 0, big: '' };
+
 /** Once a frame, before the scene's places are worked out: the waiting let in by turns, the rising raised. */
 export function pumpArrivals(pos, now = performance.now()) {
   raise(now);
+  lastPump.ms = lastPump.began = lastPump.tex = lastPump.texBytes = lastPump.texMs = lastPump.shown = lastPump.geo = 0; lastPump.big = '';
+  // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's, one of 30 a second 2)
+  const k = Math.min(2.5, Math.max(0.3, (A.last ? now - A.last : 16.7) / 16.7));
+  A.last = now;
   if (!A.open || !A.queue.length || !A.renderer) return;
   // (nearest first; sorted again every few frames, or when the walker has moved on)
   if (++A.sorted % 8 === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
   let geo = 0, tex = 0, began = 0;
-  const t0 = performance.now();
+  const t0 = performance.now(), B = A.budget;
+  A.texAllow = Math.min(B.tex * 2, A.texAllow + B.tex * k); A.geoAllow = Math.min(B.geo * 2, A.geoAllow + B.geo * k);
   for (const a of A.queue) {
     if (a.cancel?.()) { a.stage = 9; a.res(); continue; }
     if (a.stage === 0) {
-      if (began >= A.budget.compiles) continue;
+      // (a program's making is begun here and goes on in the background, but the beginning is the page's own work -
+      // each material's shader written out: no more begun once this frame's time is spent)
+      if (began >= Math.max(1, Math.round(B.compiles * k)) || (began > 0 && performance.now() - t0 > B.ms)) continue;
       began++; a.stage = 1;
       Promise.all(a.list.flatMap((o) => [compileView(o), compileShadow(o)])).then(() => { a.stage = 2; }, () => { a.stage = 2; });
       continue;
@@ -214,21 +230,28 @@ export function pumpArrivals(pos, now = performance.now()) {
         if (!pictureReady(t)) { if (now - (a.waitPic ??= now) < 10000) break; a.tex.shift(); continue; }
         if (A.sent.has(keyOf(t))) { a.tex.shift(); continue; }
         const b = pictureBytes(t);
-        if (tex > 0 && (tex + b > A.budget.tex || performance.now() - t0 > A.budget.ms)) break;
+        if (A.texAllow <= 0 || (tex > 0 && performance.now() - t0 > B.ms)) break;
+        const u0 = performance.now();
         try { A.renderer.initTexture(t); } catch { /* (drawn as it can be, then) */ }
-        A.sent.add(keyOf(t)); tex += b; a.tex.shift();
+        const du = performance.now() - u0;
+        A.sent.add(keyOf(t)); tex += b; A.texAllow -= b; a.tex.shift();
+        lastPump.tex++; lastPump.texMs += du;
+        if (du > 8) lastPump.big += `${t.image?.width}x${t.image?.height} ${t.image?.constructor?.name ?? ''} ${du.toFixed(0)}ms; `;
       }
       if (a.tex.length) continue;
       a.stage = 3;
     }
     if (a.stage === 3) {
       if (a.bytes < 0) a.bytes = bytesOf(a.list);
-      if (geo > 0 && geo + a.bytes > A.budget.geo) continue;
-      geo += a.bytes;
+      if (A.geoAllow <= 0 || (geo > 0 && performance.now() - t0 > B.ms * 2)) continue;
+      geo += a.bytes; A.geoAllow -= a.bytes;
       show(a, pos, now);
+      lastPump.shown++;
+      if (a.bytes > 8e6) lastPump.big += `${a.list[0]?.name || a.list[0]?.type} ${(a.bytes / 1e6).toFixed(0)}MB; `;
     }
   }
   if (A.queue.some((a) => a.stage >= 4)) A.queue = A.queue.filter((a) => a.stage < 4);
+  lastPump.ms = performance.now() - t0; lastPump.began = began; lastPump.texBytes = tex; lastPump.geo = geo;
 }
 
 const batches = new Map();
