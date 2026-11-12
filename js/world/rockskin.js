@@ -5,7 +5,7 @@
 // little lighter or darker than the next. For any lit material (MeshStandardMaterial): chains any onBeforeCompile it
 // already has.
 import * as THREE from 'three';
-import { capImage } from '../texcap.js';
+import { loadPictureAsync } from '../texcap.js';
 
 const cache = new Map();
 /** The rock tile (one texture for every rock), the best there is. */
@@ -13,15 +13,13 @@ function rockTile(base, kind) {
   const key = base + kind;
   if (!cache.has(key)) {
     const u = { value: null }, on = { value: 0 };
-    const L = new THREE.TextureLoader();
     const take = (t) => {
-      capImage(t);
       t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
       t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
       u.value = t; on.value = 1;
     };
-    L.loadAsync(`${base}assets/world/ground/rock-${kind}-2k.jpg`).then(take)
-      .catch(() => L.loadAsync(`${base}assets/world/ground/rock.jpg`).then(take).catch(() => {}));
+    loadPictureAsync(`${base}assets/world/ground/rock-${kind}-2k.jpg`).then(take)
+      .catch(() => loadPictureAsync(`${base}assets/world/ground/rock.jpg`).then(take).catch(() => {}));
     cache.set(key, { u, on });
   }
   return cache.get(key);

@@ -7,6 +7,8 @@
 // than that is drawn down once, when it is read, before the card ever has it. Half the side is a quarter of the memory.
 // The world's own maps (the heights, the cover, the water: world/terrain.js) are numbers, not pictures, and are never
 // touched; nor are the sky's panoramas, which fill the whole view.
+import * as THREE from 'three';
+
 let CAP = Infinity;
 
 /** The longest side kept (px); 0, none or Infinity: every picture as it is. Set before anything is read. */
@@ -55,3 +57,52 @@ export async function capBitmap(tex) {
   } catch { /* (kept as it came) */ }
   return tex;
 }
+
+// ---- a picture file as a texture, decoded off the page's own thread
+// three's TextureLoader gives a texture whose picture is an image element, and the browser decodes an image element
+// when it is first sent to the graphics card - on the page's thread: 25 ms for a 2048 px JPEG, 60 ms for a PNG, each a
+// dropped frame or four as it came into the walk; awaiting its decode() changed nothing. Read as a bitmap it is
+// decoded in the background and goes up in 5 ms (all measured in Chrome on the walk's own pictures, 12 Nov 2026).
+// (the browsers whose bitmaps cannot be trusted for this take the image element, as three's own model loader does)
+const BITMAPS = (() => {
+  if (typeof createImageBitmap !== 'function' || typeof fetch !== 'function') return false;
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const safari = /^((?!chrome|android).)*safari/i.test(ua), sv = safari ? +(ua.match(/Version\/(\d+)/)?.[1] ?? -1) : -1;
+  const ff = +(ua.match(/Firefox\/(\d+)\./)?.[1] ?? -1);
+  return !(safari && sv < 17) && !(ua.includes('Firefox') && ff < 98);
+})();
+
+/** A texture for the picture at `url`, at once - to be set up as three's TextureLoader's is (its wrapping, its colour
+ *  space, its flipY) - its picture following when the file has come, as a bitmap no larger than the machine's cap
+ *  (cap: false - as it is). The texture's flipY and premultiplyAlpha as they stand when the file arrives are built
+ *  into the bitmap (the card takes a bitmap as it is), so set them, if at all, at once. onLoad(texture) once it has
+ *  its picture; onError(error) if it cannot be read. */
+export function loadPicture(url, { cap = true, onLoad = null, onError = null } = {}) {
+  const t = new THREE.Texture();
+  const viaImage = () => new THREE.ImageLoader().load(url, (im) => { t.image = im; if (cap) capImage(t); t.needsUpdate = true; onLoad?.(t); }, undefined, (e) => onError?.(e));
+  if (!BITMAPS) { viaImage(); return t; }
+  fetch(url).then((r) => { if (!r.ok) throw new Error(url + ' ' + r.status); return r.blob(); })
+    .then((b) => createImageBitmap(b, { imageOrientation: t.flipY ? 'flipY' : 'none', premultiplyAlpha: t.premultiplyAlpha ? 'premultiply' : 'none', colorSpaceConversion: 'none' }))
+    .then(async (bmp) => {
+      const to = cap ? sizeFor(bmp.width, bmp.height) : null;
+      if (to) {
+        try {
+          const small = await createImageBitmap(bmp, { resizeWidth: to[0], resizeHeight: to[1], resizeQuality: 'medium', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+          if (small.width <= to[0] && small.height <= to[1]) { bmp.close?.(); bmp = small; } else small.close?.();
+        } catch { /* (kept as it came) */ }
+      }
+      t.image = bmp; t.flipY = false; t.premultiplyAlpha = false; t.needsUpdate = true;
+      return true;
+    })
+    .catch((e) => {
+      // (the file is not there: said; a browser that could not make the bitmap: the image element)
+      if (/ \d\d\d$/.test(String(e?.message))) onError?.(e); else viaImage();
+      return false;
+    })
+    .then((ok) => { if (ok) onLoad?.(t); });
+  return t;
+}
+
+/** loadPicture as a promise: the texture once it has its picture. */
+export const loadPictureAsync = (url, opts = {}) => new Promise((res, rej) => loadPicture(url, { ...opts, onLoad: res, onError: rej }));
+

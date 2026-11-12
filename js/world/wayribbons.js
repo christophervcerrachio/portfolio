@@ -6,19 +6,19 @@
 import * as THREE from 'three';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { towardCamera } from '../depthmode.js';
-import { capImage } from '../texcap.js';
+import { loadPictureAsync } from '../texcap.js';
 
 const R = 260, REBUILD = 60, FRINGE = 0.45;
 const STRIPS = { track: { w: 2.6, len: 8, depth: 0.116 }, foot: { w: 1.3, len: 8, depth: 0.067 }, road: { w: 6.5, len: 8, depth: 0.116, from: 'track' } };
 
 function loadStrip(base, kind, maxAniso) {
-  const L = new THREE.TextureLoader(), dir = base + 'assets/world/ways/';
+  const dir = base + 'assets/world/ways/';
   const set = (t, srgb) => { t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; t.anisotropy = maxAniso; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; return t; };
   return Promise.all([
     // (the colours: Blender's layout redrawn as a photograph by ComfyUI's detail pass; till that is here, no ribbon)
-    L.loadAsync(dir + kind + '-albedo-comfy.jpg').then((t) => set(capImage(t), true)),
-    L.loadAsync(dir + kind + '-normal.jpg').then((t) => set(capImage(t), false)),
-    L.loadAsync(dir + kind + '-height.jpg').then((t) => set(t, false)).catch(() => null),   // (its height: for the parallax)
+    loadPictureAsync(dir + kind + '-albedo-comfy.jpg').then((t) => set(t, true)),
+    loadPictureAsync(dir + kind + '-normal.jpg').then((t) => set(t, false)),
+    loadPictureAsync(dir + kind + '-height.jpg', { cap: false }).then((t) => set(t, false)).catch(() => null),   // (its height: for the parallax)
   ]);
 }
 

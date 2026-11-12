@@ -118,10 +118,14 @@ function texturesOf(list) {
     if (!m) return;
     for (const k of TEXKEYS) if (m[k]?.isTexture) out.add(m[k]);
     if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u?.value?.isTexture) out.add(u.value);
+    for (const t of m.userData?.pictures ?? []) if (t?.isTexture) out.add(t);
   };
   for (const o of list) o.traverse((c) => { if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(look); });
   return [...out];
 }
+// (a material's shader may take pictures that are not among its own maps - the rooms behind a house front's windows:
+// interiors.js lists them in the material's userData.pictures, and they come in with it)
+
 const keyOf = (t) => t.source?.uuid ?? t.uuid;
 function pictureReady(t) {
   const im = t.image;
@@ -131,6 +135,45 @@ function pictureReady(t) {
   return (im.width ?? 0) > 0;
 }
 const pictureBytes = (t) => { const im = t.image; return im ? (im.width || 0) * (im.height || 0) * 4 * (t.generateMipmaps === false ? 1 : 1.33) : 0; };
+// (already on the card: a picture something in view uses was sent when that was first drawn)
+function onCard(t) {
+  const p = A.renderer.properties?.get?.(t);
+  return !!p && p.__webglTexture !== undefined && p.__version === t.version;
+}
+
+// A large picture goes up a strip at a time. Sent whole, a 2048 px picture holds the page 5 ms and one of 4096 px over
+// 20 (measured in Chrome, 12 Nov 2026) - a dropped frame or three each on a fast screen, and the walk takes in some
+// sixty such pictures in its first minute. So the card is first asked for the picture's room, with no pixels; its rows
+// follow, a few MB at a time within the frame's share (three's copyTextureToTexture, given a strip of the picture's
+// own rows), and its smaller copies are made with the last of them. Only a bitmap that goes up as it is - not turned
+// over, its alpha not multiplied in - is sent so; any other picture goes whole.
+const STRIP = 3.2e6;                 // (bytes of pixels to a strip)
+const sBox = new THREE.Box2(), sAt = new THREE.Vector2(), sTo = new THREE.Vector2();
+const upping = new Set();           // (pictures part of the way up: another thing that uses one waits for the rest of it)
+function inStrips(t) {
+  const im = t.image;
+  return typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap && t.version > 0 && !t.flipY && !t.premultiplyAlpha
+    && !t.isCompressedTexture && !t.isDataTexture && !t.isCubeTexture && !(t.mipmaps?.length > 0)
+    && im.width * im.height * 4 > STRIP * 1.5 && typeof A.renderer.copyTextureToTexture === 'function';
+}
+/** The next strip of `a`'s first picture (a.upY: the rows already there). Returns the bytes sent; a.upY undefined
+ *  once the whole picture is up. */
+function sendStrip(a, t) {
+  const im = t.image, w = im.width, h = im.height, r = A.renderer;
+  if (a.upY === undefined) {
+    // (its room on the card, and nothing in it yet)
+    t.source.dataReady = false;
+    try { r.initTexture(t); } finally { t.source.dataReady = true; }
+    a.upY = 0; upping.add(keyOf(t));
+  }
+  const y1 = Math.min(h, a.upY + Math.max(16, Math.floor(STRIP / (w * 4)))), last = y1 >= h, mips = t.generateMipmaps;
+  if (!last) t.generateMipmaps = false;
+  try { r.copyTextureToTexture(t, t, sBox.set(sAt.set(0, a.upY), sTo.set(w, y1)), sAt); } finally { t.generateMipmaps = mips; }
+  const b = w * (y1 - a.upY) * 4 * (mips ? 1.33 : 1);
+  a.upY = last ? undefined : y1;
+  if (last) upping.delete(keyOf(t));
+  return b;
+}
 
 // ---- the triangles' weight
 const counted = new WeakSet();
@@ -212,7 +255,11 @@ export function pumpArrivals(pos, now = performance.now()) {
   const t0 = performance.now(), B = A.budget;
   A.texAllow = Math.min(B.tex * 2, A.texAllow + B.tex * k); A.geoAllow = Math.min(B.geo * 2, A.geoAllow + B.geo * k);
   for (const a of A.queue) {
-    if (a.cancel?.()) { a.stage = 9; a.res(); continue; }
+    if (a.cancel?.()) {
+      // (no longer wanted, with a picture part of the way up: that picture sent again, whole, when it is next used)
+      if (a.upY !== undefined && a.tex?.[0]) { upping.delete(keyOf(a.tex[0])); a.tex[0].needsUpdate = true; a.upY = undefined; }
+      a.stage = 9; a.res(); continue;
+    }
     if (a.stage === 0) {
       // (a program's making is begun here and goes on in the background, but the beginning is the page's own work -
       // each material's shader written out: no more begun once this frame's time is spent)
@@ -229,14 +276,22 @@ export function pumpArrivals(pos, now = performance.now()) {
         // second six hundred frames were minutes)
         if (!pictureReady(t)) { if (now - (a.waitPic ??= now) < 10000) break; a.tex.shift(); continue; }
         if (A.sent.has(keyOf(t))) { a.tex.shift(); continue; }
-        const b = pictureBytes(t);
+        if (a.upY === undefined && upping.has(keyOf(t))) break;         // (another's, part of the way up: wait for it)
+        if (a.upY === undefined && onCard(t)) { A.sent.add(keyOf(t)); a.tex.shift(); continue; }
         if (A.texAllow <= 0 || (tex > 0 && performance.now() - t0 > B.ms)) break;
         const u0 = performance.now();
-        try { A.renderer.initTexture(t); } catch { /* (drawn as it can be, then) */ }
+        let b = 0, whole = true;
+        try {
+          if (inStrips(t)) { b = sendStrip(a, t); whole = a.upY === undefined; }
+          else { b = pictureBytes(t); A.renderer.initTexture(t); }
+        } catch { a.upY = undefined; upping.delete(keyOf(t)); whole = true; /* (drawn as it can be, then) */ }
         const du = performance.now() - u0;
-        A.sent.add(keyOf(t)); tex += b; A.texAllow -= b; a.tex.shift();
-        lastPump.tex++; lastPump.texMs += du;
+        tex += b; A.texAllow -= b;
+        lastPump.texMs += du;
         if (du > 8) lastPump.big += `${t.image?.width}x${t.image?.height} ${t.image?.constructor?.name ?? ''} ${du.toFixed(0)}ms; `;
+        if (!whole) continue;              // (its next strip, if this frame has the time and the share for it)
+        A.sent.add(keyOf(t)); a.tex.shift();
+        lastPump.tex++;
       }
       if (a.tex.length) continue;
       a.stage = 3;

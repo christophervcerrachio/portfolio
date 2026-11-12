@@ -14,6 +14,7 @@
 // glass mirrors the sky the flatter it is looked along (11 Nov 2026).
 import * as THREE from 'three';
 import { styleNow } from '../retro.js';
+import { loadPicture } from '../texcap.js';
 
 const DIR = 'assets/world/cities/';
 let ROOMS = null;
@@ -31,7 +32,7 @@ function tex(url, nearest) {
       .then((bmp) => { t.image = bmp; t.needsUpdate = true; }).catch(() => {});
     return t;
   }
-  const t = new THREE.TextureLoader().load(url);
+  const t = loadPicture(url, { cap: false });
   t.flipY = false;                                  // (as the models' own pictures: glTF's way up)
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
@@ -45,6 +46,8 @@ export function interiors(mat, name, { base = '', far = 140, depth = 3.0, cut = 
   mat.userData.interiors = true;
   ROOMS ??= tex(base + DIR + 'rooms.jpg', false);
   WINS[name] ??= tex(base + DIR + 'windows/' + name + '_win.png', true);
+  // (the pictures its shader takes beside its own maps: sent to the card with it as it comes into the walk - arrive.js)
+  (mat.userData.pictures ??= []).push(ROOMS, WINS[name]);
   const U = { uWin: { value: WINS[name] }, uRooms: { value: ROOMS }, uIntFar: { value: far }, uIntDepth: { value: depth },
     uRev: { value: flat ? 0.0 : 0.24 }, uMx: { value: 0.012 }, uMy: { value: 0.012 }, uPH: { value: 1024 }, uCut: { value: cut },
     // (the sky the glass mirrors: the scene's own, at the horizon and overhead - backdrops/clouds.js)

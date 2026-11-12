@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
-import { capImage } from '../texcap.js';
+import { loadPicture } from '../texcap.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
 import { lightCopies, standAt } from './citymarks.js';
@@ -17,7 +17,7 @@ const WALL = { h: 12.0, hRed: 17.0, thick: 4.5, merlon: { w: 2.0, h: 2.4, t: 0.7
 const RED_SQUARE = new Set(['konstantino-eleninskaya', 'nabatnaya', 'tsarskaya', 'spasskaya', 'senatskaya', 'nikolskaya', 'corner-arsenalnaya']);
 
 function tileTex(base, name, rep) {
-  const t = new THREE.TextureLoader().load(base + DIR + name, capImage);
+  const t = loadPicture(base + DIR + name);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = THREE.Texture.DEFAULT_ANISOTROPY;
   if (rep) t.repeat.set(rep, rep);
   return t;

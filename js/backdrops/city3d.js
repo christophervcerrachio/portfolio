@@ -5,6 +5,7 @@
 // Group whose local frame is the map's world frame (metres, the camera's origin at the map origin, turned by map.az).
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
+import { loadPictureAsync } from '../texcap.js';
 import { FEATURES } from './features.js';
 
 export async function buildCity(base, specPath, opts = {}) {
@@ -20,7 +21,7 @@ export async function buildCity(base, specPath, opts = {}) {
   const lambert = (o) => new THREE.MeshLambertMaterial(o);
   const floats = async (file) => new Float32Array(await (await fetch(dir + file)).arrayBuffer());
   const tex = async (file, srgb = true) => {
-    const t = await new THREE.TextureLoader().loadAsync(dir + file);
+    const t = await loadPictureAsync(dir + file, { cap: false });
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     t.anisotropy = 8; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; return t;
   };
