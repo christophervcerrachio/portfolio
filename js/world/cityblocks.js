@@ -42,7 +42,7 @@ export function readChannel(url, channel = 0) {
   });
 }
 
-export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null } = {}) {
+export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null } = {}) {
   reliefReach(reliefNear);
   const pieces = [];                     // (each tile's object and its middle: drawn within `far` m, the machine's setting)
   const group = new THREE.Group(); group.name = 'cityblocks';
@@ -50,7 +50,7 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
   // (the fronts' relief near the camera - window surrounds, sills, cornices, string courses - in the houses' own front
   // materials: facaderelief.js)
   const MATS = {};
-  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear, heightAt });
+  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear, heightAt, ground });
   group.add(relief);
   // (and a step clear of every wall near: the walls themselves, exact - facaderelief.js push)
   group.userData.wallPush = (x, z, r) => relief.userData.push(x, z, r);
@@ -74,7 +74,7 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
     if (m.map && /granite/.test((m.name || '').toLowerCase())) parallax(m, { depth: 0.012, scale: 2.774 });
     // (a house front: rooms behind its windows - interiors.js)
     { const nm = m.name || ''; if (m.map && /^front-/.test(nm)) { interiors(m, 'facade-' + nm.slice(6), { base, cut: CUT, sky: U }); MATS[nm] ??= m; } }
-    receiveSun(m, U);
+    receiveSun(m, U, { street: true });
   };
   const streams = [], fars = [];
   for (const city of cities) {

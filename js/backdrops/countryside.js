@@ -522,13 +522,15 @@ export class CountrysideScene {
     // they take the sun's near shadows and cast them; the far cascade leaves them out (the city is the plate's)
     // (tiles of houses and yards come and go as the walker moves: the sun's pictures gather their casters again then)
     const changed = () => { if (this.shadow) this.shadow.casters = null; if (this.shadowFar) this.shadowFar.casters = null; };
-    const blocks = buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z) });
+    // (the cities' ground materials by city, once the furniture has read them: the houses' door steps are made of them)
+    const ground = {};
+    const blocks = buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground });
     // and their bridges (world/citybridges.js): the walker crosses them as the country ones (one deckAt for both)
     const bridges = buildCityBridges(this.U, { base });
     // the yards made gardens, and the yards' and streets' furniture: fountains, benches, lamps, gates, trees
     // (world/cityprops.js, dev\world\cityhouses.py), drawn near the camera only
     const props = buildCityProps(this.U, models, { base, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
-      addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed });
+      addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed, ground });
     // (and smoke over two in five of the houses' chimneys, near the walker: world/chimneys.js)
     const smoke = buildChimneySmoke(this.U, { base, near: G.smokeNear ?? 320 });
     this._later = { groups: [blocks, bridges, props], blocks, bridges, props, smoke };

@@ -1,5 +1,5 @@
 {
- "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; 'trim': a window casing's px at the sides, over the head and under the sill.",
+ "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill.",
  "facade-spb-cream": {
   "H": 1238,
   "bays": [
@@ -813,10 +813,10 @@
    ]
   ],
   "door": [
-   463,
-   320,
-   543,
-   486
+   470,
+   323,
+   551,
+   490
   ],
   "hood": {
    "kind": "gable",
@@ -966,10 +966,10 @@
    ]
   ],
   "door": [
-   471,
-   249,
-   545,
-   434
+   481,
+   255,
+   555,
+   440
   ],
   "hood": {
    "kind": "gable",
@@ -1098,7 +1098,7 @@
     ]
    ],
    [
-    359,
+    357,
     491,
     [
      5,
@@ -1107,14 +1107,15 @@
      8,
      9,
      10
-    ]
+    ],
+    1.0
    ]
   ],
   "door": [
-   461,
-   358,
-   546,
-   548
+   473,
+   361,
+   557,
+   561
   ],
   "hood": {
    "kind": "flat",
@@ -1253,7 +1254,7 @@
     ]
    ],
    [
-    373,
+    368,
     482,
     [
      7,
@@ -1262,15 +1263,17 @@
      10,
      11,
      12
-    ]
+    ],
+    1.0
    ]
   ],
   "door": [
-   453,
-   350,
-   548,
-   540
-  ]
+   465,
+   352,
+   556,
+   547
+  ],
+  "doorArch": 1.0
  },
  "facade-msk2-merchant": {
   "H": 506,
@@ -1376,22 +1379,24 @@
     ]
    ],
    [
-    345,
+    326,
     432,
     [
      7,
      8,
      9,
      10
-    ]
+    ],
+    0.76
    ]
   ],
   "door": [
-   450,
-   315,
-   542,
-   490
-  ]
+   453,
+   310,
+   559,
+   498
+  ],
+  "doorArch": 0.4
  },
  "facade-msk2-timber": {
   "H": 464,
@@ -1494,10 +1499,10 @@
    ]
   ],
   "door": [
-   464,
-   285,
-   531,
-   433
+   475,
+   292,
+   551,
+   437
   ],
   "hood": {
    "kind": "gable",

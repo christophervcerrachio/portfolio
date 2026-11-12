@@ -24,12 +24,15 @@ const TILE = 160, NEAR = 600, TREE_NEAR = 700, FOOT_NEAR = 900, YARD_NEAR = 1400
 const KINDS = { fountain: 'prop-fountain', bench: 'prop-bench', lamp: 'prop-lamp', gate: 'prop-gate', 'gate-top': 'prop-gate-top', 'gate-side': 'prop-gate-side', 'gate-leaf': 'prop-gate-leaf', bollard: 'prop-bollard',
   sentry: 'prop-sentry', firewood: 'prop-firewood', barrel: 'prop-barrel', well: 'prop-well',
   stall: 'prop-stall', 'shop-bakery': 'prop-shop-bakery', 'shop-boots': 'prop-shop-boots', 'shop-grocer': 'prop-shop-grocer',
-  // (Moscow's own: the mansions' porticos, one and two storeys, and the plank fences between the houses, grey and green
-  // - dev\world\city_kits.py)
+  // (Moscow's own: the mansions' porticos, one and two storeys - each four columns, each on a pier of the front, and
+  // the top over them, stretched to the span, or a porch of two columns over the door: dev\world\city_blender.py
+  // places them, <city>-porticos.json - and the plank fences between the houses, grey and green - dev\world\city_kits.py)
   // (the canals' cast iron: a railing bay between two pedestals and a gate of two leaves, stretched to the bay ([4]) -
   // dev\world\canals.py)
   railing: 'prop-railing', 'canal-gate': 'prop-canal-gate',
-  'portico-1': 'prop-portico-1', 'portico-2': 'prop-portico-2', 'fence-grey': 'prop-fence-grey', 'fence-green': 'prop-fence-green' };
+  'portico-col-1': 'prop-portico-col-1', 'portico-col-2': 'prop-portico-col-2', 'portico-top-1': 'prop-portico-top-1', 'portico-top-2': 'prop-portico-top-2',
+  'portico-top-1s': 'prop-portico-top-1s',
+  'fence-grey': 'prop-fence-grey', 'fence-green': 'prop-fence-green' };
 
 /** A city's furniture lists, read and packed off the page's own thread (props-worker.js): a promise of packProps's
  *  result, or null. Where no worker can be made, read and packed here. */
@@ -61,7 +64,7 @@ async function partsOf(url, U) {
     // (TRELLIS.2's models come with a half-gloss everywhere: painted wood, stone and cloth read as plastic; matt them)
     else if (!/glass/i.test(mat.name || '')) { mat.metalness = Math.min(mat.metalness ?? 0, 0.1); mat.roughness = Math.max(0.72, mat.roughness ?? 0.8); }
     if (/glass/i.test(mat.name || '')) { mat.emissive = new THREE.Color(0x3a2a10); }
-    receiveSun(mat, U);
+    receiveSun(mat, U, { street: true });
     parts.push({ geo, mat });
   });
   return parts;
@@ -137,9 +140,9 @@ const REACH = { bench: 0.42, barrel: 0.35, firewood: 0.4, bollard: 0.42, well: 0
 // no pictures of its own - dressed in the full model's materials by name): drawn in place of the full one in every tile
 // whose middle is further than `full` m (hardware.js propsFull).
 // (the yard gate's parts have none: a few hundred triangles each)
-const LIGHT = ['bench', 'lamp', 'railing', 'barrel', 'firewood', 'well', 'fountain', 'canal-gate', 'stall', 'portico-1', 'portico-2'];
+const LIGHT = ['bench', 'lamp', 'railing', 'barrel', 'firewood', 'well', 'fountain', 'canal-gate', 'stall', 'portico-col-1', 'portico-col-2', 'portico-top-1', 'portico-top-2', 'portico-top-1s'];
 
-export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'moscow'], heightAt = null, near = NEAR, footNear = FOOT_NEAR, yardNear = YARD_NEAR, addTrees = null, changed = null, full = 130 } = {}) {
+export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'moscow'], heightAt = null, near = NEAR, footNear = FOOT_NEAR, yardNear = YARD_NEAR, addTrees = null, changed = null, full = 130, ground = null } = {}) {
   const group = new THREE.Group(); group.name = 'cityprops';
   const tiles = new Map();               // 'i,j' -> { g: Group, c: [x, z], trees: Group | null }
   const tileOf = (x, z) => {
@@ -187,7 +190,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
         if (m.map) m.map.anisotropy = /footway|kerb|walk/.test(nm) ? 8 : 4;
         if (m.map && /hedge/.test(nm)) parallax(m, { depth: 0.012, scale: 1.1 }); else if (m.map && /gravel/.test(nm)) parallax(m, { depth: 0.006, scale: 0.8 }); else if (/^bed/.test(nm)) softBed(m); else m.vertexColors = false;
         if (m.map && /gwall/.test(nm)) detile(m);
-        receiveSun(m, U);
+        receiveSun(m, U, { street: true });
       };
       const url = base + DIR + city + '-ground-materials.glb';
       LM.itemStart(url);
@@ -198,6 +201,8 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
         group.add(g.scene);
         return lib;
       }).catch(() => new Map()).finally(() => LM.itemEnd(url));
+      // (and handed to the houses' relief, whose door steps are of the pavement's stone and planks: facaderelief.js)
+      if (ground) library.then((lib) => { ground[city] = lib; });
       // (the flat ground - gravel, lawn, beds, pavements - throws no shadow; the hedges and the gardens' walls do)
       streams.push(tileStream({ base, city, kind: 'g', near: yardNear, group, library, changed,
         each: (o) => { if (!/hedge|gwall|coping/.test((o.material.name || '').toLowerCase())) o.userData.noCast = true; } }));
