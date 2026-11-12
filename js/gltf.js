@@ -32,4 +32,8 @@ class SharedPictures {
   }
 }
 
+// (the meshes' decoding off the page's own thread, in a few workers: a city's 27 MB of plain boxes or a tile of houses
+// had been decoded in the frame it came in)
+try { MeshoptDecoder.useWorkers?.(Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 2))); } catch { /* (decoded here, then) */ }
+
 export const gltfLoader = () => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register((parser) => new SharedPictures(parser));

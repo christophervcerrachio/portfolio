@@ -135,19 +135,23 @@ export class SunShadow {
    *  own depth material (userData.depthMat, which moves with the wind) or a plain one. */
   add(group) { this.groups.push(group); this.casters = null; }
 
+  /** The depth material `o` is drawn with into the sun's pictures, or null if it throws no shadow (made once, kept on it). */
+  depthOf(o) {
+    if (!o.isMesh || o.userData.noCast) return null;
+    if (o.userData.depthMat) return o.userData.depthMat;
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    // (only the solid: no water, no mist, no lights, no special shader without a depth form of its own)
+    if (!mat || mat.transparent || mat.isShaderMaterial || mat.depthWrite === false) return null;
+    return (o.userData.depthMat = mat.alphaTest > 0 && mat.map ? Object.assign(new THREE.MeshDepthMaterial({ side: THREE.DoubleSide, map: mat.map, alphaTest: mat.alphaTest }), { colorWrite: false }) : PLAIN_DEPTH);
+  }
+
   _gather() {
     const out = [];
     for (const g of this.groups) g.traverse((o) => {
       // (noCastFar: into the near picture alone - small things; noCastNear: into the far one alone - trees too far
       // off to shade the ground round the walker, world/woods.js)
       if (!o.isMesh || o.userData.noCast || (this.layer === 2 && o.userData.noCastFar) || (this.layer === 1 && o.userData.noCastNear)) return;
-      const m = o.userData.depthMat;
-      if (!m) {
-        const mat = Array.isArray(o.material) ? o.material[0] : o.material;
-        // (only the solid: no water, no mist, no lights, no special shader without a depth form of its own)
-        if (!mat || mat.transparent || mat.isShaderMaterial || mat.depthWrite === false) return;
-        o.userData.depthMat = mat.alphaTest > 0 && mat.map ? Object.assign(new THREE.MeshDepthMaterial({ side: THREE.DoubleSide, map: mat.map, alphaTest: mat.alphaTest }), { colorWrite: false }) : PLAIN_DEPTH;
-      }
+      if (!this.depthOf(o)) return;
       o.layers.enable(this.layer);
       out.push(o);
     });

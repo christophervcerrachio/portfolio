@@ -85,7 +85,8 @@ float rbNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 
     m.customProgramCacheKey = () => 'way-ribbon-' + kind;
     receiveSun(m, U);
     mats[kind] = m;
-    loadStrip(base, S.from ?? kind, aniso).then(([a, n, ht]) => {
+    // (its pictures read only once the ribbons are shown: 7 MB the walk had fetched for ribbons it never drew)
+    m.userData.load = () => loadStrip(base, S.from ?? kind, aniso).then(([a, n, ht]) => {
       m.map = a; m.normalMap = n; m.normalScale.set(1, 1);
       if (ht) pomU.uRbH.value = ht; else pomU.uRbDepth.value = 0;
       m.visible = true; m.needsUpdate = true;
@@ -163,7 +164,10 @@ float rbNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 
       meshes[kind].geometry.dispose(); meshes[kind].geometry = g;
     }
   };
+  let asked = false;
   group.userData.update = (cam) => {
+    if (!group.visible) return;                        // (hidden: nothing read, nothing built)
+    if (!asked) { asked = true; for (const m of Object.values(mats)) m.userData.load(); }
     if (at && Math.hypot(cam.x - at.x, cam.z - at.z) < REBUILD) return;
     at = { x: cam.x, z: cam.z };
     build(cam);

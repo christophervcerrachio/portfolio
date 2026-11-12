@@ -17,6 +17,8 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
+import { setupArrivals, openArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState } from './world/arrive.js';
+import { startLoading } from './loading.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
 const PITCH = [-1.1, 1.2];                          // how far the view can tip down and up, zoomed out (radians)
@@ -35,6 +37,8 @@ export async function initWalk(container, opts = {}) {
   const params = new URLSearchParams(location.search);
   const frozenT = params.has('t') ? parseFloat(params.get('t')) : null;
   const still = params.has('still');
+  // (?norise: everything in its place the moment it is in - for tests that measure where things stand)
+  const noRise = params.has('norise') || frozenT !== null;
   const small = Math.min(innerWidth, innerHeight) < 640;
   const base = opts.base ?? '';
 
@@ -72,9 +76,15 @@ export async function initWalk(container, opts = {}) {
   stage.background = s.horizon;
   stage.add(s.group);
   s.setFade(1);
-  // ---- the veil: nothing of the world shows until all of it is in - every file asked for answered, the ground's tiles
-  // laid, the sky drawn and a second of frames run - then the veil fades. Before, the half-built scene showed: a bare
-  // olive land, the grass and a path.
+  // (what comes in once the walk has begun - world/arrive.js: made for the scene's own picture, rising into place)
+  setupArrivals({ renderer, scene: s.land, camera: () => s.cam, target: () => s.rt, shadow: () => s.shadow, still: still || noRise,
+    budget: GFX.style ? { tex: 12e6, geo: 16e6, compiles: 4 } : null });
+  // ---- the loading picture (index.html .walk-load, loading.js): the walk's own evening, its woods and landmarks rising
+  // out of the ground as the first view's files come in. It lifts once that first view is in - the land and its
+  // pictures, the woods, the sky - with its shaders made and a second of its frames run (and measured: below). The rest
+  // - the villages, the bridges, the landmarks, the cities - is asked for only then, and each thing rises out of the
+  // ground into its place as it arrives (world/arrive.js). Until v0.0.38 the walk waited under a grey veil for every
+  // file of the whole world: 114 MB, half a minute on a first visit.
   let pending = 0, quietSince = performance.now();
   const ofetch = window.fetch.bind(window);
   window.fetch = (...a) => { pending++; return ofetch(...a).finally(() => { if (--pending === 0) quietSince = performance.now(); }); };
@@ -82,30 +92,25 @@ export async function initWalk(container, opts = {}) {
   let managerBusy = false;
   LM.onStart = (...a) => { managerBusy = true; prevStart?.(...a); };
   LM.onLoad = (...a) => { managerBusy = false; quietSince = performance.now(); prevLoad?.(...a); };
-  const veil = document.createElement('div');
-  veil.style.cssText = 'position:absolute;inset:0;z-index:6;background:#c9d1d6;display:flex;align-items:center;justify-content:center;'
-    + 'font:500 15px/1.3 system-ui,sans-serif;color:#3b4650;letter-spacing:.02em;transition:opacity .7s ease;pointer-events:none';
-  veil.textContent = 'Loading the walk\u2026';
-  if (!still) container.appendChild(veil);
+  const loading = startLoading(document.querySelector('.walk-load'), { style: GFX.style ?? 'full', still, base });
   let framesSince = 0, veilUp = !still, gfxChecked = still, bench = null, benchLast = null;
   const veilStart = performance.now();
   // (the load's timeline in the console - "[load] <stage> <ms since the page began>" - so its slow parts can be found)
   // (and how much of it the page's own work held the browser up: its long tasks, summed)
   let busy = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) busy += e.duration; }).observe({ type: 'longtask', buffered: true }); } catch { /* (none) */ }
-  const tl = (label) => console.info('[load]', label, Math.round(performance.now()), 'busy', Math.round(busy));
-  let settledOnce = false, settledAt = null;
+  const tl = (label) => { console.info('[load]', label, Math.round(performance.now()), 'busy', Math.round(busy)); loading?.stage(label); };
+  let settledAt = null;
   function veilCheck(now) {
     if (!veilUp) return;
-    const settled = s.ready && pending === 0 && !managerBusy && groundLoaded() && now - quietSince > 600;
-    const framesBefore = framesSince;
+    // (the first view in: the scene built from its files, the ground's close tiles laid)
+    const settled = s.ready && groundLoaded();
     framesSince = settled ? framesSince + 1 : 0;
-    if (settled && !settledOnce) { settledOnce = true; tl('everything fetched and built'); }
-    if (settledOnce && !settled && (veilCheck.n = (veilCheck.n || 0) + 1) <= 8)
-      tl(`unsettled: pending ${pending}, manager ${managerBusy}, ground ${groundLoaded()}, quiet ${Math.round(now - quietSince)}, frames ${framesBefore}`);
-    // (once all is in and has drawn a second, every shader made (prewarm), with every texture and model it will use;
-    // then the veil lifts)
-    // (the first frames once all is in, still under the veil, measured: far too slow for the tier guessed, and the
-    // walk loads again a tier or two lower before anyone sees it - at most twice a visit; hardware.js)
+    if (settled && settledAt === null) tl('first view in');
+    // (once the first view is in and has drawn a second, every shader made, with every texture and model it will use;
+    // then the picture lifts)
+    // (the first frames once it is in, still under the picture, measured: far too slow for the tier guessed, and the
+    // walk loads again a tier or two lower before anyone sees it - at most twice a visit; hardware.js. Nothing else is
+    // being read then: the rest is asked for only once the picture has lifted)
     // (only while the page is in front and focused: a window behind others has its frames held to one a second by the
     // browser, which read as a machine at 1 fps - and dropped an RTX 5090 to the lowest tier in testing)
     const watched = document.visibilityState === 'visible' && document.hasFocus();
@@ -127,7 +132,7 @@ export async function initWalk(container, opts = {}) {
           try { sessionStorage.setItem('career-gfx-tries', String(tries + 1)); } catch { /* (none) */ }
           rememberTier({ ...gfxInfo, tier: to, why: `measured ${Math.round(med)} ms a frame at ${gfxInfo.tier}` });
           console.info('[gfx]', Math.round(med), 'ms a frame at', gfxInfo.tier, '- loading again at', to);
-          veil.textContent = 'Adjusting the graphics to this computer\u2026';
+          loading?.say('Adjusting the graphics to this computer…');
           location.reload(); return;
         }
         // (a remembered tier below what the parts suggest, and frames to spare: the next visit a tier higher, so a
@@ -139,83 +144,70 @@ export async function initWalk(container, opts = {}) {
         }
       }
     }
-    // (all in for a second and a couple of frames drawn, then the shaders (a window behind others gets a frame a second): it had waited for 60 frames running, which at the
-    // few frames a second the veil's loading draws took up to the 30 s limit - the load's longest part, idle)
+    // (in for a second and a couple of frames drawn, then the shaders (a window behind others gets a frame a second)
     settledAt = settled ? (settledAt ?? now) : null;
     if (((framesSince > 2 && now - settledAt > 1000) || framesSince > 60 || now - veilStart > 30000) && !warmed && !warming) { prewarm(); return; }
     if (warmed) {
-      veilUp = false; veil.style.opacity = '0'; tl('veil lifted');
-      later();
-      setTimeout(() => { veil.remove(); window.fetch = ofetch; }, 800);
+      veilUp = false; tl('veil lifted');
+      loading?.done();
+      open();
     }
   }
-  // (every shader the walk will ever draw made before the veil lifts: a wood of a kind not yet seen, or the gold birches,
-  // coming into view had stopped the frame for a fifth of a second while the card built its program. Everything is shown
-  // for the moment, compiled, and put back.)
+  // (every shader the first view will draw made before the picture lifts, in the background and for the picture it is
+  // drawn into (world/arrive.js compileView): a wood of a kind not yet seen, or the gold birches, coming into view had
+  // stopped the frame for a fifth of a second while the card built its program)
   let warmed = false, warming = false;
-  // (the cities, once the walk has begun: loaded, their shaders made off screen, then into the scene - countryside.js
-  // loadLater; nothing they need is waited for before the veil lifts)
+  // (once the picture has lifted: the rest asked for, the opening's wave set off, and the cities loaded)
+  function open() {
+    const at = s.freeCam.on ? s.freeCam.pos : s.at;
+    openArrivals(at);
+    // (the woods rise out of the ground in a wave from the walker: wind-glsl.js riseAt; off again once it has passed
+    // the farthest tree)
+    if (!still && !noRise) {
+      s.U.uRise.value.set(at.x, at.z, clock, 450);
+      const off = () => { if (clock - s.U.uRise.value.z > 7.5) s.U.uRise.value.w = 0; else setTimeout(off, 500); };
+      setTimeout(off, 7000);
+    }
+    s.loadRest();
+    later();
+  }
+  // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
+  // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
+  let laterDone = false;
   async function later() {
     const groups = s.loadLater();
-    if (!groups.length) return;
+    if (!groups.length) { laterDone = true; return; }
     tl('cities: loading');
     await new Promise((res) => { const t = setInterval(() => { if (pending === 0 && !managerBusy && performance.now() - quietSince > 800) { clearInterval(t); res(); } }, 250); });
     tl('cities: in');
     try {
-      const tmp = new THREE.Scene(); tmp.matrixWorldAutoUpdate = true;
+      const tmp = new THREE.Scene();
       for (const o of groups) tmp.add(o);
       // (and the furniture's tiles not yet near, which are out of the scene until they are)
       const spare = (s._later?.props?.userData.allTiles?.() ?? []).filter((t) => !t.parent);
       for (const t of spare) tmp.add(t);
       tmp.updateMatrixWorld(true);
-      const hidden = []; tmp.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
-      if (renderer.compileAsync) await renderer.compileAsync(tmp, s.cam, s.land); else renderer.compile(tmp, s.cam, s.land);
-      // (their sun-shadow copies too: programs of their own - drawn from one small piece of each material, not the
-      // whole of both cities, which had sent every house, yard and pavement to the card in one frame, and
-      // the walk stood still for it. The cities' pieces go up a few MB a frame after: world/reveal.js)
-      const one = new THREE.Scene(), seen = new Set();
-      tmp.traverse((o) => {
-        if (!o.isMesh || !o.geometry) return;
-        const k = (Array.isArray(o.material) ? o.material.map((m) => m.uuid).join() : o.material?.uuid) + (o.isInstancedMesh ? 'i' : '') + (o.isSkinnedMesh ? 's' : '');
-        if (seen.has(k)) return; seen.add(k);
-        const g = new THREE.BufferGeometry();
-        for (const [n, at] of Object.entries(o.geometry.attributes)) {
-          const a = new Float32Array(at.itemSize * 3), get = [at.getX, at.getY, at.getZ, at.getW];
-          for (let v = 0; v < Math.min(3, at.count); v++) for (let c = 0; c < at.itemSize; c++) a[v * at.itemSize + c] = get[c].call(at, v);
-          g.setAttribute(n, new THREE.BufferAttribute(a, at.itemSize));
-        }
-        const c = o.isInstancedMesh ? new THREE.InstancedMesh(g, o.material, 1) : new THREE.Mesh(g, o.material);
-        c.castShadow = o.castShadow; c.receiveShadow = o.receiveShadow; c.frustumCulled = false; c.matrixWorld.copy(o.matrixWorld);
-        c.matrixAutoUpdate = false; one.add(c);
-      });
-      for (const sh of [s.shadow, s.shadowFar]) { try { sh?.warm(renderer, one); } catch { /* (none) */ } }
-      one.traverse((o) => o.geometry?.dispose?.());
-      for (const o of hidden) o.visible = false;
+      // (their programs, and their sun-shadow copies', made in the background: arrive.js. The cities' pieces then come
+      // in a few MB a frame, each rising in its place)
+      await Promise.all([compileView(tmp), compileShadow(tmp)]);
       for (const t of spare) tmp.remove(t);
       for (const o of groups) tmp.remove(o);
     } catch (e) { console.warn('cities', e); }
     s.addLater();
+    laterDone = true;
     tl('cities: shown');
   }
   async function prewarm() {
     warming = true; tl('shaders: start');
     try {
-      for (const [scene, cam] of [[s.skyScene, s.cam], [s.farScene, s.farCam ?? s.cam], [s.land, s.cam]]) {
-        if (!scene) continue;
-        const hidden = [];
-        scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
-        const counts = [];
-        scene.traverse((o) => { if (o.isInstancedMesh && o.count === 0) { counts.push(o); o.count = 1; } });
-        if (renderer.compileAsync) await renderer.compileAsync(scene, cam); else renderer.compile(scene, cam);
-        tl('shaders: ' + (scene === s.land ? 'land' : scene === s.farScene ? 'far' : 'sky') + ' compiled');
-        // (and the sun's pictures of it, whose depth-only copies are programs of their own)
-        if (scene === s.land) s.land.updateMatrixWorld();
-        if (scene === s.land) for (const sh of [s.shadow, s.shadowFar]) { try { sh?.render(renderer, s.land, true); } catch { /* (none) */ } }
-        for (const o of hidden) o.visible = false;
-        for (const o of counts) o.count = 0;
-      }
-      // (and a look all the way round, drawn in full, so what changes with the view - the houses' and the rivers'
-      // near and far makings - is made now too)
+      await Promise.all([
+        compileView(s.skyScene, { camera: s.cam, scene: s.skyScene }).then(() => tl('shaders: sky compiled')),
+        compileView(s.farScene, { camera: s.farCam ?? s.cam, scene: s.farScene }).then(() => tl('shaders: far compiled')),
+        Promise.all([compileView(s.land), compileShadow(s.land)]).then(() => tl('shaders: land compiled')),
+      ]);
+      // (and a look all the way round, drawn in full, so what changes with the view - the woods' near and far copies,
+      // the rivers' - and every picture it shows is on the card now too)
+      s.land.updateMatrixWorld();
       const L = s.look, keep = [L.yaw, L.pitch, L.goal[0], L.goal[1]];
       for (let k = 0; k < 12; k++) {
         L.yaw = L.goal[0] = (k / 12) * Math.PI * 2; L.pitch = L.goal[1] = k % 2 ? -0.25 : 0.05;
@@ -548,6 +540,8 @@ export async function initWalk(container, opts = {}) {
   requestAnimationFrame(tick);
   await loaded;
   container.classList.add('is-live');
+  // (a still: no picture to lift - the rest comes in at once, in its place)
+  if (still) { openArrivals(s.at); s.loadRest(); laterDone = true; }
 
   // ---- VIEW POSE (dev only; remove with the free-cam). pose() says where the view is: degrees right of ahead (yaw) and
   // up (pitch), the zoom, the clock, and where the eye stands (x, z on the hill) or flies (fly, x, y, z). goTo(pose)
@@ -640,7 +634,11 @@ export async function initWalk(container, opts = {}) {
     play() { live = true; }, pause() { live = false; }, lookBy, zoomTo,
     walkTo: (x, z, jump = true) => s.walkTo(x, z, jump), look: (yaw, pitch) => { s.look.anchor = null; s.look.yaw = yaw; s.look.pitch = pitch; s.look.goal = [yaw, pitch]; },
     free: () => (s.freeCam.on ? (s.exitFree(), false) : (s.enterFree(), true)), get freeCam() { return s.freeCam.on; },   // (dev free-cam)
-    sound: startSound, get quality() { return quality.scale; }, gfx: { ...gfxInfo, settings: GFX } };
+    sound: startSound, get quality() { return quality.scale; }, gfx: { ...gfxInfo, settings: GFX },
+    // (for tests: everything asked for is in, in its place and still - the cities loaded, no file being read, nothing
+    // waiting to come in or rising)
+    get allIn() { return s.ready && !veilUp && laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0; },
+    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); } };
   window.__walk = api;
   window.__walkReady = true;
   return api;

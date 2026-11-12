@@ -10,6 +10,9 @@ export function landscapeUniforms() {
   const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   return {
     uTime: { value: 0 }, uGust: { value: 0 }, uFront: { value: -1e4 }, uWindOrigin: { value: new THREE.Vector2() }, uWindLevel: { value: 1 },
+    // (the walk's opening: what grows rises out of the ground in a wave from the walker - its middle x, z, when it set
+    // out on the scene's clock (s), how fast it goes (m/s); 0: none, all of it in its place. arrive.js, countryside.js)
+    uRise: { value: new THREE.Vector4(0, 0, 0, 0) },
     uHalfTan: { value: 0.72 },                               // tan of half the full frame's width (the gust's 0..1 across it)
     uViewYaw: { value: 0 },                                  // how far the view is turned (radians: the gust sweeps across the view)
     uWindDir: { value: new THREE.Vector2(1, 0.12).normalize() },
@@ -62,6 +65,13 @@ export function windAtCPU(p, U, seed = 0.5) {
 export const WIND_GLSL = /* glsl */`
 uniform float uTime; uniform float uGust; uniform float uFront; uniform float uHalfTan; uniform float uViewYaw; uniform vec2 uWindDir;
 uniform vec2 uWindOrigin; uniform float uWindLevel;   // (0.07 in a calm spell .. 1)
+uniform vec4 uRise;
+// (how far a thing rooted at root has risen in the opening wave, 0 under the ground .. 1 in its place; seed: 0..1 its own)
+float riseAt(vec2 root, float seed) {
+  if (uRise.w <= 0.0) return 1.0;
+  float r = clamp(((uTime - uRise.z) * uRise.w - length(root - uRise.xy) + seed * 30.0) / (uRise.w * 1.25), 0.0, 1.0);
+  return 1.0 - pow(1.0 - r, 3.2);
+}
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyColor; uniform vec3 uGroundColor; uniform vec3 uHaze; uniform float uHazeDist;
 float hash12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);

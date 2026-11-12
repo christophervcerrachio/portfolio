@@ -18,6 +18,30 @@ import { DefaultLoadingManager as LM } from 'three';
 
 const DIR = 'assets/world/cities/';
 
+/** A picture's red channel as { w, h, px }, decoded in a worker (pixels-worker.js), or here where no worker can be made. */
+export function readChannel(url, channel = 0) {
+  const here = () => new Promise((res) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, img.width, img.height).data, px = new Uint8Array(img.width * img.height);
+      for (let k = 0; k < px.length; k++) px[k] = d[k * 4 + channel];
+      res({ w: img.width, h: img.height, px });
+    };
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return here();
+  return new Promise((res) => {
+    let w;
+    try { w = new Worker(new URL('./pixels-worker.js', import.meta.url)); } catch { here().then(res); return; }
+    w.onmessage = (e) => { w.terminate(); if (e.data?.error) here().then(res); else res(e.data); };
+    w.onerror = () => { w.terminate(); here().then(res); };
+    w.postMessage({ url: new URL(url, location.href).href, channel });
+  });
+}
+
 export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null } = {}) {
   reliefReach(reliefNear);
   const pieces = [];                     // (each tile's object and its middle: drawn within `far` m, the machine's setting)
@@ -65,9 +89,11 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
       group.add(g.scene);
       return lib;
     }).catch(() => new Map()).finally(() => LM.itemEnd(url));
-    const st = tileStream({ base, city, kind: 'h', near: tiles, group, library, changed });
+    // (a tile of houses that comes in where its plain boxes stand takes their place there; elsewhere it rises: arrive.js)
+    let fb = null;
+    const st = tileStream({ base, city, kind: 'h', near: tiles, group, library, changed, standIn: (key) => fb?.visible(key) ?? false });
     streams.push(st);
-    fars.push(farBoxes({ base, city, group, far, inTile: (key) => st.shown(key), dress: (m) => receiveSun(m, U) }));
+    fars.push(fb = farBoxes({ base, city, group, far, inTile: (key) => st.shown(key), dress: (m) => receiveSun(m, U) }));
   }
   group.userData.streams = streams;
   for (const file of extras) loadOne(file);
@@ -77,26 +103,21 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
         dress(o.material);
-        o.geometry.computeBoundingSphere();
+        // (its bounds as the file gives them, never summed over its vertices: citytiles.js)
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
         const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
-        // (shown first when the gate lets it, nearest first and a few MB a frame: reveal.js)
-        gate(o, c.x, c.z); o.visible = false;
+        // (shown first when the gate lets it, nearest first and a few MB a frame, rising out of the ground: reveal.js)
+        gate(o, c.x, c.z, { batch: 'embankments', wave: 2200 }); o.visible = false;
         pieces.push({ o, x: c.x, z: c.z, r: o.geometry.boundingSphere.radius });
       });
       g.scene.name = 'cityblocks-' + file;
       group.add(g.scene);
     }).catch(() => {});
   }
+  // (where each house stands, read off the page's own thread: pixels-worker.js)
   for (const city of cities) {
-    Promise.all([fetch(base + DIR + city + '-blocks.grid.json').then((r) => r.json()), new Promise((res, rej) => {
-      const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = base + DIR + city + '-built.png';
-    })]).then(([G, img]) => {
-      const c = document.createElement('canvas'); c.width = G.nx; c.height = G.nz;
-      const g2 = c.getContext('2d', { willReadFrequently: true }); g2.drawImage(img, 0, 0);
-      const d = g2.getImageData(0, 0, G.nx, G.nz).data, px = new Uint8Array(G.nx * G.nz);
-      for (let k = 0; k < px.length; k++) px[k] = d[k * 4];
-      masks.push({ ...G, px });
-    }).catch(() => {});
+    Promise.all([fetch(base + DIR + city + '-blocks.grid.json').then((r) => r.json()), readChannel(base + DIR + city + '-built.png')])
+      .then(([G, R]) => { if (R && R.w === G.nx && R.h === G.nz) masks.push({ ...G, px: R.px }); }).catch(() => {});
   }
   // (on a slower machine the houses past `far` are not drawn: hardware.js)
   group.userData.update = (pos) => {
