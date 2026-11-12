@@ -1,0 +1,72 @@
+{
+ "facade-spb-cream": {
+  "mx": 0.01018,
+  "my": 0.01018,
+  "H": 1238
+ },
+ "facade-spb-ochre": {
+  "mx": 0.01224,
+  "my": 0.01223,
+  "H": 1030
+ },
+ "facade-spb-pink": {
+  "mx": 0.01222,
+  "my": 0.01221,
+  "H": 1032
+ },
+ "facade-spb-grey": {
+  "mx": 0.01223,
+  "my": 0.01222,
+  "H": 1031
+ },
+ "facade-spb-green": {
+  "mx": 0.01229,
+  "my": 0.01229,
+  "H": 1025
+ },
+ "facade-msk-white": {
+  "mx": 0.00764,
+  "my": 0.00772,
+  "H": 1088
+ },
+ "facade-msk-yellow": {
+  "mx": 0.00882,
+  "my": 0.0089,
+  "H": 944
+ },
+ "facade-msk-wood": {
+  "mx": 0.00855,
+  "my": 0.00861,
+  "H": 976
+ },
+ "facade-msk2-blue": {
+  "mx": 0.01771,
+  "my": 0.01771,
+  "H": 497
+ },
+ "facade-msk2-ochre": {
+  "mx": 0.01939,
+  "my": 0.01938,
+  "H": 454
+ },
+ "facade-msk2-pink": {
+  "mx": 0.01541,
+  "my": 0.01541,
+  "H": 571
+ },
+ "facade-msk2-white": {
+  "mx": 0.01585,
+  "my": 0.01586,
+  "H": 555
+ },
+ "facade-msk2-merchant": {
+  "mx": 0.01739,
+  "my": 0.01739,
+  "H": 506
+ },
+ "facade-msk2-timber": {
+  "mx": 0.01896,
+  "my": 0.01897,
+  "H": 464
+ }
+}

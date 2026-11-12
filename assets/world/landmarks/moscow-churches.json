@@ -1,0 +1,285 @@
+{
+ "about": "Moscow's parish churches, one to a block (church_plots.py)",
+ "buildings": [
+  {
+   "name": "moscow-church-0",
+   "glb": "church-moscow-a.glb",
+   "x": 1253.5,
+   "z": -5335.93,
+   "yaw": -1.5042
+  },
+  {
+   "name": "moscow-church-1",
+   "glb": "church-moscow-b.glb",
+   "x": -341.62,
+   "z": -7359.22,
+   "yaw": 0.6828
+  },
+  {
+   "name": "moscow-church-2",
+   "glb": "church-moscow-a.glb",
+   "x": 3484.0,
+   "z": -9887.6,
+   "yaw": 2.618
+  },
+  {
+   "name": "moscow-church-3",
+   "glb": "church-moscow-b.glb",
+   "x": -3297.25,
+   "z": -2679.6,
+   "yaw": -1.4212
+  },
+  {
+   "name": "moscow-church-4",
+   "glb": "church-moscow-a.glb",
+   "x": -1199.42,
+   "z": -8097.07,
+   "yaw": 0.4155
+  },
+  {
+   "name": "moscow-church-5",
+   "glb": "church-moscow-b.glb",
+   "x": -5181.38,
+   "z": -3838.51,
+   "yaw": -2.1708
+  },
+  {
+   "name": "moscow-church-6",
+   "glb": "church-moscow-a.glb",
+   "x": -1838.0,
+   "z": -5487.6,
+   "yaw": 0.818
+  },
+  {
+   "name": "moscow-church-7",
+   "glb": "church-moscow-b.glb",
+   "x": -11.0,
+   "z": -9061.6,
+   "yaw": 0.731
+  },
+  {
+   "name": "moscow-church-8",
+   "glb": "church-moscow-a.glb",
+   "x": -2073.6,
+   "z": -9373.4,
+   "yaw": 3.0693
+  },
+  {
+   "name": "moscow-church-9",
+   "glb": "church-moscow-b.glb",
+   "x": -1303.5,
+   "z": -5903.85,
+   "yaw": -3.1416
+  },
+  {
+   "name": "moscow-church-10",
+   "glb": "church-moscow-a.glb",
+   "x": -1284.08,
+   "z": -6959.14,
+   "yaw": -2.8198
+  },
+  {
+   "name": "moscow-church-11",
+   "glb": "church-moscow-b.glb",
+   "x": -394.83,
+   "z": -7937.1,
+   "yaw": 2.3022
+  },
+  {
+   "name": "moscow-church-12",
+   "glb": "church-moscow-a.glb",
+   "x": -313.25,
+   "z": -10749.85,
+   "yaw": 0.0097
+  },
+  {
+   "name": "moscow-church-13",
+   "glb": "church-moscow-b.glb",
+   "x": -3078.57,
+   "z": -6663.74,
+   "yaw": 2.9882
+  },
+  {
+   "name": "moscow-church-14",
+   "glb": "church-moscow-a.glb",
+   "x": -2504.0,
+   "z": -7045.6,
+   "yaw": 1.811
+  },
+  {
+   "name": "moscow-church-15",
+   "glb": "church-moscow-b.glb",
+   "x": -4694.25,
+   "z": -6036.1,
+   "yaw": -0.4907
+  },
+  {
+   "name": "moscow-church-16",
+   "glb": "church-moscow-a.glb",
+   "x": -3535.46,
+   "z": -4523.98,
+   "yaw": -1.5319
+  },
+  {
+   "name": "moscow-church-17",
+   "glb": "church-moscow-b.glb",
+   "x": -150.0,
+   "z": -6615.6,
+   "yaw": 0.262
+  },
+  {
+   "name": "moscow-church-18",
+   "glb": "church-moscow-a.glb",
+   "x": -124.0,
+   "z": -6109.6,
+   "yaw": 0.262
+  },
+  {
+   "name": "moscow-church-19",
+   "glb": "church-moscow-b.glb",
+   "x": -1582.65,
+   "z": -3567.72,
+   "yaw": -0.1747
+  },
+  {
+   "name": "moscow-church-20",
+   "glb": "church-moscow-a.glb",
+   "x": -4740.3,
+   "z": -3835.7,
+   "yaw": -0.7354
+  },
+  {
+   "name": "moscow-church-21",
+   "glb": "church-moscow-b.glb",
+   "x": 1770.0,
+   "z": -9725.6,
+   "yaw": 1.309
+  },
+  {
+   "name": "moscow-church-22",
+   "glb": "church-moscow-a.glb",
+   "x": -2453.16,
+   "z": -2658.51,
+   "yaw": -2.4167
+  },
+  {
+   "name": "moscow-church-23",
+   "glb": "church-moscow-b.glb",
+   "x": -2206.0,
+   "z": -8116.6,
+   "yaw": 0.1608
+  },
+  {
+   "name": "moscow-church-24",
+   "glb": "church-moscow-a.glb",
+   "x": 2450.0,
+   "z": -10613.6,
+   "yaw": 0.0
+  },
+  {
+   "name": "moscow-church-25",
+   "glb": "church-moscow-b.glb",
+   "x": -4237.45,
+   "z": -5439.35,
+   "yaw": -3.0385
+  },
+  {
+   "name": "moscow-church-26",
+   "glb": "church-moscow-a.glb",
+   "x": 3354.31,
+   "z": -7710.16,
+   "yaw": 0.7854
+  },
+  {
+   "name": "moscow-church-27",
+   "glb": "church-moscow-b.glb",
+   "x": 3322.29,
+   "z": -10849.89,
+   "yaw": -2.7611
+  },
+  {
+   "name": "moscow-church-28",
+   "glb": "church-moscow-a.glb",
+   "x": 1188.27,
+   "z": -7253.24,
+   "yaw": -2.6779
+  },
+  {
+   "name": "moscow-church-29",
+   "glb": "church-moscow-b.glb",
+   "x": -1948.0,
+   "z": -3181.6,
+   "yaw": 0.524
+  },
+  {
+   "name": "moscow-church-30",
+   "glb": "church-moscow-a.glb",
+   "x": -1634.27,
+   "z": -7559.96,
+   "yaw": -0.9774
+  },
+  {
+   "name": "moscow-church-31",
+   "glb": "church-moscow-b.glb",
+   "x": -3581.55,
+   "z": -8418.55,
+   "yaw": 0.8543
+  },
+  {
+   "name": "moscow-church-32",
+   "glb": "church-moscow-a.glb",
+   "x": -2345.36,
+   "z": -10730.15,
+   "yaw": -0.0
+  },
+  {
+   "name": "moscow-church-33",
+   "glb": "church-moscow-b.glb",
+   "x": -4384.8,
+   "z": -4313.27,
+   "yaw": -2.3562
+  },
+  {
+   "name": "moscow-church-34",
+   "glb": "church-moscow-a.glb",
+   "x": 3332.0,
+   "z": -8188.78,
+   "yaw": -0.7497
+  },
+  {
+   "name": "moscow-church-35",
+   "glb": "church-moscow-b.glb",
+   "x": -406.42,
+   "z": -10022.52,
+   "yaw": 0.7854
+  },
+  {
+   "name": "moscow-church-36",
+   "glb": "church-moscow-a.glb",
+   "x": 480.2,
+   "z": -7882.4,
+   "yaw": 2.2849
+  },
+  {
+   "name": "moscow-church-37",
+   "glb": "church-moscow-b.glb",
+   "x": 1576.41,
+   "z": -6574.89,
+   "yaw": 2.3562
+  },
+  {
+   "name": "moscow-church-38",
+   "glb": "church-moscow-a.glb",
+   "x": -3680.46,
+   "z": -5978.29,
+   "yaw": 1.7127
+  },
+  {
+   "name": "moscow-church-39",
+   "glb": "church-moscow-b.glb",
+   "x": -438.0,
+   "z": -5441.6,
+   "yaw": 0.245
+  }
+ ]
+}

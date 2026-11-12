@@ -1,0 +1,163 @@
+{
+ "about": "Yasnaya Polyana's buildings, placed from the estate's plan (estate.py)",
+ "buildings": [
+  {
+   "name": "tolstoy-house",
+   "glb": "estate-tolstoy-house.glb",
+   "x": 1749.5,
+   "z": 300.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "volkonsky-house",
+   "glb": "estate-volkonsky-house.glb",
+   "x": 1763.0,
+   "z": 72.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "kuzminsky-wing",
+   "glb": "estate-kuzminsky-wing.glb",
+   "x": 1625.0,
+   "z": -135.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "stables",
+   "glb": "estate-stables.glb",
+   "x": 1523.0,
+   "z": -157.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-15",
+   "glb": "estate-cottage-15.glb",
+   "x": 1767.5,
+   "z": 15.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "shed-10",
+   "glb": "estate-shed-10.glb",
+   "x": 1752.5,
+   "z": 388.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-9a",
+   "glb": "estate-cottage-9a.glb",
+   "x": 1754.0,
+   "z": -172.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-9b",
+   "glb": "estate-cottage-9b.glb",
+   "x": 1722.5,
+   "z": -210.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-8a",
+   "glb": "estate-cottage-8a.glb",
+   "x": 1677.5,
+   "z": -285.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-8b",
+   "glb": "estate-cottage-8b.glb",
+   "x": 1641.5,
+   "z": -277.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-a",
+   "glb": "estate-cottage-a.glb",
+   "x": 1580.0,
+   "z": 30.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "cottage-b",
+   "glb": "estate-cottage-b.glb",
+   "x": 1557.5,
+   "z": -7.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "pavilion",
+   "glb": "estate-pavilion.glb",
+   "x": 1710.5,
+   "z": 187.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "greenhouse",
+   "glb": "estate-greenhouse.glb",
+   "x": 1497.5,
+   "z": 342.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "bathhouse",
+   "glb": "estate-bathhouse.glb",
+   "x": 1440.5,
+   "z": -153.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "pond-house-a",
+   "glb": "estate-pond-house-a.glb",
+   "x": 1298.0,
+   "z": -115.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "pond-house-b",
+   "glb": "estate-pond-house-b.glb",
+   "x": 1295.0,
+   "z": -55.5,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "bathing-house",
+   "glb": "estate-bathing-house.glb",
+   "x": 1406.0,
+   "z": 249.0,
+   "yaw": -1.5708,
+   "ground": "max"
+  },
+  {
+   "name": "entrance-tower-1",
+   "glb": "estate-entrance-tower.glb",
+   "x": 1250.0,
+   "z": 0.0,
+   "yaw": -1.5708
+  },
+  {
+   "name": "entrance-tower1",
+   "glb": "estate-entrance-tower.glb",
+   "x": 1250.0,
+   "z": 14.0,
+   "yaw": -1.5708
+  }
+ ]
+}

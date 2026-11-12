@@ -1,0 +1,10 @@
+{
+ "tile_m": [
+  1.4,
+  1.4
+ ],
+ "source": "art/comfy/out/detail/4e60aebd_000.png",
+ "size_px": 2048,
+ "px_per_m": 1463,
+ "made_by": "make_tile.py"
+}

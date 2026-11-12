@@ -1,0 +1,629 @@
+{
+ "about": "The Kremlin in metres east and north of its middle (55.7515 N, 37.6175 E); the wall runs tower to tower in this order, closing the ring.",
+ "towers": [
+  {
+   "name": "vodovzvodnaya",
+   "e": -241.39,
+   "n": -377.82,
+   "face": -2.4559,
+   "glb": "kremlin-vodovzvodnaya.glb"
+  },
+  {
+   "name": "blagoveshchenskaya",
+   "e": -144.59,
+   "n": -309.25,
+   "face": -2.5566,
+   "glb": "kremlin-blagoveshchenskaya.glb"
+  },
+  {
+   "name": "taynitskaya",
+   "e": 22.74,
+   "n": -236.67,
+   "face": -3.112,
+   "glb": "kremlin-taynitskaya.glb"
+  },
+  {
+   "name": "first-unnamed",
+   "e": 91.97,
+   "n": -223.2,
+   "face": 2.7928,
+   "glb": "kremlin-first-unnamed.glb"
+  },
+  {
+   "name": "second-unnamed",
+   "e": 179.36,
+   "n": -209.84,
+   "face": 2.3902,
+   "glb": "kremlin-second-unnamed.glb"
+  },
+  {
+   "name": "petrovskaya",
+   "e": 282.86,
+   "n": -200.38,
+   "face": 2.1097,
+   "glb": "kremlin-petrovskaya.glb"
+  },
+  {
+   "name": "beklemishevskaya",
+   "e": 359.54,
+   "n": -195.7,
+   "face": 1.9898,
+   "glb": "kremlin-beklemishevskaya.glb"
+  },
+  {
+   "name": "konstantino-eleninskaya",
+   "e": 304.41,
+   "n": -35.73,
+   "face": 1.5258,
+   "glb": "kremlin-konstantino-eleninskaya.glb"
+  },
+  {
+   "name": "nabatnaya",
+   "e": 276.16,
+   "n": 38.18,
+   "face": 1.2355,
+   "glb": "kremlin-nabatnaya.glb"
+  },
+  {
+   "name": "tsarskaya",
+   "e": 257.36,
+   "n": 87.27,
+   "face": 1.0368,
+   "glb": "kremlin-tsarskaya.glb"
+  },
+  {
+   "name": "spasskaya",
+   "e": 243.7,
+   "n": 114.66,
+   "face": 0.9235,
+   "glb": "spasskaya-tower.glb"
+  },
+  {
+   "name": "senatskaya",
+   "e": 128.31,
+   "n": 216.96,
+   "face": 0.3606,
+   "glb": "kremlin-senatskaya.glb"
+  },
+  {
+   "name": "nikolskaya",
+   "e": 13.34,
+   "n": 325.17,
+   "face": -0.0401,
+   "glb": "kremlin-nikolskaya.glb"
+  },
+  {
+   "name": "corner-arsenalnaya",
+   "e": -64.59,
+   "n": 401.87,
+   "face": -0.2036,
+   "glb": "kremlin-corner-arsenalnaya.glb"
+  },
+  {
+   "name": "middle-arsenalnaya",
+   "e": -123.73,
+   "n": 241.23,
+   "face": -0.4838,
+   "glb": "kremlin-middle-arsenalnaya.glb"
+  },
+  {
+   "name": "troitskaya",
+   "e": -186.07,
+   "n": 70.13,
+   "face": -1.0666,
+   "glb": "kremlin-troitskaya.glb"
+  },
+  {
+   "name": "komendantskaya",
+   "e": -249.47,
+   "n": -102.97,
+   "face": -1.7656,
+   "glb": "kremlin-komendantskaya.glb"
+  },
+  {
+   "name": "oruzheynaya",
+   "e": -299.84,
+   "n": -230.66,
+   "face": -2.0783,
+   "glb": "kremlin-oruzheynaya.glb"
+  },
+  {
+   "name": "borovitskaya",
+   "e": -311.99,
+   "n": -288.43,
+   "face": -2.1855,
+   "glb": "kremlin-borovitskaya.glb"
+  },
+  {
+   "name": "kutafya",
+   "e": -303.91,
+   "n": 112.88,
+   "face": -1.1194,
+   "glb": "kremlin-kutafya.glb",
+   "outside": true
+  }
+ ],
+ "kutafya": {
+  "e": -303.91,
+  "n": 112.88
+ },
+ "wall": {
+  "h": [
+   8.5,
+   19.0
+  ],
+  "thick": [
+   3.5,
+   6.5
+  ],
+  "walk": 3.0
+ },
+ "world": {
+  "towers": [
+   {
+    "name": "vodovzvodnaya",
+    "e": -241.39,
+    "n": -377.82,
+    "face": -2.4559,
+    "glb": "kremlin-vodovzvodnaya.glb",
+    "x": -1868.59,
+    "z": -6163.22
+   },
+   {
+    "name": "blagoveshchenskaya",
+    "e": -144.59,
+    "n": -309.25,
+    "face": -2.5566,
+    "glb": "kremlin-blagoveshchenskaya.glb",
+    "x": -1768.11,
+    "z": -6226.26
+   },
+   {
+    "name": "taynitskaya",
+    "e": 22.74,
+    "n": -236.67,
+    "face": -3.112,
+    "glb": "kremlin-taynitskaya.glb",
+    "x": -1596.97,
+    "z": -6289.35
+   },
+   {
+    "name": "first-unnamed",
+    "e": 91.97,
+    "n": -223.2,
+    "face": 2.7928,
+    "glb": "kremlin-first-unnamed.glb",
+    "x": -1527.1,
+    "z": -6298.93
+   },
+   {
+    "name": "second-unnamed",
+    "e": 179.36,
+    "n": -209.84,
+    "face": 2.3902,
+    "glb": "kremlin-second-unnamed.glb",
+    "x": -1439.1,
+    "z": -6307.37
+   },
+   {
+    "name": "petrovskaya",
+    "e": 282.86,
+    "n": -200.38,
+    "face": 2.1097,
+    "glb": "kremlin-petrovskaya.glb",
+    "x": -1335.23,
+    "z": -6311.02
+   },
+   {
+    "name": "beklemishevskaya",
+    "e": 359.54,
+    "n": -195.7,
+    "face": 1.9898,
+    "glb": "kremlin-beklemishevskaya.glb",
+    "x": -1258.41,
+    "z": -6311.39
+   },
+   {
+    "name": "konstantino-eleninskaya",
+    "e": 304.41,
+    "n": -35.73,
+    "face": 1.5258,
+    "glb": "kremlin-konstantino-eleninskaya.glb",
+    "x": -1304.49,
+    "z": -6474.2
+   },
+   {
+    "name": "nabatnaya",
+    "e": 276.16,
+    "n": 38.18,
+    "face": 1.2355,
+    "glb": "kremlin-nabatnaya.glb",
+    "x": -1328.56,
+    "z": -6549.58
+   },
+   {
+    "name": "tsarskaya",
+    "e": 257.36,
+    "n": 87.27,
+    "face": 1.0368,
+    "glb": "kremlin-tsarskaya.glb",
+    "x": -1344.58,
+    "z": -6599.64
+   },
+   {
+    "name": "spasskaya",
+    "e": 243.7,
+    "n": 114.66,
+    "face": 0.9235,
+    "glb": "spasskaya-tower.glb",
+    "x": -1356.68,
+    "z": -6627.76
+   },
+   {
+    "name": "senatskaya",
+    "e": 128.31,
+    "n": 216.96,
+    "face": 0.3606,
+    "glb": "kremlin-senatskaya.glb",
+    "x": -1466.16,
+    "z": -6736.36
+   },
+   {
+    "name": "nikolskaya",
+    "e": 13.34,
+    "n": 325.17,
+    "face": -0.0401,
+    "glb": "kremlin-nikolskaya.glb",
+    "x": -1574.89,
+    "z": -6850.84
+   },
+   {
+    "name": "corner-arsenalnaya",
+    "e": -64.59,
+    "n": 401.87,
+    "face": -0.2036,
+    "glb": "kremlin-corner-arsenalnaya.glb",
+    "x": -1648.4,
+    "z": -6931.78
+   },
+   {
+    "name": "middle-arsenalnaya",
+    "e": -123.73,
+    "n": 241.23,
+    "face": -0.4838,
+    "glb": "kremlin-middle-arsenalnaya.glb",
+    "x": -1716.44,
+    "z": -6774.71
+   },
+   {
+    "name": "troitskaya",
+    "e": -186.07,
+    "n": 70.13,
+    "face": -1.0666,
+    "glb": "kremlin-troitskaya.glb",
+    "x": -1788.27,
+    "z": -6607.37
+   },
+   {
+    "name": "komendantskaya",
+    "e": -249.47,
+    "n": -102.97,
+    "face": -1.7656,
+    "glb": "kremlin-komendantskaya.glb",
+    "x": -1861.27,
+    "z": -6438.09
+   },
+   {
+    "name": "oruzheynaya",
+    "e": -299.84,
+    "n": -230.66,
+    "face": -2.0783,
+    "glb": "kremlin-oruzheynaya.glb",
+    "x": -1918.71,
+    "z": -6313.42
+   },
+   {
+    "name": "borovitskaya",
+    "e": -311.99,
+    "n": -288.43,
+    "face": -2.1855,
+    "glb": "kremlin-borovitskaya.glb",
+    "x": -1934.08,
+    "z": -6256.43
+   },
+   {
+    "name": "kutafya",
+    "e": -303.91,
+    "n": 112.88,
+    "face": -1.1194,
+    "glb": "kremlin-kutafya.glb",
+    "outside": true,
+    "x": -1903.53,
+    "z": -6656.65
+   }
+  ],
+  "north": [
+   0.5489441395286576,
+   -9.78461344824973
+  ],
+  "east": [
+   9.784613448249956,
+   0.5489441395284302
+  ],
+  "fit_rot_deg": 3.2110870707871944,
+  "buildings": [
+   {
+    "name": "ivan-the-great",
+    "glb": "kremlin-ivan-the-great.glb",
+    "e": 8.14,
+    "n": -97.96,
+    "x": -1603.78,
+    "z": -6428.67,
+    "yaw": 1.5148
+   },
+   {
+    "name": "dormition",
+    "glb": "kremlin-dormition.glb",
+    "e": -38.22,
+    "n": -66.79,
+    "x": -1648.32,
+    "z": -6462.38,
+    "yaw": -0.056
+   },
+   {
+    "name": "archangel",
+    "glb": "kremlin-archangel.glb",
+    "e": 12.53,
+    "n": -166.98,
+    "x": -1603.26,
+    "z": -6359.51,
+    "yaw": -0.056
+   },
+   {
+    "name": "annunciation",
+    "glb": "kremlin-annunciation.glb",
+    "e": -46.36,
+    "n": -144.72,
+    "x": -1660.81,
+    "z": -6385.04,
+    "yaw": -0.056
+   },
+   {
+    "name": "facets",
+    "glb": "kremlin-facets.glb",
+    "e": -76.43,
+    "n": -99.07,
+    "x": -1688.28,
+    "z": -6432.29,
+    "yaw": 1.5148
+   },
+   {
+    "name": "grand-palace",
+    "glb": "kremlin-grand-palace.glb",
+    "e": -119.03,
+    "n": -205.94,
+    "x": -1736.8,
+    "z": -6327.98,
+    "yaw": -0.056
+   },
+   {
+    "name": "st-basils",
+    "glb": "st-basils.glb",
+    "e": 348.33,
+    "n": 111.32,
+    "x": -1252.4,
+    "z": -6618.56,
+    "yaw": 3.0855
+   },
+   {
+    "name": "senate-base",
+    "glb": "kremlin-senate-wing.glb",
+    "e": 104.7,
+    "n": 191.12,
+    "x": -1491.18,
+    "z": -6711.89,
+    "yaw": 2.3451
+   },
+   {
+    "name": "senate-side-a",
+    "glb": "kremlin-senate-wing.glb",
+    "e": 93.94,
+    "n": 142.29,
+    "x": -1504.65,
+    "z": -6663.74,
+    "yaw": -2.8909
+   },
+   {
+    "name": "senate-side-b",
+    "glb": "kremlin-senate-wing.glb",
+    "e": 57.04,
+    "n": 176.02,
+    "x": -1539.61,
+    "z": -6699.48,
+    "yaw": -1.8436
+   },
+   {
+    "name": "senate-dome",
+    "glb": "kremlin-senate-dome.glb",
+    "e": 96.6,
+    "n": 182.26,
+    "x": -1499.76,
+    "z": -6703.5,
+    "yaw": 2.3451
+   },
+   {
+    "name": "arsenal-outer",
+    "glb": "kremlin-arsenal-long.glb",
+    "e": -103.28,
+    "n": 223.51,
+    "x": -1697.02,
+    "z": -6755.88,
+    "yaw": 1.1637
+   },
+   {
+    "name": "arsenal-inner",
+    "glb": "kremlin-arsenal-inner.glb",
+    "e": -45.06,
+    "n": 202.2,
+    "x": -1640.08,
+    "z": -6731.33,
+    "yaw": 1.1637
+   },
+   {
+    "name": "arsenal-south",
+    "glb": "kremlin-arsenal-end.glb",
+    "e": -118.7,
+    "n": 91.25,
+    "x": -1719.82,
+    "z": -6624.69,
+    "yaw": -0.4071
+   },
+   {
+    "name": "arsenal-north",
+    "glb": "kremlin-arsenal-end.glb",
+    "e": -29.64,
+    "n": 334.46,
+    "x": -1617.28,
+    "z": -6862.52,
+    "yaw": -0.4071
+   }
+  ]
+ },
+ "buildings": [
+  {
+   "name": "ivan-the-great",
+   "glb": "kremlin-ivan-the-great.glb",
+   "e": 8.14,
+   "n": -97.96,
+   "x": -1603.78,
+   "z": -6428.67,
+   "yaw": 1.5148
+  },
+  {
+   "name": "dormition",
+   "glb": "kremlin-dormition.glb",
+   "e": -38.22,
+   "n": -66.79,
+   "x": -1648.32,
+   "z": -6462.38,
+   "yaw": -0.056
+  },
+  {
+   "name": "archangel",
+   "glb": "kremlin-archangel.glb",
+   "e": 12.53,
+   "n": -166.98,
+   "x": -1603.26,
+   "z": -6359.51,
+   "yaw": -0.056
+  },
+  {
+   "name": "annunciation",
+   "glb": "kremlin-annunciation.glb",
+   "e": -46.36,
+   "n": -144.72,
+   "x": -1660.81,
+   "z": -6385.04,
+   "yaw": -0.056
+  },
+  {
+   "name": "facets",
+   "glb": "kremlin-facets.glb",
+   "e": -76.43,
+   "n": -99.07,
+   "x": -1688.28,
+   "z": -6432.29,
+   "yaw": 1.5148
+  },
+  {
+   "name": "grand-palace",
+   "glb": "kremlin-grand-palace.glb",
+   "e": -119.03,
+   "n": -205.94,
+   "x": -1736.8,
+   "z": -6327.98,
+   "yaw": -0.056
+  },
+  {
+   "name": "st-basils",
+   "glb": "st-basils.glb",
+   "e": 348.33,
+   "n": 111.32,
+   "x": -1252.4,
+   "z": -6618.56,
+   "yaw": 3.0855
+  },
+  {
+   "name": "senate-base",
+   "glb": "kremlin-senate-wing.glb",
+   "e": 104.7,
+   "n": 191.12,
+   "x": -1491.18,
+   "z": -6711.89,
+   "yaw": 2.3451
+  },
+  {
+   "name": "senate-side-a",
+   "glb": "kremlin-senate-wing.glb",
+   "e": 93.94,
+   "n": 142.29,
+   "x": -1504.65,
+   "z": -6663.74,
+   "yaw": -2.8909
+  },
+  {
+   "name": "senate-side-b",
+   "glb": "kremlin-senate-wing.glb",
+   "e": 57.04,
+   "n": 176.02,
+   "x": -1539.61,
+   "z": -6699.48,
+   "yaw": -1.8436
+  },
+  {
+   "name": "senate-dome",
+   "glb": "kremlin-senate-dome.glb",
+   "e": 96.6,
+   "n": 182.26,
+   "x": -1499.76,
+   "z": -6703.5,
+   "yaw": 2.3451
+  },
+  {
+   "name": "arsenal-outer",
+   "glb": "kremlin-arsenal-long.glb",
+   "e": -103.28,
+   "n": 223.51,
+   "x": -1697.02,
+   "z": -6755.88,
+   "yaw": 1.1637
+  },
+  {
+   "name": "arsenal-inner",
+   "glb": "kremlin-arsenal-inner.glb",
+   "e": -45.06,
+   "n": 202.2,
+   "x": -1640.08,
+   "z": -6731.33,
+   "yaw": 1.1637
+  },
+  {
+   "name": "arsenal-south",
+   "glb": "kremlin-arsenal-end.glb",
+   "e": -118.7,
+   "n": 91.25,
+   "x": -1719.82,
+   "z": -6624.69,
+   "yaw": -0.4071
+  },
+  {
+   "name": "arsenal-north",
+   "glb": "kremlin-arsenal-end.glb",
+   "e": -29.64,
+   "n": 334.46,
+   "x": -1617.28,
+   "z": -6862.52,
+   "yaw": -0.4071
+  }
+ ]
+}

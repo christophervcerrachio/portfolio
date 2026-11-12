@@ -1,0 +1,60 @@
+{
+ "name": "spb-kit",
+ "glb": "kit.glb",
+ "bin": "kit.bin",
+ "front": "+z",
+ "near_m": 120,
+ "copies": 9039,
+ "turned": 1369,
+ "models": [
+  {
+   "id": "spb-corner",
+   "size": [
+    24.0,
+    22.0,
+    24.0
+   ]
+  },
+  {
+   "id": "spb-granite-block",
+   "size": [
+    24.0,
+    20.0,
+    15.0
+   ]
+  },
+  {
+   "id": "spb-palace",
+   "size": [
+    60.0,
+    22.0,
+    20.0
+   ]
+  },
+  {
+   "id": "spb-townhouse-pink",
+   "size": [
+    22.0,
+    21.0,
+    14.0
+   ]
+  },
+  {
+   "id": "spb-townhouse4",
+   "size": [
+    26.0,
+    21.0,
+    15.0
+   ]
+  },
+  {
+   "id": "spb-townhouse5",
+   "size": [
+    26.0,
+    24.0,
+    15.0
+   ]
+  }
+ ],
+ "replaced_shapes": []
+}

@@ -1,0 +1,84 @@
+{
+ "frame": {
+  "w": 2560,
+  "h": 1152,
+  "spanX": 1.444087,
+  "spanY": 0.649839,
+  "horizon": 0.272,
+  "scale": 2
+ },
+ "camera": {
+  "E": 170.0
+ },
+ "map": {
+  "albedo": "albedo.png",
+  "size": [
+   640,
+   480
+  ],
+  "mPerPx": 6.5,
+  "origin": [
+   610.0,
+   470.0
+  ],
+  "az": -0.9536049352545344
+ },
+ "classes": "classes.png",
+ "outside": "#9a9a90",
+ "fog": {
+  "color": "#dfe3e6",
+  "density": 0.00035
+ },
+ "shadowReach": 5000,
+ "light": {
+  "sun": [
+   -0.55,
+   0.5,
+   0.3
+  ],
+  "sunColor": "#fff4e2",
+  "sunI": 2.2,
+  "sky": "#c8d3df",
+  "ground": "#7a7466",
+  "skyI": 1.15
+ },
+ "boxes": "boxes.bin",
+ "roofs": "roofs.bin",
+ "facades": true,
+ "canopy": {
+  "height": "canopy_h.png",
+  "color": "canopy_c.png",
+  "step": 1,
+  "x0": 0,
+  "y0": 0,
+  "max": 24.0,
+  "sink": 4
+ },
+ "shapes": [
+  {
+   "kind": "box",
+   "at": [
+    700.0,
+    172.0
+   ],
+   "w": 845.0,
+   "d": 325.0,
+   "h": 0.06,
+   "color": "#526170"
+  }
+ ],
+ "region": {
+  "albedo": "region.png",
+  "size": [
+   1920,
+   1440
+  ],
+  "mPerPx": 6.5,
+  "center": [
+   320.0,
+   240.0
+  ],
+  "rot": 0.0
+ },
+ "kit": "kit/kit.json"
+}

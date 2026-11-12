@@ -1,0 +1,97 @@
+{
+ "surfaces": {
+  "grass": [
+   "grass-0.wav",
+   "grass-1.wav",
+   "grass-2.wav",
+   "grass-3.wav",
+   "grass-4.wav",
+   "grass-5.wav",
+   "grass-6.wav",
+   "grass-7.wav"
+  ],
+  "field": [
+   "field-0.wav",
+   "field-1.wav",
+   "field-2.wav",
+   "field-3.wav",
+   "field-4.wav",
+   "field-5.wav",
+   "field-6.wav",
+   "field-7.wav"
+  ],
+  "forest": [
+   "forest-0.wav",
+   "forest-1.wav",
+   "forest-2.wav",
+   "forest-3.wav",
+   "forest-4.wav",
+   "forest-5.wav",
+   "forest-6.wav",
+   "forest-7.wav"
+  ],
+  "dirt": [
+   "dirt-0.wav",
+   "dirt-1.wav",
+   "dirt-2.wav",
+   "dirt-3.wav",
+   "dirt-4.wav",
+   "dirt-5.wav",
+   "dirt-6.wav",
+   "dirt-7.wav",
+   "dirt-8.wav",
+   "dirt-9.wav"
+  ],
+  "cobble": [
+   "cobble-0.wav",
+   "cobble-1.wav",
+   "cobble-2.wav",
+   "cobble-3.wav",
+   "cobble-4.wav",
+   "cobble-5.wav",
+   "cobble-6.wav",
+   "cobble-7.wav"
+  ],
+  "rock": [
+   "rock-0.wav",
+   "rock-1.wav",
+   "rock-2.wav",
+   "rock-3.wav",
+   "rock-4.wav",
+   "rock-5.wav",
+   "rock-6.wav",
+   "rock-7.wav"
+  ],
+  "shore": [
+   "shore-0.wav",
+   "shore-1.wav",
+   "shore-2.wav",
+   "shore-3.wav",
+   "shore-4.wav",
+   "shore-5.wav",
+   "shore-6.wav",
+   "shore-7.wav"
+  ],
+  "water": [
+   "water-0.wav",
+   "water-1.wav",
+   "water-2.wav",
+   "water-3.wav",
+   "water-4.wav",
+   "water-5.wav",
+   "water-6.wav",
+   "water-7.wav"
+  ],
+  "wood": [
+   "wood-0.wav",
+   "wood-1.wav",
+   "wood-2.wav",
+   "wood-3.wav",
+   "wood-4.wav",
+   "wood-5.wav",
+   "wood-6.wav",
+   "wood-7.wav"
+  ]
+ },
+ "gain": 0.55
+}
