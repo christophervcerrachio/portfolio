@@ -119,7 +119,7 @@ export function tileStream({ base = '', city, kind, near = 1200, keep = 300, gro
   };
   /** Whether the tile 'i_j' is in and all of it shown. */
   st.shown = (key) => tiles.get(key)?.shown === true;
-  /** Whether the tile 'i_j' is shown and stands in its place: risen out of the ground, or never asked to (reveal.js). */
+  /** Whether the tile 'i_j' is shown and stands in its place: risen out of the ground, or shown where it stood (reveal.js). */
   st.risen = (key) => { const t = tiles.get(key); return t?.shown === true && t.scene?.userData.risen === true; };
   return st;
 }
