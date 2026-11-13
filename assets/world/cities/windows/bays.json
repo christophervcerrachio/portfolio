@@ -1,5 +1,5 @@
 {
- "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill. shutters: [[x0, y0, x1, y1, side], ...] the shutters standing open beside its windows, side -1 left, 1 right (measure_shutters.py).",
+ "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill. shutters: [[x0, y0, x1, y1, side], ...] the shutters standing open beside its windows, side -1 left, 1 right (measure_shutters.py). A front measured to its openings (13 Nov 2026, msk2-white): its 'cols' and 'rows' (a row a window) are each window's hole in the wall's plane, to the outer edge of its reveal, and 'frames' {column: [x0, y0, x1, y1]} its painted frame inside the hole, the picture's reveal or soffit between the two; 'frameColours' {column: [r, g, b]} a frame that is not white (a glazed door's wood); 'doorCols' the columns whose opening is a door (a balcony's), modelled with the doors. The frames are models of their own (fixtures\\frames_spec.py, frames_blender.py) and the window maps are made from the holes and frames (make_window_maps.py).",
  "facade-spb-cream": {
   "H": 1238,
   "bays": [
@@ -1187,93 +1187,254 @@
   },
   "cols": [
    [
-    98,
-    157
+    86.0,
+    155.0
    ],
    [
-    218,
-    269
+    210.0,
+    268.0
    ],
    [
-    337,
-    400
+    333.0,
+    403.0
    ],
    [
-    471,
-    546
+    471.0,
+    549.0
    ],
    [
-    624,
-    683
+    621.0,
+    691.0
    ],
    [
-    781,
-    845
+    783.0,
+    852.0
    ],
    [
-    922,
-    974
+    927.0,
+    986.0
    ],
    [
-    89,
-    150
+    72.0,
+    149.0
    ],
    [
-    216,
-    264
+    201.0,
+    261.0
    ],
    [
-    328,
-    400
+    315.0,
+    407.0
    ],
    [
-    624,
-    692
+    616.0,
+    705.0
    ],
    [
-    787,
-    851
+    786.0,
+    864.0
    ],
    [
-    930,
-    980
+    932.0,
+    993.0
    ]
   ],
   "rows": [
    [
-    123,
-    241,
+    117.0,
+    242.5,
     [
-     0,
-     1,
-     2,
-     3,
-     4,
-     5,
+     0
+    ]
+   ],
+   [
+    116.0,
+    240.5,
+    [
+     1
+    ]
+   ],
+   [
+    115.0,
+    242.0,
+    [
+     2
+    ]
+   ],
+   [
+    114.0,
+    241.0,
+    [
+     3
+    ]
+   ],
+   [
+    115.0,
+    239.5,
+    [
+     4
+    ]
+   ],
+   [
+    115.0,
+    239.5,
+    [
+     5
+    ]
+   ],
+   [
+    116.0,
+    237.5,
+    [
      6
     ]
    ],
    [
-    368,
-    482,
+    364.5,
+    486.0,
     [
-     7,
-     8,
-     9,
-     10,
-     11,
+     7
+    ],
+    1.0
+   ],
+   [
+    367.5,
+    486.0,
+    [
+     8
+    ],
+    1.0
+   ],
+   [
+    359.5,
+    485.5,
+    [
+     9
+    ],
+    1.0
+   ],
+   [
+    358.0,
+    483.5,
+    [
+     10
+    ],
+    1.0
+   ],
+   [
+    360.0,
+    482.5,
+    [
+     11
+    ],
+    1.0
+   ],
+   [
+    362.0,
+    482.5,
+    [
      12
     ],
     1.0
    ]
   ],
   "door": [
-   465,
-   352,
-   556,
-   547
+   462.5,
+   354.0,
+   556.0,
+   547.5
   ],
-  "doorArch": 1.0
+  "doorArch": 1.0,
+  "frames": {
+   "0": [
+    93.5,
+    125.0,
+    154.5,
+    242.5
+   ],
+   "1": [
+    216.5,
+    126.0,
+    268.0,
+    240.5
+   ],
+   "2": [
+    334.0,
+    123.0,
+    402.0,
+    242.0
+   ],
+   "3": [
+    471.0,
+    121.0,
+    549.0,
+    241.0
+   ],
+   "4": [
+    622.0,
+    124.0,
+    690.0,
+    239.5
+   ],
+   "5": [
+    783.0,
+    125.0,
+    852.0,
+    239.5
+   ],
+   "6": [
+    928.0,
+    124.0,
+    978.0,
+    237.5
+   ],
+   "7": [
+    82.0,
+    371.5,
+    149.0,
+    486.0
+   ],
+   "8": [
+    212.0,
+    378.5,
+    261.0,
+    486.0
+   ],
+   "9": [
+    324.0,
+    368.0,
+    402.0,
+    485.5
+   ],
+   "10": [
+    621.5,
+    367.5,
+    696.0,
+    483.5
+   ],
+   "11": [
+    790.5,
+    367.5,
+    855.0,
+    482.5
+   ],
+   "12": [
+    935.5,
+    371.0,
+    983.0,
+    482.5
+   ]
+  },
+  "frameColours": {
+   "3": [
+    91,
+    52,
+    38
+   ]
+  },
+  "doorCols": [
+   3
+  ]
  },
  "facade-msk2-merchant": {
   "H": 506,

@@ -5,11 +5,16 @@
 // cities have some 780,000 walls and millions of windows, gigabytes if every one were in the models. The window maps'
 // bays and storey bands (windows/bays.json, from dev\world\cities\facade-bays.json) place each window as the houses'
 // own walls placed it.
+// A front measured to its openings (bays.json 'frames': each window's painted frame inside its hole) has its windows'
+// frames as models of their own (fronts/<front>.glb: dev\world\cities\fixtures\frames_blender.py), each set at the back
+// of its hole on the glass, stretched to the hole as the picture is; the glass behind is the picture's own window, from
+// its painted frame's place, and the hole's sides the picture's own reveal.
 import * as THREE from 'three';
 import { interiors } from './interiors.js';
 import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
+import { styleNow } from '../retro.js';
 
 const DIR = 'assets/world/cities/';
 const NEAR = 380;               // (m: the relief is built for the tiles within this of the camera)
@@ -21,6 +26,9 @@ const PROUD = 0.08, SILL = 0.15, CORN = 0.35, COURSE = 0.08;
 // rooms seen through it - the wall's own material leaves the hole open within CUT m: interiors.js `cut`)
 export const REC = 0.25;
 export let CUT = 150;
+// (the windows' frames: in cells of FCELL m of their own, each drawn while the camera is within FRAMES_NEAR m of it and
+// the holes are open there - farther, a frame is a pixel and the picture's own frame on the glass does as well)
+const FCELL = 50, FRAMES_NEAR = 60;
 /** The relief's reach for this machine (hardware.js reliefNear): built within `near` m, drawn within a little less, the
  *  windows open as holes within less again. Call before the fronts' materials are made (cityblocks.js). */
 export function reliefReach(near) {
@@ -81,6 +89,26 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     g.scene.traverse((o) => { if (o.isMesh) { const m = o.material; receiveSun(m, U); parts.push({ geo: o.geometry.clone().applyMatrix4(o.matrixWorld), mat: m }); } });
     return parts;
   }).catch(() => null)));
+  // (the windows' frames: each front's models, { c<column>: { p, n, u: its triangles' points, normals and texture
+  // coordinates in its own metres - x along the hole from its left, y up from its foot, z out from the glass - mat }};
+  // their paint one material a colour, whatever the front)
+  const FRAMES = {}, FMATS = {};
+  const frameMat = (name, src) => {
+    if (FMATS[name]) return FMATS[name];
+    const m = new THREE.MeshStandardMaterial({ color: src.color.clone(), roughness: src.roughness ?? 0.45, metalness: 0, name });
+    receiveSun(m, U, { street: true });
+    return (FMATS[name] = m);
+  };
+  const loadFrames = (key) => gltfLoader().loadAsync(base + DIR + 'fronts/' + key.slice(7) + '.glb').then((g) => {
+    g.scene.updateMatrixWorld(true); const F = {};
+    g.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+      const uv = geo.attributes.uv;
+      F[o.name] = { p: geo.attributes.position.array, n: geo.attributes.normal.array, u: uv ? uv.array : new Float32Array(geo.attributes.position.count * 2), mat: frameMat(o.material.name || 'frame', o.material) };
+    });
+    FRAMES[key] = F;
+  }).catch(() => {});
   const group = new THREE.Group(); group.name = 'facade-relief';
   const tiles = new Map();         // key -> { c: [x, z], state: 0 none 1 loading 2 built, mesh group }
   let BAYS = null, FRONTS = null;
@@ -88,7 +116,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     fetch(base + DIR + 'windows/bays.json').then((r) => r.json()),
     fetch(base + DIR + 'windows/fronts.json').then((r) => r.json()),
     ...cities.map((c) => fetch(base + DIR + c + '-relief/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)),
-  ]).then(([b, f, ...idx]) => {
+  ]).then(([b, f, ...idx]) => Promise.all(Object.keys(b).filter((k) => b[k]?.frames).map(loadFrames)).then(() => {
+    // (the frames first: the tiles are built once, from what is in hand when they are)
     BAYS = b; FRONTS = f;
     idx.forEach((I, ci) => {
       if (!I) return;
@@ -97,7 +126,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         tiles.set(cities[ci] + ':' + t, { city: cities[ci], key: t, I, c: [(i + 0.5) * I.tile, (j + 0.5) * I.tile], state: 0, g: null });
       }
     });
-  }).catch(() => {});
+  })).catch(() => {});
 
   // ---- the walls themselves, for the walker: he is kept a step off every wall that shows (the houses' picture the
   // walker is stopped by is 2 m a pixel, and by it he could stand with his eye through a wall and see the house from
@@ -147,7 +176,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   function build(T, walls) {
     // per front material: positions, normals, uvs
     const acc = new Map(); const boxes = [];
-    const get = (name, ck) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, p: [], n: [], u: [], c: [] })); return a; };
+    const get = (name, ck, cell = CELL) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, cell, p: [], n: [], u: [], c: [] })); return a; };
+    // (the windows' frames are not built for an older machine's picture of 240 lines: its windows are the picture's own,
+    // no holes - interiors.js)
+    const frOK = !(styleNow() && styleNow().lines <= 240);
     for (const w of walls) {
       // (k0, cut: a wall shared with a lower house - it shows from `cut` up, its windows from storey band k0 up:
       // dev/world/facade_bays.py)
@@ -156,7 +188,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // portico's two middle columns' pedestals, which its door's steps keep to - dev/world/city_blender.py)
       const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0, , lev = null, room = null] = w;
       let dix = 0;
-      const fname = T.I.fronts[fi], key = 'facade-' + fname.slice(6), fb = BAYS[key], fr = FRONTS[key];
+      const fname = T.I.fronts[fi], key = 'facade-' + fname.slice(6), fb = BAYS[key], fr = FRONTS[key], FM = frOK ? FRAMES[key] : null;
       if (!fb || !fr) continue;
       fb.my ??= fr.my; fb.mx ??= fr.mx;
       const H = fr.H;
@@ -220,7 +252,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           // each face cut from the picture where it stands, the hole's from the plaster beyond the surround. (Every
           // opening had been a rectangle: under an arch the wall between it and the rectangle's corners was cut away
           // with the hole, and the hole's flat head stood across the arch like a plank.)
-          const arched = (x0, x1, y0p, y1p, vBot, af, mpx, e, ew, D) => {
+          const arched = (x0, x1, y0p, y1p, vBot, af, mpx, e, ew, D, rev = null) => {
             // (an even count of segments: the crown is a corner, where the head's left half meets its right)
             const NA = 2 * Math.max(3, Math.round(6 * Math.min(1, af))), Ar = archOf(x0, x1, y0p, af, NA);
             const a0 = S(x0), a1 = S(x1), am = mpx * fb.mx * sc, vs = Z(Ar.ys);
@@ -229,8 +261,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
             // (the hole's sides and head from the surround's front back to the glass, not from the wall's face: the wall's
             // cut is its window map's, a staircase of texels round an arch, and between that and the smooth arch the
             // light behind had shown in dots along every arched head - seen live, 12 Nov 2026)
-            quad(V(a0, vBot, PROUD), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, PROUD), [x0 - e, y1p], [x0 - e - ew, y1p], [x0 - e - ew, Ar.ys], [x0 - e, Ar.ys], along);
-            quad(V(a1, vBot, -D), V(a1, vBot, PROUD), V(a1, vs, PROUD), V(a1, vs, -D), [x1 + e + ew, y1p], [x1 + e, y1p], [x1 + e, Ar.ys], [x1 + e + ew, Ar.ys], back);
+            // (rev: the picture's own reveal for each side, [u at the front, u at the back] - a window measured to its
+            // hole; else the plaster beyond the surround. That reveal lies inside the hole, which the wall's own material
+            // leaves open near the camera: its faces take the door's, the front's picture with no hole in it)
+            const [lf, lb] = rev ? rev[0] : [x0 - e, x0 - e - ew], [rf, rb] = rev ? rev[1] : [x1 + e, x1 + e + ew];
+            const AW = A, AR = rev ? AD : A;
+            A = AR;
+            quad(V(a0, vBot, PROUD), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, PROUD), [lf, y1p], [lb, y1p], [lb, Ar.ys], [lf, Ar.ys], along);
+            quad(V(a1, vBot, -D), V(a1, vBot, PROUD), V(a1, vs, PROUD), V(a1, vs, -D), [rb, y1p], [rf, y1p], [rf, Ar.ys], [rb, Ar.ys], back);
+            A = AW;
             const W = (x, y, o) => V(S(x), Z(y), o);
             // (the head's underside in the jambs' own strip of the picture, carried on from where each jamb stops: up the
             // arch from either springing, the strip read on down from the springing's row, so the reveal is one plain
@@ -247,8 +286,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const qa = [ax_ + anx * mpx, ay_ + any * mpx], qb = [bx_ + bnx * mpx, by_ + bny * mpx];
               quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(qb[0], qb[1], PROUD), W(qa[0], qa[1], PROUD), [ax_, ay_], [bx_, by_], qb, qa, out);       // (the archivolt's face)
               quad(W(qa[0], qa[1], 0), W(qa[0], qa[1], PROUD), W(qb[0], qb[1], PROUD), W(qb[0], qb[1], 0), qa, qa, qb, qb, nr);                        // (its outer edge)
-              const left = i < NA / 2, uf = left ? x0 - e : x1 + e, ub = left ? x0 - e - ew : x1 + e + ew, va = vAt(i), vb = vAt(i + 1);
-              quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(bx_, by_, -D), W(ax_, ay_, -D), [uf, va], [uf, vb], [ub, vb], [ub, va], [-nr[0], -nr[1], -nr[2]]);   // (the hole's head)
+              const left = i < NA / 2, uf = left ? lf : rf, ub = left ? lb : rb, va = vAt(i), vb = vAt(i + 1);
+              A = AR; quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(bx_, by_, -D), W(ax_, ay_, -D), [uf, va], [uf, vb], [ub, vb], [ub, va], [-nr[0], -nr[1], -nr[2]]); A = AW;   // (the hole's head)
             }
           };
           if (!shop) for (const [ry0, ry1, cs, af = 0] of fb.rows) {
@@ -262,13 +301,26 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const tr = fb.trim, mpx = tr ? tr[0] : Math.max(6, Math.min(16, (cx1 - cx0) * 0.12)), hpx = tr ? tr[1] : mpx;
               const u0 = S(cx0), u1 = S(cx1), v0 = Z(ry1), v1 = Z(ry0), um = mpx * fb.mx * sc, vm = (Z(ry0 - hpx) - v1);
               const e = Math.round(mpx) + 5, ew = 6;
+              // (a window measured to its hole (bays.json 'frames'): its painted frame's place in the picture, and at each
+              // side the picture's own reveal between the two - [u at the wall, u at the frame] - or, where the picture
+              // shows that side's none (under 2 px, the picture taken square to the front's middle), the other side's)
+              const gf = fb.frames?.[ci], [gx0, gy0, gx1, gy1] = gf ?? [cx0, ry0, cx1, ry1];
+              const rvL = gf && gx0 - cx0 >= 2 ? [cx0, gx0] : null, rvR = gf && cx1 - gx1 >= 2 ? [cx1, gx1] : null;
+              const rev = rvL || rvR ? [rvL ?? rvR, rvR ?? rvL] : null;
+              // (each strip's corners in the picture - at the wall's foot, the frame's foot, the frame's head, the wall's
+              // head - for a side: the left's, the right's, or the soffit's turned on its side where the window shows
+              // neither, as one near the picture's middle does; and the soffit's for the head where it shows)
+              const hasH = gf && gy0 - ry0 >= 2;
+              const SL = [[cx0, ry1], [gx0, gy1], [gx0, gy0], [cx0, ry0]], SR = [[cx1, ry1], [gx1, gy1], [gx1, gy0], [cx1, ry0]];
+              const SH = [[cx0, ry0], [gx0, gy0], [gx1, gy0], [cx1, ry0]];
+              const sideL = rvL ? SL : rvR ? SR : hasH ? SH : null, sideR = rvR ? SR : rvL ? SL : hasH ? SH : null;
               // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
               // dev\world\cities\measure_shutters.py)
               // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
               const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= cx0 + 1.5 && cx0 - q[2] <= mpx + 2 : q[0] >= cx1 - 1.5 && q[0] - cx1 <= mpx + 2) && q[1] < ry1 && q[3] > ry0) : [];
               const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
-              if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC);
+              if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC, rev);
               else {
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
                 // (a side of the casing under an open shutter is not built: its strip of the picture is the shutter's
@@ -297,15 +349,43 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const F0 = V(u0, v0, PROUD), F1 = V(u1, v0, PROUD), F2 = V(u1, v1, PROUD), F3 = V(u0, v1, PROUD);
               // (the plaster from beyond the surround, a strip of the wall itself: the frame's own edge, a pixel or two
               // stretched over the reveal, had read as a flat grey-blue)
+              // (a window measured to its hole: each side the picture's own reveal there, from the hole's edge at the wall to
+              // the frame's at the glass - the reveal the picture paints in its perspective, laid on the reveal modelled. It
+              // lies inside the hole, which the wall's own material leaves open near the camera: those faces take the door's,
+              // the front's picture with no hole in it)
+              const AW = A;
               if (!(af > 0)) {
-                quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);        // (left side)
-                quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);       // (right side)
-                quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);       // (head)
+                if (sideL) { A = AD; quad(F0, B0, B3, F3, ...sideL, along); A = AW; }                                          // (left side)
+                else quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);
+                if (sideR) { A = AD; quad(B1, F1, F2, B2, sideR[1], sideR[0], sideR[3], sideR[2], back); A = AW; }             // (right side)
+                else quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);
+                if (hasH) { A = AD; quad(F3, F2, B2, B3, [cx0, ry0], [cx1, ry0], [gx1, gy0], [gx0, gy0], down); A = AW; }       // (head)
+                else if (rev) { A = AD; quad(F3, F2, B2, B3, [rev[0][0], ry1], [rev[0][0], ry0], [rev[0][1], gy0], [rev[0][1], gy1], down); A = AW; }
+                else quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);
               }
-              quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up);         // (sill)
-              // the glass and its frame at the back: the picture's window
+              if (gf && ry1 - gy1 >= 2) { A = AD; quad(B0, B1, R1, R0, [gx0, gy1], [gx1, gy1], [cx1, ry1], [cx0, ry1], up); A = AW; }             // (sill)
+              else quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up);
+              // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
+              // was measured to its hole
               const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -REC);
-              quad(B0, B1, B2, B3, [cx0, ry1], [cx1, ry1], [cx1, ry0], [cx0, ry0], out); A = A0; winC = null;
+              quad(B0, B1, B2, B3, [gx0, gy1], [gx1, gy1], [gx1, gy0], [gx0, gy0], out); A = A0; winC = null;
+              // the window's frame, its own model (fronts/<front>.glb), standing on the glass: stretched to the hole as the
+              // picture is, the model being the hole's own size in the picture's metres
+              const fm = FM?.['c' + ci];
+              if (fm) {
+                const sx = (u1 - u0) / ((cx1 - cx0) * fb.mx), sy = (v1 - v0) / ((ry1 - ry0) * fb.my);
+                const mid = V((u0 + u1) / 2, (v0 + v1) / 2, 0), AF = get(fm.mat.name, Math.floor(mid[0] / FCELL) + ',' + Math.floor(mid[2] / FCELL), FCELL);
+                AF.mat = fm.mat;
+                const { p: fp, n: fn, u: fu } = fm;
+                for (let i = 0; i < fp.length; i += 3) {
+                  const s_ = u0 + fp[i] * sx, h_ = v0 + fp[i + 1] * sy, o_ = -REC + fp[i + 2];
+                  AF.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
+                  // (a normal stretched the other way to the shape)
+                  let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
+                  AF.n.push(tx * q0 + nx * q2, q1, tz * q0 + nz * q2);
+                }
+                for (let i = 0; i < fu.length; i++) AF.u.push(fu[i]);
+              }
               // a window box of flowers on the sill now and then: one window in six on the lower two storeys, never a
               // shop's
               const hsh = Math.abs(Math.sin((ax + bx) * 12.9898 + u0 * 78.233 + v0 * 37.719) * 43758.5453) % 1;
@@ -436,8 +516,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     }
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
-      const name = a.name, mat = name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
-        : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name);
+      const name = a.name, mat = a.mat ?? (name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
+        : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
@@ -449,7 +529,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       m.name = 'relief.' + name; m.matrixAutoUpdate = false;
       m.userData.noCastFar = true;                     // (mouldings a hand deep: the sun's near picture alone can draw their shade)
       const [ci, cj] = a.ck.split(',').map(Number);
-      g.userData.cells.push({ m, x: (ci + 0.5) * CELL, z: (cj + 0.5) * CELL });
+      g.userData.cells.push({ m, x: (ci + 0.5) * a.cell, z: (cj + 0.5) * a.cell, near: a.cell === FCELL });
       g.add(m);
     }
     // the window boxes: copies of the two models (prop-window-box-0/1.glb, Blender with ComfyUI's flowers), each cell's
@@ -507,7 +587,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         // (a tile left well behind: its relief let go - built again from its list if the walker comes back; kept, the
         // relief of every street ever walked stayed in memory)
         if (d > near + 400) { T.g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.isMesh) o.geometry.dispose(); }); T.g.removeFromParent(); T.g = null; T.arriving = false; unhashWalls(T); T.state = 0; continue; }
-        if (want) for (const c of T.g.userData.cells) c.m.visible = Math.max(Math.abs(c.x - pos.x), Math.abs(c.z - pos.z)) < SHOW;
+        if (want) {
+          const nearF = Math.min(SHOW, CUT, FRAMES_NEAR) + FCELL / 2;
+          for (const c of T.g.userData.cells) c.m.visible = Math.max(Math.abs(c.x - pos.x), Math.abs(c.z - pos.z)) < (c.near ? nearF : SHOW);
+        }
       }
     }
   };
