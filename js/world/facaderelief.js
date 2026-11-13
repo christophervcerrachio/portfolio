@@ -181,10 +181,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       let raw = false;              // (texture coordinates as given - the steps' stone, in its own tiles - not the picture's px)
       const out = [nx, 0, nz], up = [0, 1, 0], down = [0, -1, 0], along = [tx, 0, tz], back = [-tx, 0, -tz];
       // a box proud of the wall: s0..s1 along, h0..h1 up, o out; its face cut from the picture's px rectangle
-      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr') => {
+      // (o0: where its back stands, 0 the wall's face - a board out from the wall stands from o0 to o)
+      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0) => {
         const [x0, y0p, x1, y1p] = pr;                               // (px: left, top, right, bottom)
         const a = V(s0, h0, o), b = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o);
-        const a0 = V(s0, h0, 0), b0 = V(s1, h0, 0), c0 = V(s1, h1, 0), d0 = V(s0, h1, 0);
+        const a0 = V(s0, h0, o0), b0 = V(s1, h0, o0), c0 = V(s1, h1, o0), d0 = V(s0, h1, o0);
         if (faces.includes('f')) quad(a, b, c, d, [x0, y1p], [x1, y1p], [x1, y0p], [x0, y0p], out);
         if (faces.includes('t')) quad(d, c, c0, d0, [x0, y0p], [x1, y0p], [x1, y0p], [x0, y0p], up);
         if (faces.includes('b')) quad(a0, b0, b, a, [x0, y1p], [x1, y1p], [x1, y1p], [x0, y1p], down);
@@ -253,18 +254,31 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const tr = fb.trim, mpx = tr ? tr[0] : Math.max(6, Math.min(16, (cx1 - cx0) * 0.12)), hpx = tr ? tr[1] : mpx;
               const u0 = S(cx0), u1 = S(cx1), v0 = Z(ry1), v1 = Z(ry0), um = mpx * fb.mx * sc, vm = (Z(ry0 - hpx) - v1);
               const e = Math.round(mpx) + 5, ew = 6;
+              // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
+              // dev\world\cities\measure_shutters.py)
+              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? Math.abs(q[2] - cx0) < 1.5 : Math.abs(q[0] - cx1) < 1.5) && q[1] < ry1 && q[3] > ry0) : [];
+              const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
               if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC);
               else {
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
-                box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                               // (left)
-                box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                               // (right)
+                // (a side of the casing under an open shutter is not built: its strip of the picture is the shutter's
+                // own edge, and raised with the casing it had cut every shutter along the casing's line - seen live,
+                // 12 Nov 2026)
+                if (!shL) box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                     // (left)
+                if (!shR) box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                     // (right)
               }
               // the sill: a stone ledge under the window, a little wider than its surround
               const sp = Math.max(5, Math.round(0.08 / fb.my));
               box(u0 - um - 0.04, u1 + um + 0.04, v0 - 0.08, v0, SILL, [cx0 - mpx, ry1 + 1, cx1 + mpx, ry1 + 1 + sp], 'ftblr');
               // (and the casing's apron under the sill, where the front has one)
               if (tr && tr[2]) box(u0 - um, u1 + um, Z(ry1 + sp + tr[2]), v0 - 0.08, PROUD, [cx0 - mpx, ry1 + sp + 1, cx1 + mpx, ry1 + sp + tr[2]], 'fblr');
+              // (each open shutter: a board 4 cm thick standing just out from the casing, the picture's whole shutter on
+              // it, its foot at the sill)
+              for (const [qx0, qy0, qx1, qy1] of sh) {
+                const yb = Math.min(qy1, ry1 + 1);
+                box(S(qx0), S(qx1), Z(yb), Z(qy0), PROUD + 0.035, [qx0, qy0, qx1, yb], 'ftblr', PROUD - 0.005);
+              }
               // the hole: its four sides back to the glass, plaster from just outside the window in the picture
               const R0 = V(u0, v0, 0), R1 = V(u1, v0, 0), R2 = V(u1, v1, 0), R3 = V(u0, v1, 0);
               const B0 = V(u0, v0, -REC), B1 = V(u1, v0, -REC), B2 = V(u1, v1, -REC), B3 = V(u0, v1, -REC);
