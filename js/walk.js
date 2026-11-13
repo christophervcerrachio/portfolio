@@ -332,7 +332,11 @@ export async function initWalk(container, opts = {}) {
   // ---- the menu. Esc lets the mouse go and the menu comes up: whose page this is, Resume, and how the picture is
   // drawn - Full, or one of the older machines' ways (hardware.js CHOICES). A choice is kept for this browser and the
   // walk loads again where the walker stands. It is a pane of glass over the scene (index.html .walk-menu): the scene
-  // shows through it, blurred, and a click on the scene beside it resumes as it always did.
+  // shows through it, blurred, and a click on the scene beside it resumes as it always did. It comes up while the walk
+  // is still loading too (over the loading picture), and the newest choice is the one kept: a heavy look's load is not
+  // waited out to choose another, and a second choice made while the page is going still counts (12 Nov 2026: "changing
+  // the graphics settings either disables subsequent graphics settings changes, or puts me in an infinite loading loop" -
+  // the menu had come up only once the walk was in, and every choice was greyed out until the next page)
   const menu = document.createElement('div');
   menu.className = 'walk-menu'; menu.hidden = true;
   menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Menu');
@@ -350,8 +354,9 @@ export async function initWalk(container, opts = {}) {
   </div>`;
   container.appendChild(menu);
   const menuNote = menu.querySelector('.walk-menu-note'), resumeBtn = menu.querySelector('.walk-menu-resume');
+  let leaving = false;
   function showMenu(on) {
-    on = !!on && !still && s.ready;
+    on = !!on && !still;
     if (on === menuOpen) return;
     menuOpen = on; menu.hidden = !on;
     if (on) { held.clear(); resumeBtn.focus({ preventScroll: true }); } else canvas.focus({ preventScroll: true });
@@ -360,13 +365,18 @@ export async function initWalk(container, opts = {}) {
   resumeBtn.addEventListener('click', () => { startSound(); takeMouse(); if (refusals >= 2) showMenu(false); });
   menu.addEventListener('change', (e) => {
     const id = e.target?.value;
-    if (!id || id === nowIs) return;
-    // (kept for this browser; where the walker stands and looks kept for the page that loads next; the address's own
-    // ?gfx= dropped, so the choice is what the next page reads)
+    if (!id || (id === nowIs && !leaving)) return;
+    // (kept for this browser; where the walker stands and looks kept for the page that loads next - unless the place
+    // from the last change is still waiting to be put back, this page not yet in: that one; the address's own ?gfx=
+    // dropped, so the choice is what the next page reads)
     keepChoice(id, renderer.getContext());
-    try { sessionStorage.setItem('career-pose', JSON.stringify(pose())); sessionStorage.removeItem('career-gfx-tries'); } catch { /* (none) */ }
+    try {
+      if (!sessionStorage.getItem('career-pose')) sessionStorage.setItem('career-pose', JSON.stringify(pose()));
+      sessionStorage.removeItem('career-gfx-tries');
+    } catch { /* (none) */ }
     menuNote.textContent = 'Loading the walk again\u2026';
-    for (const i of menu.querySelectorAll('input')) i.disabled = true;
+    if (leaving) return;
+    leaving = true;
     const u = new URL(location.href); u.searchParams.delete('gfx');
     setTimeout(() => { if (u.href === location.href) location.reload(); else location.replace(u.href); }, 60);
   });

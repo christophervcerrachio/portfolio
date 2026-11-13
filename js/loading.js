@@ -24,7 +24,7 @@ const STEPS = [
 ];
 const STEP = new Map(STEPS);
 // (each look's pictures: its lines for the whole screen - hardware.js STYLES)
-const RES = { full: 'full', xbox360: 'full', gamecube: '480', dreamcast: '480', n64: '240', ps1: '240', gameboy: '144' };
+const RES = { full: 'full', xbox360: 'full', gamecube: '480', dreamcast: '480', n64: '240', ps1: '240', gba: '160' };
 
 let C = null;
 

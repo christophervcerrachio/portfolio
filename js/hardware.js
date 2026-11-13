@@ -9,8 +9,8 @@
 // Each tier's settings are what costs most on a weak card: the screen's resolution, the MSAA samples, the sun's
 // shadow pictures, how far the trees, the yards' furniture and the grass are drawn, and the sky's panorama.
 // The tier is remembered per browser (localStorage), with the reason, so a slow machine starts right the next time;
-// ?gfx=ultra|high|xbox360|gamecube|dreamcast|n64|ps1|gameboy forces one (medium, low and minimum still read: the three
-// they became).
+// ?gfx=ultra|high|xbox360|gamecube|dreamcast|n64|ps1|gba forces one (medium, low, minimum and gameboy still read: the
+// ones they became).
 //
 // Below the two full tiers the walk is drawn the way an older machine drew: a weak machine cannot draw the full picture
 // well, and a full picture drawn badly is only a bad picture - so it draws a smaller one on purpose, by the rules of a
@@ -61,11 +61,14 @@ export const TIERS = {
   dreamcast: { style: 'dreamcast', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 256, aniso: 2, woods: [[10, 'light'], [45, 'lighter']], shadowFarEvery: 1, woodsFar: 1100, canopyAt: 950, propsFull: 0, propsNear: 180, footNear: 300, yardNear: 420, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 2600, bridgesFar: 1200, cribStones: 90, tilesNear: 420, reliefNear: 60, blocksFar: 2600, smokeNear: 150, grass: { per: 50, reach: 90, rows: 2, wide: 7, floor: 0.13 }, flowers: { reach: 45, far: 120, near: 0, thin: 0.3 }, landN: 64, placesFar: 1600 },
   n64:       { style: 'n64', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 96, aniso: 1, woods: [[16, 'lighter']], shadowFarEvery: 1, woodsFar: 800, canopyAt: 680, propsFull: 0, propsNear: 110, footNear: 170, yardNear: 230, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1500, bridgesFar: 600, cribStones: 60, tilesNear: 240, reliefNear: 0, blocksFar: 1500, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 900 },
   ps1:       { style: 'ps1', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 128, aniso: 1, woods: [[12, 'lighter']], shadowFarEvery: 1, woodsFar: 700, canopyAt: 600, propsFull: 0, propsNear: 95, footNear: 140, yardNear: 190, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1300, bridgesFar: 500, cribStones: 50, tilesNear: 200, reliefNear: 0, blocksFar: 1300, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 800 },
-  // (a Game Boy's: 144 lines in four greens - the least the walk is drawn with, for the weakest machine)
-  gameboy:   { style: 'gameboy', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 64, aniso: 1, woods: [[10, 'lighter']], shadowFarEvery: 1, woodsFar: 600, canopyAt: 500, propsFull: 0, propsNear: 80, footNear: 120, yardNear: 160, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1100, bridgesFar: 400, cribStones: 40, tilesNear: 160, reliefNear: 0, blocksFar: 1100, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 700 },
+  // (a Game Boy Advance's: 160 lines in its bright 15-bit colour - the least the walk is drawn with, for the weakest
+  // machine. Until 12 Nov 2026 a Game Boy's, 144 lines in four greens: "i like game boy, but it's what too pixelated you
+  // cannot even tell what youre looking at, i prefer gameboy advance if you can")
+  gba:       { style: 'gba', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 64, aniso: 1, woods: [[10, 'lighter']], shadowFarEvery: 1, woodsFar: 600, canopyAt: 500, propsFull: 0, propsNear: 80, footNear: 120, yardNear: 160, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1100, bridgesFar: 400, cribStones: 40, tilesNear: 160, reliefNear: 0, blocksFar: 1100, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 700 },
 };
-// (the three tiers these took the place of, 11 Nov 2026: an address or a remembered setting that names one gets its heir)
-const HEIR = { medium: 'gamecube', low: 'dreamcast', minimum: 'n64' };
+// (the tiers these took the place of - medium, low and minimum on 11 Nov 2026, the Game Boy's on 12 Nov: an address or a
+// remembered setting that names one gets its heir)
+const HEIR = { medium: 'gamecube', low: 'dreamcast', minimum: 'n64', gameboy: 'gba' };
 for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 
 // How each older machine drew, as far as a browser can draw it again. lines: the picture's height (its width follows
@@ -77,10 +80,11 @@ for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 // snap: corners moved to the picture's own pixels (a PlayStation had no finer
 // place to put them: its models shiver as they move); affine: how far a texture is drawn straight across each triangle
 // instead of in perspective (0 to 1: it swims on big walls seen at a slant, as it did); filter: 'nearest' (hard
-// texels), 'linear' (smeared, no smaller copies), 'trilinear'; sat: the picture's colour against the full look's;
-// bloom: how strongly what is bright spreads soft light round it (a 360's, its picture's own smaller copies); tone:
-// 'filmic' (the film-like curve those years' pictures were finished with); palette: 'dmg' (the light of each pixel
-// as one of a Game Boy's four greens, through the dither).
+// texels), 'nearest-mip' (hard texels, their smaller copies far off, so a far wall or field does not glitter in a
+// picture this small), 'linear' (smeared, no smaller copies), 'trilinear'; sat: the picture's colour against the full
+// look's; gamma: its light drawn up before its colours are cut (below 1: brighter - a Game Boy Advance's games were
+// made bright for its unlit screen); bloom: how strongly what is bright spreads soft light round it (a 360's, its
+// picture's own smaller copies); tone: 'filmic' (the film-like curve those years' pictures were finished with).
 // texMax (the tier's) is the longest side any texture keeps.
 // No fog in any of them: the land is seen to the horizon as in the full look, and what stands far off is drawn by
 // lighter means instead of hidden - the trees as one card each and then as the land's painted crowns, the houses as
@@ -93,16 +97,18 @@ export const STYLES = {
   dreamcast: { name: 'Dreamcast', about: '480 lines, hard VGA pixels, 16-bit dither', lines: 480, scaleUp: 'pixel', bits: [5, 6, 5], dither: 'ordered', snap: false, affine: 0, filter: 'trilinear', sat: 1.06 },
   n64:       { name: 'N64',       about: '240 lines, smeared textures',        lines: 240, scaleUp: 'smooth', bits: 5, dither: 'noise', snap: false, affine: 0,    filter: 'linear',    sat: 1.0 },
   ps1:       { name: 'PS1',       about: '240 lines, hard pixels, it shivers', lines: 240, scaleUp: 'pixel',  bits: 5, dither: 'bayer', snap: true,  affine: 0.55, filter: 'nearest',   sat: 1.0 },
-  gameboy:   { name: 'Game Boy',  about: '144 lines, four greens',             lines: 144, scaleUp: 'pixel',  bits: 2, dither: 'ordered', snap: false, affine: 0, filter: 'nearest',   sat: 1.0, palette: 'dmg' },
+  // (a Game Boy Advance's 240 x 160: every pixel a hard square, its 32,768 colours with no dither (the steps of a sky
+  // left to show), the picture bright and its colour full, as its games were made for its unlit screen - 12 Nov 2026)
+  gba:       { name: 'Game Boy Advance', about: '160 lines, bright 15-bit colour', lines: 160, scaleUp: 'pixel', bits: 5, dither: 'none', snap: false, affine: 0, filter: 'nearest-mip', sat: 1.2, gamma: 0.85 },
 };
 /** What the menu offers, top to bottom: the full look, then each older machine's. */
 export const CHOICES = [
   { id: 'full', name: 'Full', about: 'everything, as it was made: needs a graphics card' },
-  ...['xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gameboy'].map((id) => ({ id, name: STYLES[id].name, about: STYLES[id].about })),
+  ...['xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gba'].map((id) => ({ id, name: STYLES[id].name, about: STYLES[id].about })),
 ];
 /** The menu's name for a tier. */
 export const choiceOf = (tier) => (TIERS[tier]?.style ? TIERS[tier].style : 'full');
-export const ORDER = ['ultra', 'high', 'xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gameboy'];
+export const ORDER = ['ultra', 'high', 'xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gba'];
 // (v2: the tiers v1 remembered are dropped - a desktop card had been held low by them)
 // (v3, 11 Nov 2026: the lower tiers took their older machines' names, and a choice made in the menu is kept as a choice)
 const KEY = 'career-gfx-v3';
@@ -160,9 +166,10 @@ export function chooseTier(gl) {
   if (forced && TIERS[forced]) return { ...g, tier: HEIR[forced] ?? forced, why: 'chosen in the address', forced: true, locked: forced === 'ultra' || g.locked };
   try {
     const kept = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (kept && kept.chosen && TIERS[kept.tier]) return { ...g, tier: kept.tier, why: 'chosen in the menu', forced: true, chosen: true, locked: kept.tier === 'ultra' };
+    const was = kept && (HEIR[kept.tier] ?? kept.tier);   // (a look since replaced: its heir)
+    if (kept && kept.chosen && TIERS[was]) return { ...g, tier: was, why: 'chosen in the menu', forced: true, chosen: true, locked: was === 'ultra' };
     if (g.locked) return g;                                // (a desktop card: ultra, whatever was remembered)
-    if (kept && kept.gpu === g.gpu && TIERS[kept.tier]) return { ...g, tier: kept.tier, why: kept.why };
+    if (kept && kept.gpu === g.gpu && TIERS[was]) return { ...g, tier: was, why: kept.why };
   } catch { /* (no storage) */ }
   return g;
 }

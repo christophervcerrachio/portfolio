@@ -4,13 +4,14 @@
 //   - its lines: the picture is `lines` high whatever the window (its width follows the window's shape), and the
 //     browser scales it up, each pixel a hard square ('pixel') or blended ('smooth');
 //   - its textures: no longer than the tier's texMax, and filtered as the machine filtered them ('nearest': hard
-//     texels; 'linear': smeared, with no smaller copies; 'trilinear');
+//     texels; 'nearest-mip': hard texels, their smaller copies far off; 'linear': smeared, with no smaller copies;
+//     'trilinear');
 //   - its corners (snap): each corner of every model moved to the nearest pixel of the picture, so models shiver as
 //     they move across it;
 //   - its textures' perspective (affine, 0-1): how far a texture is drawn straight across a triangle on the screen
 //     rather than in depth, so it swims on a wall seen at a slant;
 //   - its colours are the show pass's (backdrops/countryside.js SHOW_FRAG: uRetro, uRetroLv, uRetroFx): their levels and
-//     dither, a 360's bloom and film-like tone, a Game Boy's four greens.
+//     dither, a 360's bloom and film-like tone, a Game Boy Advance's bright light.
 // No fog: the land is seen as far as in the full look; what makes the picture light to draw is what is drawn far off -
 // hardware.js TIERS. Everything here is set once, before any material is made: the shader pieces every material is
 // built from are changed in place (three's ShaderChunk), so the land, the houses, the trees and the furniture all
@@ -29,8 +30,11 @@ function forceFilters(kind) {
   const P = THREE.Texture.prototype;
   const pic = (t) => !(t.isDataTexture || t.isRenderTargetTexture || t.isDepthTexture || t.isCubeTexture || t.isData3DTexture || t.isDataArrayTexture
     || t.isCompressedTexture || t.isVideoTexture || t.isFramebufferTexture || t.userData?.keepFilter);
-  const F = kind === 'nearest' ? THREE.NearestFilter : THREE.LinearFilter;
-  for (const [key, forced] of [['magFilter', F], ['minFilter', F], ['generateMipmaps', false], ['anisotropy', 1]]) {
+  const F = kind === 'linear' ? THREE.LinearFilter : THREE.NearestFilter;
+  // ('nearest-mip': each texel hard, as 'nearest', but read from the texture's smaller copies where it is seen small -
+  // a picture of 160 lines otherwise glitters wherever a far field or wall has more texels than it has pixels)
+  const mip = kind === 'nearest-mip';
+  for (const [key, forced] of [['magFilter', F], ['minFilter', mip ? THREE.NearestMipmapNearestFilter : F], ['generateMipmaps', mip], ['anisotropy', 1]]) {
     Object.defineProperty(P, key, {
       configurable: true,
       get() { return pic(this) ? forced : this['_' + key]; },
@@ -73,8 +77,8 @@ if ( gl_Position.w > 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) {
  * Put a style in force. Call once, before any material or texture is made. Returns what the page needs of it:
  *   size(w, h)  the picture's size in pixels for a window w by h;
  *   show        what the show pass is told: { lines, levels (red, green, blue), dither (0 none, 1 a PlayStation's 4 x 4,
- *               2 fine noise, 3 the regular 4 x 4 cross-hatch of a 16-bit picture), sat, bloom (0: none), palette (0: the
- *               picture's own colours, 1: a Game Boy's four greens) };
+ *               2 fine noise, 3 the regular 4 x 4 cross-hatch of a 16-bit picture), sat, bloom (0: none), gamma (0: the
+ *               picture's own light; below 1: brighter) };
  *   tone        'filmic' where the style finishes its picture with the film-like curve, else null.
  */
 export function useStyle(style, canvas) {
@@ -89,7 +93,7 @@ export function useStyle(style, canvas) {
   return {
     size,
     show: { lines: style.lines, levels: (Array.isArray(style.bits) ? style.bits : [style.bits, style.bits, style.bits]).map((b) => 2 ** b - 1),
-      dither: { bayer: 1, noise: 2, ordered: 3 }[style.dither] ?? 0, sat: style.sat ?? 1, bloom: style.bloom ?? 0, palette: style.palette === 'dmg' ? 1 : 0 },
+      dither: { bayer: 1, noise: 2, ordered: 3 }[style.dither] ?? 0, sat: style.sat ?? 1, bloom: style.bloom ?? 0, gamma: style.gamma ?? 0 },
     tone: style.tone ?? null,
   };
 }
