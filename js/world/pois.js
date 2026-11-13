@@ -306,6 +306,9 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     fisher: [{ file: 'fisher-hut.glb', yaw: 0 }],
     post: [{ file: 'post-station.glb', yaw: 0 }],
     verst: [{ file: 'verst-post.glb', yaw: 0 }],
+    // (the stone idol on the kurgan: TRELLIS.2 in ComfyUI from Klein's picture, stood to its size in Blender -
+    // dev\world\models\idol_blender.py; each one is turned at random on its mound)
+    idol: [{ file: 'stone-idol.glb', yaw: 0 }],
     // (the hunting tower: dev\world\models\hunting_tower.py in Blender, ComfyUI's pine, planks and shingles)
     hunt: [{ file: 'hunting-tower.glb', yaw: 0 }],
   };
