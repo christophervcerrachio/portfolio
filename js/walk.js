@@ -263,7 +263,8 @@ export async function initWalk(container, opts = {}) {
     } else {
       renderer.setSize(w, h, false);
       const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
-      s.resize(Math.max(2, Math.round(buf.x * quality.scale)), Math.max(2, Math.round(buf.y * quality.scale)));
+      // (the screen's own size beside it: a picture drawn smaller is brought up to it edge by edge - backdrops/upscale.js)
+      s.resize(Math.max(2, Math.round(buf.x * quality.scale)), Math.max(2, Math.round(buf.y * quality.scale)), buf.x, buf.y);
     }
     s.fit(0, 0, 1, w / h);
     quality.n = 0; quality.sum = 0; quality.skip = 60; quality.times.length = 0;

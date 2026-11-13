@@ -21,7 +21,10 @@
 
 export const TIERS = {
   // pixelRatio: the cap on the screen's own; scale: the scene's picture against the canvas (the resolution
-  // follows the frame time between minScale and 1); msaa: samples; scene: the countryside's own 'high' | 'low'
+  // follows the frame time between minScale and scale; a picture drawn smaller than the canvas is brought up to it
+  // edge by edge - backdrops/upscale.js - so the two full tiers draw two-thirds of the pixels each way, 'high' less
+  // still when its frames come slowly); msaa: samples; scene:
+  // the countryside's own 'high' | 'low'
   // (grass rings, shadow picture sizes, sky); woodsFar / canopyAt: trees drawn to here, the land's painted crowns from
   // there; propsNear / footNear / yardNear: the cities' furniture, pavements and yards drawn within; blocksFar: the
   // houses drawn within; shadows: 'both' | 'near' | 'none' of the sun's two shadow pictures, shadowSize their size;
@@ -51,8 +54,8 @@ export const TIERS = {
   // Measured 11 Nov 2026 on the walk as published (v0.0.31): the meadow alone was 1.5 to 4.8 million triangles a frame
   // on every tier below Full - its grass at a third of the full density out to 950 m, 21 kinds of flower by the
   // thousand - even in the 240-line pictures, even over a city.
-  ultra:   { pixelRatio: 2,    scale: 1,    minScale: 1,    msaa: 8, scene: 'high', woods: [[60, 'full', 'full'], [220, 'full', 'light'], [450, 'light']], shadowFarEvery: 1, woodsFar: 1800, canopyAt: 1650, propsFull: 150, propsNear: 600, footNear: 900, yardNear: 1400, shadows: 'both', shadowSize: 2048 , marksFar: Infinity, bridgesFar: 8000, tilesNear: 2500, reliefNear: 380, blocksFar: Infinity, smokeNear: 420 },
-  high:    { pixelRatio: 1.5,  scale: 1,    minScale: 0.55, msaa: 4, scene: 'high', woods: [[12, 'full', 'full'], [45, 'full', 'mid'], [95, 'mid', 'light'], [140, 'mid', 'light'], [220, 'light', 'lighter'], [320, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 130, propsNear: 500, footNear: 750, yardNear: 1100, shadows: 'both', shadowSize: 2048 , marksFar: 6000, bridgesFar: 4000, cribStones: 350, tilesNear: 1800, reliefNear: 380, blocksFar: 7000, smokeNear: 320 },
+  ultra:   { pixelRatio: 2,    scale: 0.67, minScale: 0.67, msaa: 8, scene: 'high', woods: [[60, 'full', 'full'], [220, 'full', 'light'], [450, 'light']], shadowFarEvery: 1, woodsFar: 1800, canopyAt: 1650, propsFull: 150, propsNear: 600, footNear: 900, yardNear: 1400, shadows: 'both', shadowSize: 2048 , marksFar: Infinity, bridgesFar: 8000, tilesNear: 2500, reliefNear: 380, blocksFar: Infinity, smokeNear: 420 },
+  high:    { pixelRatio: 1.5,  scale: 0.67, minScale: 0.5,  msaa: 4, scene: 'high', woods: [[12, 'full', 'full'], [45, 'full', 'mid'], [95, 'mid', 'light'], [140, 'mid', 'light'], [220, 'light', 'lighter'], [320, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 130, propsNear: 500, footNear: 750, yardNear: 1100, shadows: 'both', shadowSize: 2048 , marksFar: 6000, bridgesFar: 4000, cribStones: 350, tilesNear: 1800, reliefNear: 380, blocksFar: 7000, smokeNear: 320 },
   // (the six below: `style` names the older machine whose way of drawing the tier takes - STYLES; scale, minScale and
   // pixelRatio are not used by them: the picture has the style's own number of lines whatever the screen)
   // (a 360's: 720 lines, near the full look's world but a little less of it - the step between Full and the GameCube)

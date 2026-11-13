@@ -221,7 +221,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           // opening had been a rectangle: under an arch the wall between it and the rectangle's corners was cut away
           // with the hole, and the hole's flat head stood across the arch like a plank.)
           const arched = (x0, x1, y0p, y1p, vBot, af, mpx, e, ew, D) => {
-            const NA = Math.max(6, Math.round(12 * Math.min(1, af))), Ar = archOf(x0, x1, y0p, af, NA);
+            // (an even count of segments: the crown is a corner, where the head's left half meets its right)
+            const NA = 2 * Math.max(3, Math.round(6 * Math.min(1, af))), Ar = archOf(x0, x1, y0p, af, NA);
             const a0 = S(x0), a1 = S(x1), am = mpx * fb.mx * sc, vs = Z(Ar.ys);
             box(a0 - am, a0, vBot, vs, PROUD, [x0 - mpx, Ar.ys, x0, y1p], 'fl');
             box(a1, a1 + am, vBot, vs, PROUD, [x1, Ar.ys, x1 + mpx, y1p], 'fr');
@@ -231,6 +232,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
             quad(V(a0, vBot, PROUD), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, PROUD), [x0 - e, y1p], [x0 - e - ew, y1p], [x0 - e - ew, Ar.ys], [x0 - e, Ar.ys], along);
             quad(V(a1, vBot, -D), V(a1, vBot, PROUD), V(a1, vs, PROUD), V(a1, vs, -D), [x1 + e + ew, y1p], [x1 + e, y1p], [x1 + e, Ar.ys], [x1 + e + ew, Ar.ys], back);
             const W = (x, y, o) => V(S(x), Z(y), o);
+            // (the head's underside in the jambs' own strip of the picture, carried on from where each jamb stops: up the
+            // arch from either springing, the strip read on down from the springing's row, so the reveal is one plain
+            // surface from sill to crown. It had been the picture's strip just outside the arch, following it round - on
+            // a rusticated front the dark wedges of stone over every arch, smeared through the head's depth like wood -
+            // seen live, 13 Nov 2026)
+            const arc = [0];
+            for (let i = 0; i < NA; i++) arc.push(arc[i] + Math.hypot(Ar.pts[i + 1][0] - Ar.pts[i][0], Ar.pts[i + 1][1] - Ar.pts[i][1]));
+            const half = arc[NA] / 2, vAt = (i) => Math.min(y1p, Ar.ys + Math.min(arc[i], 2 * half - arc[i]));
             for (let i = 0; i < NA; i++) {
               const [ax_, ay_, anx, any] = Ar.pts[i], [bx_, by_, bnx, bny] = Ar.pts[i + 1];
               const mxn = (anx + bnx) / 2, myn = (any + bny) / 2, ml = Math.hypot(mxn, myn) || 1;
@@ -238,9 +247,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const qa = [ax_ + anx * mpx, ay_ + any * mpx], qb = [bx_ + bnx * mpx, by_ + bny * mpx];
               quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(qb[0], qb[1], PROUD), W(qa[0], qa[1], PROUD), [ax_, ay_], [bx_, by_], qb, qa, out);       // (the archivolt's face)
               quad(W(qa[0], qa[1], 0), W(qa[0], qa[1], PROUD), W(qb[0], qb[1], PROUD), W(qb[0], qb[1], 0), qa, qa, qb, qb, nr);                        // (its outer edge)
-              const ea = [ax_ + anx * e, ay_ + any * e], eb = [bx_ + bnx * e, by_ + bny * e];
-              const fa = [ax_ + anx * (e + ew), ay_ + any * (e + ew)], fq = [bx_ + bnx * (e + ew), by_ + bny * (e + ew)];
-              quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(bx_, by_, -D), W(ax_, ay_, -D), ea, eb, fq, fa, [-nr[0], -nr[1], -nr[2]]);                 // (the hole's head)
+              const left = i < NA / 2, uf = left ? x0 - e : x1 + e, ub = left ? x0 - e - ew : x1 + e + ew, va = vAt(i), vb = vAt(i + 1);
+              quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(bx_, by_, -D), W(ax_, ay_, -D), [uf, va], [uf, vb], [ub, vb], [ub, va], [-nr[0], -nr[1], -nr[2]]);   // (the hole's head)
             }
           };
           if (!shop) for (const [ry0, ry1, cs, af = 0] of fb.rows) {

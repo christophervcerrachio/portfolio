@@ -15,6 +15,7 @@ import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
 import { makeEvening } from './evening.js';
 import { makeWeather } from './weather.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
+import { makeUpscale } from './upscale.js';
 import { loadBark, loadSpecies } from './birchlook.js';
 import { loadWorld, buildLand, preloadGround } from '../world/terrain.js';
 import { buildPaths } from '../world/paths.js';
@@ -681,14 +682,34 @@ export class CountrysideScene {
 
   /** The landscape is drawn at the hero's size (drawing-buffer pixels, at most 3840 across), multisampled. (It was at most
    *  2560 across: on a 3440-wide screen the picture was stretched a third larger than it was drawn, and looked soft.) */
-  resize(w, h) {
+  /** The scene's picture w by h pixels; the screen's, ow by oh (when the picture is drawn smaller - hardware.js
+   *  `scale` - it is brought up to the screen edge by edge, upscale.js, and the show pass's light sharpening crisps it
+   *  as it does the picture drawn full size; never in an older machine's look, whose own coarse pixels are the point). */
+  resize(w, h, ow = w, oh = h) {
     const k = Math.min(1, 3840 / w);
     this.size = [Math.max(2, Math.round(w * k)), Math.max(2, Math.round(h * k))];
-    this.showU.uTexel.value.set(1 / this.size[0], 1 / this.size[1]);
+    this.out = [Math.max(2, Math.round(ow)), Math.max(2, Math.round(oh))];
+    this.up = !this.retro && (this.out[0] > this.size[0] * 1.02 || this.out[1] > this.size[1] * 1.02);
     if (this.rt && (this.rt.width !== this.size[0] || this.rt.height !== this.size[1])) {
       this.rt.setSize(...this.size); this.distRT.setSize(...this.size); this.look.drawn = null;
     }
+    this._upTarget();
     this._skyRange();
+  }
+  /** What the show pass reads: the scene's own picture, or (this.up) the picture brought up to the screen. */
+  _upTarget() {
+    const U = this.showU;
+    if (this.up && this.rt) {
+      if (!this.upRT) {
+        this.upRT = new THREE.WebGLRenderTarget(...this.out, { type: this.rt.texture.type, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
+        this.upRT.texture.colorSpace = this.rt.texture.colorSpace;
+        this.upscaler ??= makeUpscale();
+      } else if (this.upRT.width !== this.out[0] || this.upRT.height !== this.out[1]) this.upRT.setSize(...this.out);
+      U.uPic.value = this.upRT.texture; U.uTexel.value.set(1 / this.out[0], 1 / this.out[1]);
+    } else {
+      if (this.rt) U.uPic.value = this.rt.texture;
+      U.uTexel.value.set(1 / this.size[0], 1 / this.size[1]);
+    }
   }
   /** The scene's own pictures made (its picture, the weather's map, the sky's panorama) before anything is drawn:
    *  what its programs are made for - walk.js prime(). */
@@ -708,6 +729,7 @@ export class CountrysideScene {
     this.showU.uAirSteps.value = this.quality === 'low' ? 6 : 10;
     this.distRT = new THREE.WebGLRenderTarget(...this.size, { type: THREE.UnsignedByteType, depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
     this.showU.uPic.value = this.rt.texture;
+    this._upTarget();
     // the weather, made once on the GPU (its map is kept on the CPU too); every material shares U's uniform objects,
     // so their values are filled in, not the objects replaced
     this.weather = makeWeather(renderer);
@@ -898,6 +920,8 @@ export class CountrysideScene {
       renderer.setRenderTarget(this.rt);
     }
     renderer.render(this.land, this.cam);
+    // (the picture brought up to the screen's size, where it was drawn smaller: upscale.js)
+    if (this.up && this.upRT) this.upscaler.upscale(renderer, this.rt.texture, this.size, this.upRT);
     // (where the sun stands on the screen, for the shafts; faded as it leaves the view and when a cloud is over it)
     {
       const sd = this.U.uSunDir.value, fwd = this._fwd ??= new THREE.Vector3(), sp = this._sunP ??= new THREE.Vector3();
