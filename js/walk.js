@@ -17,7 +17,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
+import { setupArrivals, openArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
@@ -188,7 +188,7 @@ export async function initWalk(container, opts = {}) {
     // the farthest tree)
     if (!still && !noRise) {
       s.U.uRise.value.set(at.x, at.z, clock, 450);
-      const off = () => { if (clock - s.U.uRise.value.z > 7.5) s.U.uRise.value.w = 0; else setTimeout(off, 500); };
+      const off = () => { if (s.U.uRise.value.w <= 0) return; if (clock - s.U.uRise.value.z > 7.5) s.U.uRise.value.w = 0; else setTimeout(off, 500); };
       setTimeout(off, 7000);
     }
     s.loadRest();
@@ -383,8 +383,37 @@ export async function initWalk(container, opts = {}) {
     if (leaving) return;
     leaving = true;
     const u = new URL(location.href); u.searchParams.delete('gfx');
-    setTimeout(() => { if (u.href === location.href) location.reload(); else location.replace(u.href); }, 60);
+    const go = () => { if (u.href === location.href) location.reload(); else location.replace(u.href); };
+    if (still || noRise || !s.ready || veilUp) { setTimeout(go, 60); return; }
+    leave().then(go, go);
   });
+  // (a change of look: everything that has come in goes back into the ground in a wave from the walker - the woods by
+  // their shader, the rest by world/arrive.js departAll - the land left bare; that picture kept for the page that loads
+  // next, which shows it while the walk comes in again under it (index.html, the held picture), then lifts it as
+  // everything rises in the new look. The load's own stalls are under that picture, not in the walk)
+  async function leave() {
+    showMenu(false);
+    const at = s.freeCam.on ? s.freeCam.pos : s.at;
+    s.U.uRise.value.set(at.x, at.z, clock, -2600);
+    const woodsDown = new Promise((r) => {
+      const far = 5200, t0 = clock;                 // (the far woods' edge at that speed, and each tree's own 1.25 s)
+      const chk = () => (clock - t0 > far / 2600 + 1.3 ? r() : setTimeout(chk, 100)); chk();
+    });
+    await Promise.race([Promise.all([departAll(at), woodsDown]), new Promise((r) => setTimeout(r, 4000))]);
+    await new Promise((r) => requestAnimationFrame(() => {
+      try {
+        renderAt(clock);
+        // (taken in the same turn as the frame is drawn: the card's picture is still there then)
+        const k = Math.min(1, 1600 / canvas.width), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(canvas.width * k)); c.height = Math.max(1, Math.round(canvas.height * k));
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = !retro;
+        g.drawImage(canvas, 0, 0, c.width, c.height);
+        sessionStorage.setItem('career-held', JSON.stringify({ src: c.toDataURL('image/jpeg', 0.86), px: !!retro, t: Date.now() }));
+      } catch { /* (no picture kept: the loading picture, as before) */ }
+      r();
+    }));
+  }
   function takeMouse() {
     if (locked() || still) return;
     try {
@@ -677,6 +706,9 @@ export async function initWalk(container, opts = {}) {
 
   const api = { scene: s, pose, goTo, snapshot, renderer, renderAt, frame, get time() { return clock; }, set time(t) { clock = t; },
     play() { live = true; }, pause() { live = false; }, lookBy, zoomTo,
+    // (the leaving as a change of look does it, without the change: the choice kept in this browser is not touched -
+    // a test then loads the page with ?gfx=)
+    leave: () => leave().then(() => !!sessionStorage.getItem('career-held')),
     walkTo: (x, z, jump = true) => s.walkTo(x, z, jump), look: (yaw, pitch) => { s.look.anchor = null; s.look.yaw = yaw; s.look.pitch = pitch; s.look.goal = [yaw, pitch]; },
     free: () => (s.freeCam.on ? (s.exitFree(), false) : (s.enterFree(), true)), get freeCam() { return s.freeCam.on; },   // (dev free-cam)
     sound: startSound, get quality() { return quality.scale; }, gfx: { ...gfxInfo, settings: GFX },

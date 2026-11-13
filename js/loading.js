@@ -79,6 +79,10 @@ function make(el, { style = 'full', still = false, idle = false, base = '' }) {
   if (reduce) el.classList.add('is-calm');
   if (idle) { el.classList.add('is-idle'); if (words) words.parentElement.hidden = true; }
 
+  // (a change of look: the walk's own last picture is shown instead - index.html, the held picture - and the evening's
+  // pictures are not fetched at all)
+  if (el.classList.contains('is-held')) { timer = setInterval(tick, 60); return api; }
+
   // ---- the land: each layer's hills and woods, rising first, far to near, once its picture is in
   const lands = [...el.querySelectorAll('.walk-load-land')];
   lands.forEach((land, k) => {

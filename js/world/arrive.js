@@ -23,6 +23,8 @@ const A = {
   renderer: null, scene: null, cam: () => null, target: () => null, shadow: null,
   open: false, still: false,
   queue: [], rising: [],
+  shown: [],                       // (what has come in: each piece's objects, for the leaving - departAll)
+  leaving: false,
   sent: new Set(),                 // (pictures already on the card: their source's uuid)
   shadowMade: new Set(),           // (depth programs made: the depth material's uuid and the kind of object)
   // (a frame's share at sixty frames a second - less of it a frame on a faster screen, more on a slower, so the same
@@ -248,8 +250,10 @@ export function pumpArrivals(pos, now = performance.now()) {
   // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's, one of 30 a second 2)
   const k = Math.min(2.5, Math.max(0.3, (A.last ? now - A.last : 16.7) / 16.7));
   A.last = now;
-  if (!A.open || !A.queue.length || !A.renderer) return;
+  if (!A.open || A.leaving || !A.queue.length || !A.renderer) return;
   // (nearest first; sorted again every few frames, or when the walker has moved on)
+  // (what has come in and has since been taken out of the walk - a tile left behind - forgotten now and then)
+  if (A.sorted % 600 === 599) A.shown = A.shown.filter((l) => l.some((o) => o.parent));
   if (++A.sorted % 8 === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
   let geo = 0, tex = 0, began = 0;
   const t0 = performance.now(), B = A.budget;
@@ -312,6 +316,7 @@ export function pumpArrivals(pos, now = performance.now()) {
 const batches = new Map();
 function show(a, pos, now) {
   a.stage = 4;
+  A.shown.push(a.list);
   for (const o of a.list) {
     if (a.gate) delete o.userData.gate;
     else if (a.parent && o.parent !== a.parent) a.parent.add(o);
@@ -374,6 +379,13 @@ function raise(now) {
   if (!A.rising.length) return;
   let done = false;
   for (const rec of A.rising) {
+    if (rec.down) {
+      // (going back into the ground: slow out of its place, quicker as it goes; kept down once there)
+      const t = Math.min(1, Math.max(0, (now - rec.t0) / rec.dur));
+      place(rec, 1 - t * t * t);
+      if (t >= 1) { for (const it of rec.items) it.o.visible = false; rec.done = true; done = true; rec.res(); }
+      continue;
+    }
     // (taken out of the walk while rising - a tile left behind: put back as it was, and done)
     const gone = !rec.items.some((it) => it.o.parent);
     const t = (now - rec.t0) / rec.dur;
@@ -385,6 +397,37 @@ function raise(now) {
 
 /** Everything still rising put in its place at once (a jump in the walk's time: a still, a test). */
 export function settleAll() {
-  for (const rec of A.rising) { settle(rec); rec.a.res(); }
+  for (const rec of A.rising) { if (rec.down) rec.res(); else { settle(rec); rec.a.res(); } }
   A.rising.length = 0;
+}
+
+/** The walk is leaving - its look changed in the menu, the page about to load again in the new one: nothing more comes
+ *  in, and everything that has come in goes back into the ground, in a wave out from `pos` (the walker), the nearest
+ *  first, as it rose (sinking things rather than dropping the picture: the change of look reads as the walk's own, and
+ *  the page that loads next brings it all up again, in the new look). A promise, resolved once all of it is down. */
+export function departAll(pos, { speed = 2600, most = 0.7 } = {}) {
+  A.leaving = true;
+  const now = performance.now();
+  settleAll();
+  const all = [];
+  for (const list of A.shown) {
+    const live = list.filter((o) => o.parent && o.visible !== false);
+    if (!live.length) continue;
+    box.makeEmpty();
+    for (const o of live) { o.updateMatrixWorld(true); box.expandByObject(o); }
+    if (box.isEmpty()) continue;
+    const h = Math.max(0.3, box.max.y - box.min.y);
+    box.getCenter(mid);
+    const d = Math.hypot(mid.x - pos.x, mid.z - pos.z);
+    all.push(new Promise((res) => {
+      A.rising.push({
+        down: true, res, t0: now + 1000 * Math.min(most, d / speed),
+        dur: 1000 * Math.min(1.1, 0.5 + 0.12 * Math.sqrt(h)),
+        depth: Math.min(h + 0.6, 140), far: d > A.far, base: box.min.y,
+        items: live.map((o) => ({ o, auto: o.matrixAutoUpdate, y: o.position.y, sy: o.scale.y, m: o.matrixAutoUpdate ? null : o.matrix.clone() })),
+      });
+    }));
+  }
+  A.shown.length = 0;
+  return Promise.all(all);
 }

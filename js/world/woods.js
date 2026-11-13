@@ -109,9 +109,11 @@ void main() {
   float view = floor(seed * uCols);
   vec3 p = root + right * (position.x * uSize.x * sc) + vec3(0.0, (position.y * uSize.y + uBase) * sc, 0.0);
   // (the opening: risen out of the ground with the trees drawn in full - wind-glsl.js riseAt, the same sum)
-  if (uRise.w > 0.0) {
-    float r = clamp(((uTime - uRise.z) * uRise.w - length(root.xz - uRise.xy) + seed * 30.0) / (uRise.w * 1.25), 0.0, 1.0);
-    p.y -= pow(1.0 - r, 3.2) * (uSize.y * sc * 1.05 + 0.6);
+  // (uRise.w below 0: back into the ground in the same wave - the leaving, wind-glsl.js riseAt)
+  if (uRise.w != 0.0) {
+    float rw = abs(uRise.w);
+    float r = clamp(((uTime - uRise.z) * rw - length(root.xz - uRise.xy) + seed * 30.0) / (rw * 1.25), 0.0, 1.0);
+    p.y -= (uRise.w > 0.0 ? pow(1.0 - r, 3.2) : r * r * r) * (uSize.y * sc * 1.05 + 0.6);
   }
   // (each view drawn inside its column with an empty margin either side: uGut, a share of the column)
   vUv = vec2((view + uGut + (position.x + 0.5) * (1.0 - 2.0 * uGut)) / uCols, position.y);

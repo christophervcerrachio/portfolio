@@ -67,10 +67,13 @@ uniform float uTime; uniform float uGust; uniform float uFront; uniform float uH
 uniform vec2 uWindOrigin; uniform float uWindLevel;   // (0.07 in a calm spell .. 1)
 uniform vec4 uRise;
 // (how far a thing rooted at root has risen in the opening wave, 0 under the ground .. 1 in its place; seed: 0..1 its own)
+// (uRise.w below 0: the leaving - walk.js, a change of look - each thing back into the ground in the same wave, at that
+// speed: 1 in its place .. 0 under the ground)
 float riseAt(vec2 root, float seed) {
-  if (uRise.w <= 0.0) return 1.0;
-  float r = clamp(((uTime - uRise.z) * uRise.w - length(root - uRise.xy) + seed * 30.0) / (uRise.w * 1.25), 0.0, 1.0);
-  return 1.0 - pow(1.0 - r, 3.2);
+  if (uRise.w == 0.0) return 1.0;
+  float w = abs(uRise.w);
+  float r = clamp(((uTime - uRise.z) * w - length(root - uRise.xy) + seed * 30.0) / (w * 1.25), 0.0, 1.0);
+  return uRise.w > 0.0 ? 1.0 - pow(1.0 - r, 3.2) : 1.0 - r * r * r;
 }
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyColor; uniform vec3 uGroundColor; uniform vec3 uHaze; uniform float uHazeDist;
 float hash12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
