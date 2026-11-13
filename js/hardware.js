@@ -86,7 +86,7 @@ for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 // lighter means instead of hidden - the trees as one card each and then as the land's painted crowns, the houses as
 // plain boxes, the landmarks as their light copies (dev\world\landmarks_lod.py).
 export const STYLES = {
-  xbox360:   { name: 'Xbox 360',  about: '720 lines, bloom, filmic tone',      lines: 720, scaleUp: 'smooth', bits: 8, dither: 'none',  snap: false, affine: 0,    filter: 'trilinear', sat: 0.94, bloom: 0.55, tone: 'filmic' },
+  xbox360:   { name: 'Xbox 360',  about: '720 lines, bloom, filmic tone',      lines: 720, scaleUp: 'smooth', bits: 8, dither: 'none',  snap: false, affine: 0,    filter: 'trilinear', sat: 0.94, bloom: 0.7, tone: 'filmic' },
   gamecube:  { name: 'GameCube',  about: '480 lines, soft and clean',          lines: 480, scaleUp: 'smooth', bits: 8, dither: 'none',  snap: false, affine: 0,    filter: 'trilinear', sat: 1.1 },
   // (a Dreamcast on its VGA box: every pixel of its 640 x 480 hard-edged, its 16-bit colour's dither plain to see, no
   // smoothing anywhere - not the GameCube's soft picture, which it had been all but the same as: 12 Nov 2026)

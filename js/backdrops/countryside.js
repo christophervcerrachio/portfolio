@@ -226,7 +226,8 @@ void main() {
     }
     if (uRetroFx.w > 0.5) {
       // a Game Boy's: the light of each pixel, through the dither, as one of its four greens, darkest to lightest
-      float lg = clamp(pow(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.8) * 1.08, 0.0, 1.0);
+      // (its light drawn apart round the middle first, as the Game Boy Camera did, so that more of it settles on one green)
+      float lg = clamp((pow(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.8) * 1.08 - 0.5) * 1.3 + 0.5, 0.0, 1.0);
       float g4 = clamp(floor(lg * 3.0 + 0.5 + d), 0.0, 3.0);
       c = g4 < 0.5 ? vec3(0.059, 0.220, 0.059) : g4 < 1.5 ? vec3(0.188, 0.384, 0.188) : g4 < 2.5 ? vec3(0.545, 0.675, 0.059) : vec3(0.608, 0.737, 0.059);
     } else c = clamp(floor(c * uRetroLv + 0.5 + d) / uRetroLv, 0.0, 1.0);
@@ -361,12 +362,12 @@ export class CountrysideScene {
       // ordered 4 x 4, 2 fine noise), its colour, whether on)
       uRetro: { value: new THREE.Vector4(255, 0, 1, 0) }, uRetroLv: { value: new THREE.Vector3(255, 255, 255) },
       // (a 360's bloom - its strength, the light it starts over - and a Game Boy's greens: retro.js)
-      uRetroFx: { value: new THREE.Vector4(0, 0.8, 0, 0) } };
+      uRetroFx: { value: new THREE.Vector4(0, 0.75, 0, 0) } };
     this.retro = o.retro ?? null;
     if (this.retro) {
       const R = this.retro.show;
       this.showU.uRetro.value.set(Math.max(...R.levels), R.dither, R.sat, 1); this.showU.uRetroLv.value.set(...R.levels);
-      this.showU.uRetroFx.value.set(R.bloom, 0.8, 0, R.palette);
+      this.showU.uRetroFx.value.set(R.bloom, 0.75, 0, R.palette);
       // (none of the full look's finishing: no sharpening, no shafts, no lit air, no mist, no darkened corners - those
       // machines had none, and each is many taps a pixel)
       this.showU.uSharp.value = 0; this.showU.uRays.value = 0; this.showU.uAir.value = 0; this.showU.uMist.value = 0; this.showU.uGrade.value.w = 0;
