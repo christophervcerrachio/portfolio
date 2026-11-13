@@ -259,10 +259,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         const a = V(s0, h0, o), b = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o);
         const a0 = V(s0, h0, o0), b0 = V(s1, h0, o0), c0 = V(s1, h1, o0), d0 = V(s0, h1, o0);
         if (faces.includes('f')) quad(a, b, c, d, [x0, y1p], [x1, y1p], [x1, y0p], [x0, y0p], out);
-        if (faces.includes('t')) quad(d, c, c0, d0, [x0, y0p], [x1, y0p], [x1, y0p], [x0, y0p], up);
-        if (faces.includes('b')) quad(a0, b0, b, a, [x0, y1p], [x1, y1p], [x1, y1p], [x0, y1p], down);
-        if (faces.includes('l')) quad(a0, a, d, d0, [x0, y1p], [x0, y1p], [x0, y0p], [x0, y0p], back);
-        if (faces.includes('r')) quad(b, b0, c0, c, [x1, y1p], [x1, y1p], [x1, y0p], [x1, y0p], along);
+        // (a side's strip read a little inside the moulding's edge: the edge's own row or column of the picture is the
+        // dark line of its shadow, which had lain along every surround's and pilaster's side as a grey stripe)
+        const ix = Math.min(2, Math.abs(x1 - x0) / 4) * Math.sign(x1 - x0), iy = Math.min(2, Math.abs(y1p - y0p) / 4) * Math.sign(y1p - y0p);
+        const xl = x0 + ix, xr = x1 - ix, yt = y0p + iy, yb = y1p - iy;
+        if (faces.includes('t')) quad(d, c, c0, d0, [x0, yt], [x1, yt], [x1, yt], [x0, yt], up);
+        if (faces.includes('b')) quad(a0, b0, b, a, [x0, yb], [x1, yb], [x1, yb], [x0, yb], down);
+        if (faces.includes('l')) quad(a0, a, d, d0, [xl, y1p], [xl, y1p], [xl, y0p], [xl, y0p], back);
+        if (faces.includes('r')) quad(b, b0, c0, c, [xr, y1p], [xr, y1p], [xr, y0p], [xr, y0p], along);
       };
       const bands = bandsFor(fb, st, T.I.storey);
       const top = y0 + st * T.I.storey;
@@ -334,7 +338,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
             // hole; else the plaster beyond the surround. That reveal lies inside the hole, which the wall's own material
             // leaves open near the camera: its faces take the door's, the front's picture with no hole in it)
             const [lf, lb] = rev ? rev[0] : [x0 - e, x0 - e - ew], [rf, rb] = rev ? rev[1] : [x1 + e, x1 + e + ew];
-            const AW = A, AR = rev ? AD : A;
+            const AW = A, AR = AD;
             A = AR;
             quad(V(a0, vBot, PROUD), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, PROUD), [lf, y1p], [lb, y1p], [lb, Ar.ys], [lf, Ar.ys], along);
             quad(V(a1, vBot, -D), V(a1, vBot, PROUD), V(a1, vs, PROUD), V(a1, vs, -D), [rb, y1p], [rf, y1p], [rf, Ar.ys], [rb, Ar.ys], back);
@@ -432,16 +436,16 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const AW = A;
               if (!(af > 0)) {
                 if (sideL) { A = AD; quad(F0, B0, B3, F3, ...sideL, along); A = AW; }                                          // (left side)
-                else quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);
+                else { A = AD; quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along); A = AW; }
                 if (sideR) { A = AD; quad(B1, F1, F2, B2, sideR[1], sideR[0], sideR[3], sideR[2], back); A = AW; }             // (right side)
-                else quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);
+                else { A = AD; quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back); A = AW; }
                 const HB = gf && !hasH ? borrowed(fb, ci, ry0, ry1, 'head') : null;
                 if (hasH) { A = AD; quad(F3, F2, B2, B3, [cx0, ry0], [cx1, ry0], [gx1, gy0], [gx0, gy0], down); A = AW; }       // (head)
                 else if (HB) { A = AD; quad(F3, F2, B2, B3, ...HB, down); A = AW; }
-                else quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);
+                else { A = AD; quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down); A = AW; }
               }
               if (gf && ry1 - gy1 >= 2) { A = AD; quad(B0, B1, R1, R0, [gx0, gy1], [gx1, gy1], [cx1, ry1], [cx0, ry1], up); A = AW; }             // (sill)
-              else quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up);
+              else { A = AD; quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up); A = AW; }
               // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
               // was measured to its hole
               const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -REC);
@@ -491,9 +495,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt');
                 // (the sides and head from the surround's front, as a window's: no crack along the door's edge)
                 const F0 = V(u0, v0, PROUD), F1 = V(u1, v0, PROUD), F2 = V(u1, v1, PROUD), F3 = V(u0, v1, PROUD);
+                const AW_ = A; A = AD;
                 quad(F0, B0, B3, F3, [dx0 - e, dy1], [dx0 - e - ew, dy1], [dx0 - e - ew, dy0], [dx0 - e, dy0], along);
                 quad(B1, F1, F2, B2, [dx1 + e + ew, dy1], [dx1 + e, dy1], [dx1 + e, dy0], [dx1 + e + ew, dy0], back);
                 quad(F3, F2, B2, B3, [dx0, dy0 - e], [dx1, dy0 - e], [dx1, dy0 - e - ew], [dx0, dy0 - e - ew], down);
+                A = AW_;
               }
               const A1 = A; A = AD;
               quad(B0, B1, R1, R0, [dx0, dy1 - 3], [dx1, dy1 - 3], [dx1, dy1 - 1], [dx0, dy1 - 1], up);   // (the threshold)
