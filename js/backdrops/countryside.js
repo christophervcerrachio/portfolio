@@ -216,7 +216,7 @@ void main() {
   // regular 4 x 4 cross-hatch of a Dreamcast's 16-bit picture (each of its pixels a hard square on the screen, so the
   // pattern shows as it did on a VGA screen)
   if (uRetro.w > 0.5) {
-    // (a Game Boy Advance's light drawn up first, as its games were made bright for its unlit screen: uRetroFx.z)
+    // (a Game Boy Advance's light drawn up first, as its pictures were made bright for its unlit screen: uRetroFx.z)
     if (uRetroFx.z > 0.0) c = pow(c, vec3(uRetroFx.z));
     float lr = dot(c, vec3(0.2126, 0.7152, 0.0722));
     c = clamp(mix(vec3(lr), c, uRetro.z), 0.0, 1.0);
