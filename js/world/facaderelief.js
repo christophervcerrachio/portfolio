@@ -180,7 +180,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     fetch(base + DIR + 'windows/bays.json').then((r) => r.json()),
     fetch(base + DIR + 'windows/fronts.json').then((r) => r.json()),
     ...cities.map((c) => fetch(base + DIR + c + '-relief/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)),
-  ]).then(([b, f, ...idx]) => Promise.all([...Object.keys(b).filter((k) => b[k]?.frames).map(loadFrames), ...Object.keys(b).filter((k) => b[k]?.models).map(loadFittings)]).then(() => {
+  ]).then(([b, f, ...idx]) => Promise.all([...Object.keys(b).filter((k) => b[k]?.frameModels).map(loadFrames), ...Object.keys(b).filter((k) => b[k]?.models).map(loadFittings)]).then(() => {
     // (the frames first: the tiles are built once, from what is in hand when they are)
     BAYS = b; FRONTS = f;
     idx.forEach((I, ci) => {
@@ -435,7 +435,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
               // dev\world\cities\measure_shutters.py)
               // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
-              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= cx0 + 1.5 && cx0 - q[2] <= mpx + 2 : q[0] >= cx1 - 1.5 && q[0] - cx1 <= mpx + 2) && q[1] < ry1 && q[3] > ry0) : [];
+              // (by the painted frame's edges where the window was measured to its hole: the shutters were measured to them)
+              const ex0 = gf ? gx0 : cx0, ex1 = gf ? gx1 : cx1;
+              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= ex0 + 1.5 && ex0 - q[2] <= mpx + 2 + (ex0 - cx0) : q[0] >= ex1 - 1.5 && q[0] - ex1 <= mpx + 2 + (cx1 - ex1)) && q[1] < ry1 && q[3] > ry0) : [];
               const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
               if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC, rev);
