@@ -72,7 +72,9 @@ export async function initWalk(container, opts = {}) {
   const stage = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();        // (the scene draws through its own camera; this one only shows it)
 
+  // (the sky: ?sky=day or ?sky=evening holds one - evening.js; a still stays in the day unless asked)
   const s = new CountrysideScene({ id: 'countryside', name: 'Russian summer', quality: small ? 'low' : GFX.scene, gfx: GFX, retro, sound: windSound,
+    sky: ['day', 'evening'].includes(params.get('sky')) ? params.get('sky') : null, still: frozenT !== null,
     horizon: '#c9d1d6', anchor: [0.5, 0.56], pitch: PITCH });
   stage.background = s.horizon;
   stage.add(s.group);
