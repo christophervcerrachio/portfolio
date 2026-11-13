@@ -32,7 +32,12 @@ const KINDS = { fountain: 'prop-fountain', bench: 'prop-bench', lamp: 'prop-lamp
   railing: 'prop-railing', 'canal-gate': 'prop-canal-gate',
   'portico-col-1': 'prop-portico-col-1', 'portico-col-2': 'prop-portico-col-2', 'portico-top-1': 'prop-portico-top-1', 'portico-top-2': 'prop-portico-top-2',
   'portico-top-1s': 'prop-portico-top-1s',
-  'fence-grey': 'prop-fence-grey', 'fence-green': 'prop-fence-green' };
+  'fence-grey': 'prop-fence-grey', 'fence-green': 'prop-fence-green',
+  // (the public gardens' own - dev\world\parks.py, 13 Nov 2026: their railing and gates the canals' cast iron, their
+  // statues TRELLIS.2's from FLUX.2 pictures (props\statue_blender.py), the rest Blender's from props.py)
+  'park-railing': 'prop-railing', 'park-gate': 'prop-canal-gate',
+  'statue-a': 'prop-statue-a', 'statue-b': 'prop-statue-b', bust: 'prop-bust', pedestal: 'prop-pedestal',
+  urn: 'prop-urn', 'urn-ped': 'prop-urn-ped', 'topiary-cone': 'prop-topiary-cone', pavilion: 'prop-pavilion', kiosk: 'prop-kiosk' };
 
 /** A city's furniture lists, read and packed off the page's own thread (props-worker.js): a promise of packProps's
  *  result, or null. Where no worker can be made, read and packed here. */
@@ -134,15 +139,18 @@ float dtNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 
 // stack of firewood is a few pixels at 250 m, and each is thousands of triangles - drawn to 600 m they were most of the
 // cities' furniture cost (10 Nov 2026: 19 million triangles a frame, and twice that again in the sun's pictures).
 const REACH = { bench: 0.42, barrel: 0.35, firewood: 0.4, bollard: 0.42, well: 0.6, sentry: 0.7, 'window-box': 0.3, gate: 0.8, 'gate-top': 0.6, 'gate-side': 0.5, 'gate-leaf': 0.5, 'canal-gate': 0.8, railing: 0.75, lamp: 0.85,
-  'fence-grey': 0.7, 'fence-green': 0.7 };   // (Moscow's yard fences: 130,000 pieces, a thin line at 400 m)
+  'fence-grey': 0.7, 'fence-green': 0.7,   // (Moscow's yard fences: 130,000 pieces, a thin line at 400 m)
+  'park-railing': 0.75, 'park-gate': 0.8, 'statue-a': 0.6, 'statue-b': 0.6, bust: 0.55, pedestal: 0.6, urn: 0.5, 'urn-ped': 0.55,
+  'topiary-cone': 0.45, kiosk: 0.8 };
 
 // The models that have a light copy (prop-<name>.lod.glb, dev\world\props\lod_blender.py: a tenth of the triangles,
 // no pictures of its own - dressed in the full model's materials by name): drawn in place of the full one in every tile
 // whose middle is further than `full` m (hardware.js propsFull).
 // (the yard gate's parts have none: a few hundred triangles each)
-const LIGHT = ['bench', 'lamp', 'railing', 'barrel', 'firewood', 'well', 'fountain', 'canal-gate', 'stall', 'portico-col-1', 'portico-col-2', 'portico-top-1', 'portico-top-2', 'portico-top-1s'];
+const LIGHT = ['bench', 'lamp', 'railing', 'barrel', 'firewood', 'well', 'fountain', 'canal-gate', 'stall', 'portico-col-1', 'portico-col-2', 'portico-top-1', 'portico-top-2', 'portico-top-1s',
+  'park-railing', 'park-gate', 'statue-a', 'statue-b', 'bust', 'pavilion', 'kiosk'];
 
-export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'moscow'], heightAt = null, near = NEAR, footNear = FOOT_NEAR, yardNear = YARD_NEAR, addTrees = null, changed = null, full = 130, ground = null } = {}) {
+export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'moscow'], heightAt = null, near = NEAR, footNear = FOOT_NEAR, yardNear = YARD_NEAR, addTrees = null, changed = null, full = 130, ground = null, lateModels = null } = {}) {
   const group = new THREE.Group(); group.name = 'cityprops';
   const tiles = new Map();               // 'i,j' -> { g: Group, c: [x, z], trees: Group | null }
   const tileOf = (x, z) => {
@@ -210,7 +218,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
     // (the lists read and sorted into tiles in a worker - props-worker.js: Moscow's alone is 12 MB - and the porticos
     // from the city's houses (city_blender.py: Moscow's mansions only) with them)
     const lists = readProps(base + DIR + city + '-props.json', city === 'moscow' ? base + DIR + city + '-porticos.json' : null);
-    Promise.all([lists, ready]).then(async ([R]) => {
+    Promise.all([lists, ready, lateModels]).then(async ([R]) => {
       if (!R) return;
       // (the trees: drawn with the woods' own, their full copy near, their light copy and their card further off -
       // world/woods.js addTrees, a few thousand at a time between frames; without the woods, as before: in full, tile

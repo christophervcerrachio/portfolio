@@ -198,11 +198,18 @@ export const SPECIES = {
   spruce: { bark: 'spruce-bark.jpg', tile: [0.3, 0.55], leaf: 'leaf-spruce.png', greens: ['#e6ecdc', '#d4dccb', '#f2f2e6', '#c6d0bc', '#dce6d0'], cardW: 1.35 },
   pine: { bark: 'pine-bark-low.jpg', bark2: 'pine-bark-high.jpg', tile: [0.4, 0.8], tile2: [0.28, 0.56], leaf: 'leaf-pine.png', greens: ['#f0f0dc', '#e2e8cc', '#fff8e4', '#d6dcc0', '#eaf0d4'], cardW: 1.5 },
   oak: { bark: 'oak-bark.jpg', tile: [0.32, 0.55], leaf: 'leaf-oak.png', greens: ['#f2f2e2', '#dfe6c8', '#fff4d8', '#d2dab8', '#f4e8c0'], cardW: 1.0 },
+  // (the cities' park trees, 13 Nov 2026 - dev\world\parks.py; their pictures loaded with them, once the cities come in:
+  // loadLateSpecies)
+  lime: { bark: 'lime-bark.jpg', tile: [0.4, 0.4], leaf: 'leaf-lime.png', greens: ['#eef2dc', '#e0e8c8', '#f6f6e0', '#d6e0bc', '#eaf0d0'], cardW: 0.9, late: true },
+  maple: { bark: 'maple-bark.jpg', tile: [0.4, 0.4], leaf: 'leaf-maple.png', greens: ['#f2f4dc', '#e4ecc8', '#fff8dc', '#dce4bc', '#f4ecc4'], cardW: 1.2, late: true },
+  poplar: { bark: 'poplar-bark.jpg', tile: [0.45, 0.45], leaf: 'leaf-poplar.png', greens: ['#eef4dc', '#e2eccc', '#f4f8e4', '#d8e4c0', '#eaf2d6'], cardW: 0.85, late: true },
+  lilac: { bark: 'lilac-bark.jpg', tile: [0.18, 0.18], leaf: 'leaf-lilac.png', greens: ['#e6ecd4', '#d8e2c4', '#eef0dc', '#ccd8b8', '#e2e8cc'], cardW: 0.8, late: true },
 };
-export const speciesOf = (name) => (/^spruce/.test(name) ? 'spruce' : /^pine/.test(name) ? 'pine' : /^oak/.test(name) ? 'oak' : 'birch');
+export const speciesOf = (name) => (/^spruce/.test(name) ? 'spruce' : /^pine/.test(name) ? 'pine' : /^oak/.test(name) ? 'oak'
+  : /^lime/.test(name) ? 'lime' : /^maple/.test(name) ? 'maple' : /^poplar/.test(name) ? 'poplar' : /^lilac/.test(name) ? 'lilac' : 'birch');
 const spTex = {};
 /** Loads the woods' bark tiles and leaf pictures (assets/countryside/species/); what is missing is drawn as a birch's. */
-export async function loadSpecies(base) {
+export async function loadSpecies(base, late = false) {
   const get = async (f, alpha) => {
     try {
       const t = await loadPictureAsync(base + 'assets/countryside/species/' + f, { cap: false });
@@ -211,10 +218,14 @@ export async function loadSpecies(base) {
       return t;
     } catch { return null; }
   };
-  await Promise.all(Object.entries(SPECIES).map(async ([sp, S]) => {
+  await Promise.all(Object.entries(SPECIES).filter(([, S]) => !S.late || late).map(async ([sp, S]) => {
+    if (spTex[sp]) return;
     spTex[sp] = { bark: await get(S.bark), bark2: S.bark2 ? await get(S.bark2) : null, leaf: await get(S.leaf, true) };
   }));
 }
+/** The park trees' bark and leaves (SPECIES' late ones), asked for once the cities come in. */
+let lateIn = null;
+export const loadLateSpecies = (base) => (lateIn ??= loadSpecies(base, true));
 export const speciesTex = (sp) => spTex[sp] ?? {};
 
 // the bark, drawn: (albedo, and a height for its relief) at a point m metres round and along the limb, h m above the

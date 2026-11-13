@@ -10,13 +10,14 @@ import { buildMeadow } from './meadow.js';
 import { placeTrees } from './groves.js';
 import { LANDMARKS } from './landmarks.js';
 import { loadModel } from './models.js';
+import { loadParkGrade } from '../world/parkgrade.js';
 import { placeStones } from './stones.js';
 import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
 import { makeEvening } from './evening.js';
 import { makeWeather } from './weather.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
 import { makeUpscale } from './upscale.js';
-import { loadBark, loadSpecies } from './birchlook.js';
+import { loadBark, loadSpecies, loadLateSpecies } from './birchlook.js';
 import { loadWorld, buildLand, preloadGround } from '../world/terrain.js';
 import { buildPaths } from '../world/paths.js';
 import { buildWayStones } from '../world/waystones.js';
@@ -255,6 +256,9 @@ export const MODELS = [
   // the world's woods (world/woods.js): grown from FLUX.2 pictures by dev\world\trees\grow_tree.py (8 Nov 2026)
   ['spruce-0'], ['pine-0'], ['oak-0'],
 ];
+// the cities' park trees (dev\world\parks.py; grown from FLUX.2 pictures by dev\world\trees\grow_tree.py, 13 Nov 2026):
+// asked for only once the cities come in (loadLater), with their bark and leaves
+export const PARK_MODELS = ['lime-0', 'maple-0', 'poplar-0', 'lilac-0'];
 
 // a little value noise, for the ground's undulation and the drifts of grass and flowers
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -570,7 +574,17 @@ export class CountrysideScene {
     const bridges = buildCityBridges(this.U, { base });
     // the yards made gardens, and the yards' and streets' furniture: fountains, benches, lamps, gates, trees
     // (world/cityprops.js, dev\world\cityhouses.py), drawn near the camera only
-    const props = buildCityProps(this.U, models, { base, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
+    // (the park trees' own models first, so none of their trees is left out: the woods take each kind in as it comes)
+    const dir = base + 'assets/countryside/models/';
+    // (the gardens' mounds and ponds' banks: the walker stands on them - world/parkgrade.js)
+    loadParkGrade(base, ['spb', 'moscow']).then((g) => {
+      if (!g) return;
+      const h0 = world.heightAt;
+      world.heightAt = (x, z) => h0(x, z) + g(x, z);
+      if (this.ground && this.ground.heightAt === h0) this.ground.heightAt = world.heightAt;
+    });
+    const lateModels = Promise.all([loadLateSpecies(base), ...PARK_MODELS.map(async (n) => { const m = await loadModel(dir, n).catch(() => null); if (m) models[n] = m; })]).catch(() => {});
+    const props = buildCityProps(this.U, models, { base, lateModels, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
       addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed, ground });
     // (and smoke over two in five of the houses' chimneys, near the walker: world/chimneys.js)
     const smoke = buildChimneySmoke(this.U, { base, near: G.smokeNear ?? 320 });

@@ -220,6 +220,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     let n = 0, near = false;
     for (const it of items) {
       const kind = models[it.kind] ? it.kind : null;
+      if (kind && !kinds.includes(kind)) addKind(kind);
       if (!kind || !kinds.includes(kind)) continue;
       const scale = it.scale ?? 1, tree = { x: it.x, z: it.z, y: it.y, yaw: it.yaw ?? 0, scale, h: models[kind].height * scale, kind };
       tree.m = new Float32Array(16);
@@ -237,7 +238,9 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   const sets = {}, TONES = { '': [1, 1, 1], gold: [1.75, 1.1, 0.18] };
   const allKinds = kinds.flatMap((k) => (k.startsWith('birch') ? [k, k + '|gold'] : [k]));
   const blanks = (n) => Array.from({ length: n }, () => ({ x: 0, y: -1e5, z: 0 }));
-  for (const kk of allKinds) {
+  // (a kind's copies for every band: made for the woods' own kinds now, and for a city's park trees when their models
+  // come in - addKind)
+  const makeSet = (kk) => {
     const [k, tone = ''] = kk.split('|'), m = models[k], look = { leafGain: TONES[tone] };
     // (a pine's or spruce's light copies: the trunk stopped inside the crown and the crown's cards grown, so far off it
     // reads as a crown on a trunk, not a bare orange pole through the canopy; seen 8 Nov 2026 past the spawn)
@@ -279,7 +282,8 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
       group.add(draw); if (cast) group.add(cast);
       return { draw, cast };
     });
-  }
+  };
+  for (const kk of allKinds) makeSet(kk);
   // (Refilled when the walker has gone 4 m or the view has turned well away from where it last looked. It had refilled
   // on every frame the view turned at all - every frame the mouse moved - placing each tree once for each part of its
   // model, up to 900 m round: 200 ms at a time.)
@@ -298,6 +302,15 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // fall forward into it - only their shadow copies drawn, where the band has them)
   const lists = {}, behind = {};
   for (const k of allKinds) { lists[k] = BANDS.map(() => []); behind[k] = BANDS.map(() => []); }
+  // (a kind the woods have not got - the cities' limes, maples, poplars and lilacs, loaded once the cities come in: the
+  // park trees' own models, countryside.js PARK_MODELS - taken in when its first trees are added)
+  const addKind = (k) => {
+    if (kinds.includes(k) || !models[k]) return;
+    kinds.push(k); allKinds.push(k);
+    lists[k] = BANDS.map(() => []); behind[k] = BANDS.map(() => []);
+    makeSet(k);
+    if (baked) bakeKinds(...baked, [k]);
+  };
   const fwd = new THREE.Vector3();
   let last = null, nearList = [];
   const SLACK = 0.6, CLOSE = 30;                       // (radians beyond the view's sides; trees this near always drawn)
@@ -346,7 +359,9 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // ---- the far trees as pictures (impostors): past MID m each tree is one card facing the camera, its picture drawn once
   // from the tree's own light copy, four ways round. The light copies there had been some 35 million triangles a frame,
   // most of the woods' cost (measured 8 Nov 2026 at the spawn: the woods 8-12 ms of a frame, vertex bound).
-  group.userData.bake = (renderer, lights, fog = null) => {
+  let baked = null;                                 // (what bake was given: a kind taken in later is drawn into a picture too)
+  group.userData.bake = (renderer, lights, fog = null) => { baked = [renderer, lights, fog]; bakeKinds(renderer, lights, fog, allKinds); };
+  const bakeKinds = (renderer, lights, fog, which) => {
     const COLS = 4, CW = 256, CH = 384, GUT = 32;   // (GUT px empty either side of each view: up to mip 4 none bleeds)
     const scene = new THREE.Scene();
     // (the land's own haze set here too - at these few metres it changes no pixel: with it the trees are drawn by the
@@ -363,7 +378,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     // to match, the alpha left a half or less, and the crowns came out pale and half bare - 13 Nov 2026)
     const copies = new Map();
     const texOf = (t) => { if (!copies.has(t)) copies.set(t, unforced(t)); return copies.get(t); };
-    for (const kk of allKinds) {
+    for (const kk of which) {
       const [k, tone = ''] = kk.split('|'), m = models[k], look = { leafGain: TONES[tone] };
       const conifer = /^(pine|spruce)/.test(k), farParts = m.far ?? m.near;
       const src = { ...m, far: conifer ? crownedFar(farParts, 1.6) : farParts };
