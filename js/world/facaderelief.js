@@ -108,21 +108,27 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     receiveSun(m, U, { street: true });
     return (DOORS[name] = m);
   };
-  // (the open shutters: the front's picture with its shutters, before they were painted out of the wall's -
-  // fronts/<front>-shutters.jpg; its px as the wall's)
-  const SHUTS = {};
-  const shutMat = (name) => {
-    if (SHUTS[name]) return SHUTS[name];
+  // (a front's own picture before something was painted out of the wall's - its open shutters, fronts/<front>-shutters.jpg;
+  // its balcony, railings, lamps and plaques, fronts/<front>-fixtures.jpg - for the models of them; its px as the wall's)
+  const PICS = {};
+  const picMat = (name, suffix) => {
+    const key = name + suffix;
+    if (PICS[key]) return PICS[key];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: name + '-shutters' });
-    new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + '-shutters.jpg').then((t) => {
+    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: key });
+    new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + suffix + '.jpg').then((t) => {
       t.colorSpace = w.map?.colorSpace ?? THREE.SRGBColorSpace; t.flipY = w.map?.flipY ?? false;
       t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
       m.map = t; m.needsUpdate = true;
     }).catch(() => {});
     receiveSun(m, U, { street: true });
-    return (SHUTS[name] = m);
+    return (PICS[key] = m);
   };
+  const shutMat = (name) => picMat(name, '-shutters');
+  // (the fittings' iron and a lantern's frosted panes: one material each, whatever the front)
+  const IRON = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide, name: 'fittings-iron' });
+  const PANES = new THREE.MeshStandardMaterial({ color: 0xd7dbd6, roughness: 0.3, metalness: 0, side: THREE.DoubleSide, name: 'fittings-glass' });
+  receiveSun(IRON, U, { street: true }); receiveSun(PANES, U, { street: true });
   // (the window boxes' models: each mesh's geometry in the model's own frame, its material; null if not there)
   const BOXES = Promise.all([0, 1].map((v) => gltfLoader().loadAsync(base + 'assets/world/props/prop-window-box-' + v + '.glb').then((g) => {
     g.scene.updateMatrixWorld(true); const parts = [];
@@ -149,6 +155,23 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     });
     FRAMES[key] = F;
   }).catch(() => {});
+  // (a front's fittings: its balcony on its brackets with its railing, French railings, lamps, plaques - each a model of
+  // its own, built to its box in the front's measure (bays.json 'models'; dev\\world\\cities\\fixtures\\
+  // fittings_blender.py): { <name>: { p, n, u, kind } } in its own metres - x along the box from its left, y up from its
+  // foot, z out from the wall; kind its material, 'iron', 'glass' or 'fix' (the front's picture before they were painted
+  // out))
+  const FITS = {};
+  const loadFittings = (key) => gltfLoader().loadAsync(base + DIR + 'fronts/' + key.slice(7) + '-fittings.glb').then((g) => {
+    g.scene.updateMatrixWorld(true); const F = {};
+    g.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+      const uv = geo.attributes.uv, nm = o.parent?.isMesh ? o.parent.name : o.name.replace(/_\d+$/, '');
+      const kind = /iron/.test(o.material.name) ? 'iron' : /glass/.test(o.material.name) ? 'glass' : 'fix';
+      (F[nm] ??= []).push({ p: geo.attributes.position.array, n: geo.attributes.normal.array, u: uv ? uv.array : new Float32Array(geo.attributes.position.count * 2), kind });
+    });
+    FITS[key] = F;
+  }).catch(() => {});
   const group = new THREE.Group(); group.name = 'facade-relief';
   const tiles = new Map();         // key -> { c: [x, z], state: 0 none 1 loading 2 built, mesh group }
   let BAYS = null, FRONTS = null;
@@ -156,7 +179,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     fetch(base + DIR + 'windows/bays.json').then((r) => r.json()),
     fetch(base + DIR + 'windows/fronts.json').then((r) => r.json()),
     ...cities.map((c) => fetch(base + DIR + c + '-relief/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)),
-  ]).then(([b, f, ...idx]) => Promise.all(Object.keys(b).filter((k) => b[k]?.frames).map(loadFrames)).then(() => {
+  ]).then(([b, f, ...idx]) => Promise.all([...Object.keys(b).filter((k) => b[k]?.frames).map(loadFrames), ...Object.keys(b).filter((k) => b[k]?.models).map(loadFittings)]).then(() => {
     // (the frames first: the tiles are built once, from what is in hand when they are)
     BAYS = b; FRONTS = f;
     idx.forEach((I, ci) => {
@@ -591,6 +614,31 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 }
                 }
               }
+            }
+          }
+          // the front's fittings standing in this bay at this band: each where its box is in the picture, stretched with
+          // the bay and the band as the picture is (its depth as built). One whose box starts in this band belongs to it -
+          // a balcony on the upper storeys hangs on down over the band below, as in the picture; a sign that names the
+          // street (plaque-st) once a wall
+          const FT = FITS[key];
+          if (FT && fb.models && k >= k0) for (const mk in fb.models) {
+            const [fx0, fy0, fx1, fy1] = fb.models[mk], parts = FT[mk];
+            if (!parts || fx0 < b[0] - 1 || fx1 > b[1] + 1 || fy0 < by0 - 1 || fy0 >= by1) continue;
+            if (shop) continue;
+            if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }
+            const f0 = S(fx0), sx = (S(fx1) - f0) / ((fx1 - fx0) * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / ((fy1 - fy0) * fb.my);
+            const mid = V((f0 + S(fx1)) / 2, f1, 0), ckF = Math.floor(mid[0] / CELL) + ',' + Math.floor(mid[2] / CELL);
+            for (const pt of parts) {
+              const AF = get('fit-' + pt.kind + (pt.kind === 'fix' ? ':' + fname : ''), ckF);
+              AF.mat ??= pt.kind === 'iron' ? IRON : pt.kind === 'glass' ? PANES : picMat(fname, '-fixtures');
+              const { p: fp, n: fn, u: fu } = pt;
+              for (let i = 0; i < fp.length; i += 3) {
+                const s_ = f0 + fp[i] * sx, h_ = f1 + fp[i + 1] * sy, o_ = fp[i + 2];
+                AF.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
+                let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
+                AF.n.push(tx * q0 + nx * q2, q1, tz * q0 + nz * q2);
+              }
+              for (let i = 0; i < fu.length; i++) AF.u.push(fu[i]);
             }
           }
           zb += hm;
