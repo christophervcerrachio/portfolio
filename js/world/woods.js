@@ -34,6 +34,17 @@ const SUN_NEAR = 90;
 // (past MID m each tree is drawn from a lighter copy still: one leaf card in three, each half as large again, so the crown
 // covers what it did with a third of the leaves; and the light and lighter copies cast no shadow, which only the nearer
 // trees' fall inside the sun's pictures anyway: a hundred million triangles a frame had gone to the woods, twice)
+// (an attribute's values one vertex after another. A packed model's normals come interleaved, four bytes a vertex for
+// three numbers: read three a vertex, every thinned crown's leaves were lit by their neighbours' normals and the
+// padding between them, and one pine leaf's came out (0, 0, 0) - no number in its light, nor in the cards drawn from
+// it, which the Xbox 360's bloom spread into black squares over the woods, 12 Nov 2026)
+function packed(a) {
+  if (!a.isInterleavedBufferAttribute) return a.array;
+  const D = a.data.array, s = a.data.stride, o = a.offset, k = a.itemSize, out = new D.constructor(a.count * k);
+  for (let i = 0; i < a.count; i++) for (let q = 0; q < k; q++) out[i * k + q] = D[i * s + o + q];
+  return out;
+}
+
 function thinCards(geo, keep = 3, grow = 1.6) {
   const per = geo.userData.leafVerts ?? 4, n = geo.attributes.position.count, cards = Math.floor(n / per);
   const map = new Int32Array(n).fill(-1);
@@ -41,7 +52,7 @@ function thinCards(geo, keep = 3, grow = 1.6) {
   for (let c = 0; c < cards; c += keep) for (let j = 0; j < per; j++) map[c * per + j] = m++;
   const out = new THREE.BufferGeometry();
   for (const [name, attr] of Object.entries(geo.attributes)) {
-    const k = attr.itemSize, src = attr.array, dst = new src.constructor(m * k);
+    const k = attr.itemSize, src = packed(attr), dst = new src.constructor(m * k);
     for (let i = 0; i < n; i++) if (map[i] >= 0) for (let q = 0; q < k; q++) dst[map[i] * k + q] = src[i * k + q];
     out.setAttribute(name, new THREE.BufferAttribute(dst, k, attr.normalized));
   }

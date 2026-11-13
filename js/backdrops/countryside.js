@@ -192,6 +192,9 @@ void main() {
   // copies, three of them each about three times wider than the last; only the light over uRetroFx.y spreads
   if (uRetroFx.x > 0.0) {
     vec3 bl = textureLod(uPic, vUv, 2.0).rgb * 0.3 + textureLod(uPic, vUv, 3.5).rgb * 0.4 + textureLod(uPic, vUv, 5.0).rgb * 0.3;
+    // (one pixel with no number in it spreads through every smaller copy into a black square as wide as that copy's
+    // texel - a degenerate leaf's light did, over the woods: such a pixel's bloom is left out)
+    if (any(isnan(bl)) || any(isinf(bl))) bl = vec3(0.0);
     float lb = dot(bl, vec3(0.2126, 0.7152, 0.0722));
     sharp += bl * (max(lb - uRetroFx.y, 0.0) / max(lb, 1e-4)) * uRetroFx.x;
   }
