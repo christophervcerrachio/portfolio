@@ -224,8 +224,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
             const a0 = S(x0), a1 = S(x1), am = mpx * fb.mx * sc, vs = Z(Ar.ys);
             box(a0 - am, a0, vBot, vs, PROUD, [x0 - mpx, Ar.ys, x0, y1p], 'fl');
             box(a1, a1 + am, vBot, vs, PROUD, [x1, Ar.ys, x1 + mpx, y1p], 'fr');
-            quad(V(a0, vBot, 0), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, 0), [x0 - e, y1p], [x0 - e - ew, y1p], [x0 - e - ew, Ar.ys], [x0 - e, Ar.ys], along);
-            quad(V(a1, vBot, -D), V(a1, vBot, 0), V(a1, vs, 0), V(a1, vs, -D), [x1 + e + ew, y1p], [x1 + e, y1p], [x1 + e, Ar.ys], [x1 + e + ew, Ar.ys], back);
+            // (the hole's sides and head from the surround's front back to the glass, not from the wall's face: the wall's
+            // cut is its window map's, a staircase of texels round an arch, and between that and the smooth arch the
+            // light behind had shown in dots along every arched head - seen live, 12 Nov 2026)
+            quad(V(a0, vBot, PROUD), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, PROUD), [x0 - e, y1p], [x0 - e - ew, y1p], [x0 - e - ew, Ar.ys], [x0 - e, Ar.ys], along);
+            quad(V(a1, vBot, -D), V(a1, vBot, PROUD), V(a1, vs, PROUD), V(a1, vs, -D), [x1 + e + ew, y1p], [x1 + e, y1p], [x1 + e, Ar.ys], [x1 + e + ew, Ar.ys], back);
             const W = (x, y, o) => V(S(x), Z(y), o);
             for (let i = 0; i < NA; i++) {
               const [ax_, ay_, anx, any] = Ar.pts[i], [bx_, by_, bnx, bny] = Ar.pts[i + 1];
@@ -236,7 +239,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               quad(W(qa[0], qa[1], 0), W(qa[0], qa[1], PROUD), W(qb[0], qb[1], PROUD), W(qb[0], qb[1], 0), qa, qa, qb, qb, nr);                        // (its outer edge)
               const ea = [ax_ + anx * e, ay_ + any * e], eb = [bx_ + bnx * e, by_ + bny * e];
               const fa = [ax_ + anx * (e + ew), ay_ + any * (e + ew)], fq = [bx_ + bnx * (e + ew), by_ + bny * (e + ew)];
-              quad(W(ax_, ay_, 0), W(bx_, by_, 0), W(bx_, by_, -D), W(ax_, ay_, -D), ea, eb, fq, fa, [-nr[0], -nr[1], -nr[2]]);                         // (the hole's head)
+              quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(bx_, by_, -D), W(ax_, ay_, -D), ea, eb, fq, fa, [-nr[0], -nr[1], -nr[2]]);                 // (the hole's head)
             }
           };
           if (!shop) for (const [ry0, ry1, cs, af = 0] of fb.rows) {
@@ -265,12 +268,16 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // the hole: its four sides back to the glass, plaster from just outside the window in the picture
               const R0 = V(u0, v0, 0), R1 = V(u1, v0, 0), R2 = V(u1, v1, 0), R3 = V(u0, v1, 0);
               const B0 = V(u0, v0, -REC), B1 = V(u1, v0, -REC), B2 = V(u1, v1, -REC), B3 = V(u0, v1, -REC);
+              // (the sides and head from the surround's front, which stands PROUD out: from the wall's face they had left
+              // a crack along the opening's edge, where the wall's own cut and these faces meet, and the light behind
+              // showed through it in dots at 480 lines)
+              const F0 = V(u0, v0, PROUD), F1 = V(u1, v0, PROUD), F2 = V(u1, v1, PROUD), F3 = V(u0, v1, PROUD);
               // (the plaster from beyond the surround, a strip of the wall itself: the frame's own edge, a pixel or two
               // stretched over the reveal, had read as a flat grey-blue)
               if (!(af > 0)) {
-                quad(R0, B0, B3, R3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);        // (left side)
-                quad(B1, R1, R2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);       // (right side)
-                quad(R3, R2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);       // (head)
+                quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);        // (left side)
+                quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);       // (right side)
+                quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);       // (head)
               }
               quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up);         // (sill)
               // the glass and its frame at the back: the picture's window
@@ -302,9 +309,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [dx0 - mp, dy0 - mp, dx1 + mp, dy0], 'ftlr');
                 box(u0 - um, u0, v0, v1, PROUD, [dx0 - mp, dy0, dx0, dy1], 'flt');
                 box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt');
-                quad(R0, B0, B3, R3, [dx0 - e, dy1], [dx0 - e - ew, dy1], [dx0 - e - ew, dy0], [dx0 - e, dy0], along);
-                quad(B1, R1, R2, B2, [dx1 + e + ew, dy1], [dx1 + e, dy1], [dx1 + e, dy0], [dx1 + e + ew, dy0], back);
-                quad(R3, R2, B2, B3, [dx0, dy0 - e], [dx1, dy0 - e], [dx1, dy0 - e - ew], [dx0, dy0 - e - ew], down);
+                // (the sides and head from the surround's front, as a window's: no crack along the door's edge)
+                const F0 = V(u0, v0, PROUD), F1 = V(u1, v0, PROUD), F2 = V(u1, v1, PROUD), F3 = V(u0, v1, PROUD);
+                quad(F0, B0, B3, F3, [dx0 - e, dy1], [dx0 - e - ew, dy1], [dx0 - e - ew, dy0], [dx0 - e, dy0], along);
+                quad(B1, F1, F2, B2, [dx1 + e + ew, dy1], [dx1 + e, dy1], [dx1 + e, dy0], [dx1 + e + ew, dy0], back);
+                quad(F3, F2, B2, B3, [dx0, dy0 - e], [dx1, dy0 - e], [dx1, dy0 - e - ew], [dx0, dy0 - e - ew], down);
               }
               const A1 = A; A = AD;
               quad(B0, B1, R1, R0, [dx0, dy1 - 3], [dx1, dy1 - 3], [dx1, dy1 - 1], [dx0, dy1 - 1], up);   // (the threshold)

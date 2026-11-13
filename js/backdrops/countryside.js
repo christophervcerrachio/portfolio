@@ -92,7 +92,7 @@ uniform vec2 uSunUV; uniform float uSunVis; uniform float uRays; uniform vec3 uR
 uniform sampler2D uDepth; uniform float uRevZ; uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform float uAir; uniform float uSunLit; uniform float uAirSteps;
 uniform vec3 uSunDir;
 uniform sampler2D uMistH; uniform sampler2D uMistCov; uniform vec4 uMistCore; uniform float uMist; uniform float uTime;
-uniform vec4 uRetro; uniform vec3 uRetroLv;
+uniform vec4 uRetro; uniform vec3 uRetroLv; uniform vec4 uRetroFx;
 ${SHADOW_GLSL}
 float mHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float mNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -187,6 +187,13 @@ void main() {
     vec3 mistCol = vec3(0.46, 0.51, 0.57) * (0.55 + 0.45 * uSunLit) + uRayTint * (0.2 + 2.2 * pow(cosM, 6.0)) * uSunLit * sunPart;
     sharp = mix(sharp, mistCol, T);
   }
+  // a 360's bloom (retro.js): what is bright spreads a soft light round it, read from the scene picture's own smaller
+  // copies, three of them each about three times wider than the last; only the light over uRetroFx.y spreads
+  if (uRetroFx.x > 0.0) {
+    vec3 bl = textureLod(uPic, vUv, 2.0).rgb * 0.3 + textureLod(uPic, vUv, 3.5).rgb * 0.4 + textureLod(uPic, vUv, 5.0).rgb * 0.3;
+    float lb = dot(bl, vec3(0.2126, 0.7152, 0.0722));
+    sharp += bl * (max(lb - uRetroFx.y, 0.0) / max(lb, 1e-4)) * uRetroFx.x;
+  }
   gl_FragColor = vec4(sharp, uAlpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -217,7 +224,12 @@ void main() {
       const float M[16] = float[16](-4.0, 0.0, -3.0, 1.0, 2.0, -2.0, 3.0, -1.0, -3.0, 1.0, -4.0, 0.0, 3.0, -1.0, 2.0, -2.0);
       d = M[pd.x + pd.y * 4] / 8.0;
     }
-    c = clamp(floor(c * uRetroLv + 0.5 + d) / uRetroLv, 0.0, 1.0);
+    if (uRetroFx.w > 0.5) {
+      // a Game Boy's: the light of each pixel, through the dither, as one of its four greens, darkest to lightest
+      float lg = clamp(pow(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.8) * 1.08, 0.0, 1.0);
+      float g4 = clamp(floor(lg * 3.0 + 0.5 + d), 0.0, 3.0);
+      c = g4 < 0.5 ? vec3(0.059, 0.220, 0.059) : g4 < 1.5 ? vec3(0.188, 0.384, 0.188) : g4 < 2.5 ? vec3(0.545, 0.675, 0.059) : vec3(0.608, 0.737, 0.059);
+    } else c = clamp(floor(c * uRetroLv + 0.5 + d) / uRetroLv, 0.0, 1.0);
   }
   gl_FragColor.rgb = c;
 }`;
@@ -347,11 +359,14 @@ export class CountrysideScene {
       uMistH: { value: null }, uMistCov: { value: null }, uMistCore: { value: new THREE.Vector4(0, 0, 0, 0) }, uMist: { value: 1.0 },
       // (an older machine's picture - retro.js, hardware.js STYLES: its colours' levels, its dither (0 none, 1 the
       // ordered 4 x 4, 2 fine noise), its colour, whether on)
-      uRetro: { value: new THREE.Vector4(255, 0, 1, 0) }, uRetroLv: { value: new THREE.Vector3(255, 255, 255) } };
+      uRetro: { value: new THREE.Vector4(255, 0, 1, 0) }, uRetroLv: { value: new THREE.Vector3(255, 255, 255) },
+      // (a 360's bloom - its strength, the light it starts over - and a Game Boy's greens: retro.js)
+      uRetroFx: { value: new THREE.Vector4(0, 0.8, 0, 0) } };
     this.retro = o.retro ?? null;
     if (this.retro) {
       const R = this.retro.show;
       this.showU.uRetro.value.set(Math.max(...R.levels), R.dither, R.sat, 1); this.showU.uRetroLv.value.set(...R.levels);
+      this.showU.uRetroFx.value.set(R.bloom, 0.8, 0, R.palette);
       // (none of the full look's finishing: no sharpening, no shafts, no lit air, no mist, no darkened corners - those
       // machines had none, and each is many taps a pixel)
       this.showU.uSharp.value = 0; this.showU.uRays.value = 0; this.showU.uAir.value = 0; this.showU.uMist.value = 0; this.showU.uGrade.value.w = 0;
@@ -665,6 +680,8 @@ export class CountrysideScene {
     const samples = Math.min(this.gfx.msaa ?? 8, renderer.capabilities.maxSamples ?? 4);
     this.rt = new THREE.WebGLRenderTarget(...this.size, { samples, depthBuffer: true, type: this.hdr ? THREE.HalfFloatType : THREE.UnsignedByteType });
     this.rt.texture.colorSpace = this.hdr ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
+    // (a 360's bloom reads the picture's own smaller copies: made after every frame, for that look alone)
+    if (this.retro?.show.bloom > 0) { this.rt.texture.generateMipmaps = true; this.rt.texture.minFilter = THREE.LinearMipmapLinearFilter; }
     // (its depth kept, for the air's shafts in the show pass)
     this.rt.depthTexture = new THREE.DepthTexture(...this.size); this.rt.depthTexture.type = THREE.FloatType;
     this.showU.uDepth.value = this.rt.depthTexture;
