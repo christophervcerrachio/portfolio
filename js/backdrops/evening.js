@@ -19,16 +19,17 @@ const lin = (hex, k = 1) => new THREE.Color(hex).convertSRGBToLinear().multiplyS
 // horizon, clouds lit pink from below, the land far #798385 to near #1f2628)
 const EVE = {
   // the light everything outdoors is lit by
-  uSunColor: lin('#ffb487', 0.62), uSkyColor: lin('#a3afbd', 0.5), uGroundColor: lin('#5f5d57', 0.13),
-  uHaze: lin('#c6b1a6'), uHazeDist: 16000,
+  uSunColor: lin('#ffb487', 0.62), uSkyColor: lin('#a3afbd', 0.6), uGroundColor: lin('#5f5d57', 0.13),
+  // (the far land in cool greys, as the picture's far hills: a warm haze had washed the whole city orange)
+  uHaze: lin('#b4babf'), uHazeDist: 26000,
   // the sky (its panorama is redrawn a band a frame: it follows in a second or so)
-  uZenith: lin('#93a7b8'), uHorizon: lin('#e2c3ad'), uHazeSun: lin('#f3b98f'), uHazeShade: lin('#a9abb3', 0.8),
+  uZenith: lin('#93a7b8'), uHorizon: lin('#d8c3b4'), uHazeSun: lin('#f3b98f'), uHazeShade: lin('#a9afb8', 0.8),
   uFarHaze: 3800, uCloudLit: lin('#ffbc9d', 1.25), uAmbHigh: lin('#b7bfcb', 0.8), uAmbLow: lin('#7b7a83', 0.58),
 };
 // the models' lights and fog, and the picture's finish (the show pass)
 const EVE_SUN = { color: new THREE.Color('#ffc19a'), intensity: 0.85 };
-const EVE_HEMI = { sky: new THREE.Color('#aab3bf'), ground: new THREE.Color('#6d6b61'), intensity: 1.05 };
-const EVE_FOG = { color: new THREE.Color('#c8b6ab'), near: 2500, far: 70000 };
+const EVE_HEMI = { sky: new THREE.Color('#aab3bf'), ground: new THREE.Color('#6d6b61'), intensity: 1.25 };
+const EVE_FOG = { color: new THREE.Color('#b7bdc2'), near: 3000, far: 90000 };
 const EVE_GRADE = new THREE.Vector4(0.8, 1.05, 0.03, 0.36);          // (saturation, contrast, lift, vignette)
 const EVE_SHADE = new THREE.Vector3(-0.022, 0.0, 0.034), EVE_LIGHT = new THREE.Vector3(0.03, 0.012, -0.022);
 
@@ -57,7 +58,7 @@ export function makeEvening({ U, show, sun, hemi, fog = () => null, hold = null,
   const daySun = { color: sun.color.clone(), intensity: sun.intensity };
   const dayHemi = { sky: hemi.color.clone(), ground: hemi.groundColor.clone(), intensity: hemi.intensity };
   const dayGrade = show.uGrade.value.clone(), dayShade = show.uShadowTint.value.clone(), dayLight = show.uLightTint.value.clone();
-  const dayMist = show.uMist.value;
+  const dayMist = show.uMist.value, dayAir = show.uAir.value;
   let dayFog = null, k = -1;
   const lerp = (a, b, x) => a + (b - a) * x;
   const api = {
@@ -86,6 +87,9 @@ export function makeEvening({ U, show, sun, hemi, fog = () => null, hold = null,
       g.set(lerp(dayGrade.x, EVE_GRADE.x, x), lerp(dayGrade.y, EVE_GRADE.y, x), lerp(dayGrade.z, EVE_GRADE.z, x), dayGrade.w > 0 ? lerp(dayGrade.w, EVE_GRADE.w, x) : 0);
       show.uShadowTint.value.copy(dayShade).lerp(EVE_SHADE, x); show.uLightTint.value.copy(dayLight).lerp(EVE_LIGHT, x);
       show.uMist.value = dayMist * (1 + 1.2 * x);
+      // (and less of the sun's light lying in the air toward it: with the low sun's warm tint it had laid an orange veil
+      // over everything looked at toward the glow)
+      show.uAir.value = dayAir * (1 - 0.65 * x);
     },
     /** The cycle at the walk's clock t (s). */
     update(t) {
