@@ -82,7 +82,7 @@ for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 // instead of in perspective (0 to 1: it swims on big walls seen at a slant, as it did); filter: 'nearest' (hard
 // texels), 'nearest-mip' (hard texels, their smaller copies far off, so a far wall or field does not glitter in a
 // picture this small), 'linear' (smeared, no smaller copies), 'trilinear'; sat: the picture's colour against the full
-// look's; gamma: its light drawn up before its colours are cut (below 1: brighter - a Game Boy Advance's games were
+// look's; gamma: its light drawn up before its colours are cut (below 1: brighter - a Game Boy Advance's pictures were
 // made bright for its unlit screen); bloom: how strongly what is bright spreads soft light round it (a 360's, its
 // picture's own smaller copies); tone: 'filmic' (the film-like curve those years' pictures were finished with).
 // texMax (the tier's) is the longest side any texture keeps.
@@ -98,7 +98,7 @@ export const STYLES = {
   n64:       { name: 'N64',       about: '240 lines, smeared textures',        lines: 240, scaleUp: 'smooth', bits: 5, dither: 'noise', snap: false, affine: 0,    filter: 'linear',    sat: 1.0 },
   ps1:       { name: 'PS1',       about: '240 lines, hard pixels, it shivers', lines: 240, scaleUp: 'pixel',  bits: 5, dither: 'bayer', snap: true,  affine: 0.55, filter: 'nearest',   sat: 1.0 },
   // (a Game Boy Advance's 240 x 160: every pixel a hard square, its 32,768 colours with no dither (the steps of a sky
-  // left to show), the picture bright and its colour full, as its games were made for its unlit screen - 12 Nov 2026)
+  // left to show), the picture bright and its colour full, as its pictures were made for its unlit screen - 12 Nov 2026)
   gba:       { name: 'Game Boy Advance', about: '160 lines, bright 15-bit colour', lines: 160, scaleUp: 'pixel', bits: 5, dither: 'none', snap: false, affine: 0, filter: 'nearest-mip', sat: 1.2, gamma: 0.85 },
 };
 /** What the menu offers, top to bottom: the full look, then each older machine's. */

@@ -50,7 +50,12 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
   // (the fronts' relief near the camera - window surrounds, sills, cornices, string courses - in the houses' own front
   // materials: facaderelief.js)
   const MATS = {};
-  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear, heightAt, ground });
+  const streams = [], fars = [];
+  // (a tile's relief comes in once its houses stand: come in before them, the arches, sills and window boxes of a street
+  // whose houses were still rising stood on their own in the air - seen where the walk had put the walker back in a
+  // street, 12 Nov 2026. A tile with no houses of its own keeps its relief as it was)
+  const housesIn = (city, key) => { const st = streams[cities.indexOf(city)]; return !st || (st.ready && (!st.tiles.has(key) || st.risen(key))); };
+  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear, heightAt, ground, housesIn });
   group.add(relief);
   // (and a step clear of every wall near: the walls themselves, exact - facaderelief.js push)
   group.userData.wallPush = (x, z, r) => relief.userData.push(x, z, r);
@@ -76,7 +81,6 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
     { const nm = m.name || ''; if (m.map && /^front-/.test(nm)) { interiors(m, 'facade-' + nm.slice(6), { base, cut: CUT, sky: U }); MATS[nm] ??= m; } }
     receiveSun(m, U, { street: true });
   };
-  const streams = [], fars = [];
   for (const city of cities) {
     const url = base + DIR + city + '-materials.glb';
     LM.itemStart(url);

@@ -50,7 +50,7 @@ function bandsFor(fb, st, storey) {
   return seq.map(([a, b], i) => [a, b, hs[i] * k]);
 }
 
-export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], materials, near = NEAR, heightAt = null, ground = null } = {}) {
+export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], materials, near = NEAR, heightAt = null, ground = null, housesIn = null } = {}) {
   // (the steps before the doors are made of the pavements' own stone and planks: the city's ground materials, once
   // cityprops.js has read them into `ground` - { <city>: Map of materials by name })
   const stepMat = (city, timber) => { const L = ground?.[city]; return L ? (timber ? L.get('walk') : null) ?? L.get('kerb') ?? L.get('footway') ?? null : null; };
@@ -485,11 +485,13 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       }
       if (T.state === 2) {
         // (a tile's mouldings come in together and settle onto their fronts - a short rise, a metre: arrive.js; while
-        // it comes in the tile is the arrival's to add)
+        // it comes in the tile is the arrival's to add. Not before the tile's houses stand: housesIn, cityblocks.js)
         if (want && !T.g.parent && T.fresh) {
-          T.fresh = false; T.arriving = true;
-          const g = T.g;
-          arrive(g, { parent: group, x: T.c[0], z: T.c[1], depth: 1.2, dur: 0.7, cancel: () => T.g !== g }).then(() => { if (T.g === g) T.arriving = false; });
+          if (!housesIn || housesIn(T.city, T.key)) {
+            T.fresh = false; T.arriving = true;
+            const g = T.g;
+            arrive(g, { parent: group, x: T.c[0], z: T.c[1], depth: 1.2, dur: 0.7, cancel: () => T.g !== g }).then(() => { if (T.g === g) T.arriving = false; });
+          }
         } else if (!T.arriving) {
           if (want && !T.g.parent) group.add(T.g);
           else if (!want && T.g.parent) group.remove(T.g);

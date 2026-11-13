@@ -192,6 +192,9 @@ void main() {
   // copies, three of them each about three times wider than the last; only the light over uRetroFx.y spreads
   if (uRetroFx.x > 0.0) {
     vec3 bl = textureLod(uPic, vUv, 2.0).rgb * 0.3 + textureLod(uPic, vUv, 3.5).rgb * 0.4 + textureLod(uPic, vUv, 5.0).rgb * 0.3;
+    // (one pixel with no number in it spreads through every smaller copy into a black square as wide as that copy's
+    // texel - a degenerate leaf's light did, over the woods: such a pixel's bloom is left out)
+    if (any(isnan(bl)) || any(isinf(bl))) bl = vec3(0.0);
     float lb = dot(bl, vec3(0.2126, 0.7152, 0.0722));
     sharp += bl * (max(lb - uRetroFx.y, 0.0) / max(lb, 1e-4)) * uRetroFx.x;
   }
@@ -213,7 +216,7 @@ void main() {
   // regular 4 x 4 cross-hatch of a Dreamcast's 16-bit picture (each of its pixels a hard square on the screen, so the
   // pattern shows as it did on a VGA screen)
   if (uRetro.w > 0.5) {
-    // (a Game Boy Advance's light drawn up first, as its games were made bright for its unlit screen: uRetroFx.z)
+    // (a Game Boy Advance's light drawn up first, as its pictures were made bright for its unlit screen: uRetroFx.z)
     if (uRetroFx.z > 0.0) c = pow(c, vec3(uRetroFx.z));
     float lr = dot(c, vec3(0.2126, 0.7152, 0.0722));
     c = clamp(mix(vec3(lr), c, uRetro.z), 0.0, 1.0);
