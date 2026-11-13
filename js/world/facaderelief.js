@@ -256,7 +256,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const e = Math.round(mpx) + 5, ew = 6;
               // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
               // dev\world\cities\measure_shutters.py)
-              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? Math.abs(q[2] - cx0) < 1.5 : Math.abs(q[0] - cx1) < 1.5) && q[1] < ry1 && q[3] > ry0) : [];
+              // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
+              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= cx0 + 1.5 && cx0 - q[2] <= mpx + 2 : q[0] >= cx1 - 1.5 && q[0] - cx1 <= mpx + 2) && q[1] < ry1 && q[3] > ry0) : [];
               const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
               if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC);
