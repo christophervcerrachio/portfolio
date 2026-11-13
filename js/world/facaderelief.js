@@ -27,6 +27,16 @@ export function reliefReach(near) {
   SHOW = Math.min(320, Math.max(60, near - 60)); CUT = Math.min(150, Math.max(40, SHOW - 20));
 }
 
+/** An arched opening's head, x0..x1 wide in the picture with its crown at y0, the arch rising `f` of half the width
+ *  (1: a half circle): { ys: the row it springs from, pts: [x, y, out x, out y] along it from its left springing to
+ *  its right - px of the picture, the last two the way out from the arch's middle }. dev\world\cities\facade-bays.json. */
+function archOf(x0, x1, y0, f, n) {
+  const a = (x1 - x0) / 2, r = f * a, R = (a * a + r * r) / (2 * r), xc = (x0 + x1) / 2, cy = y0 + R, ph = Math.asin(Math.min(1, a / R));
+  const pts = [];
+  for (let i = 0; i <= n; i++) { const t = -ph + 2 * ph * i / n, sn = Math.sin(t), cs = Math.cos(t); pts.push([xc + R * sn, cy - R * cs, sn, -cs]); }
+  return { ys: y0 + r, pts };
+}
+
 /** Each front's storey bands from the street up, st storeys high: [[y0 px, y1 px, metres], ...] (city_blender.py bands_for). */
 function bandsFor(fb, st, storey) {
   const B = fb.bands;
@@ -40,7 +50,10 @@ function bandsFor(fb, st, storey) {
   return seq.map(([a, b], i) => [a, b, hs[i] * k]);
 }
 
-export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], materials, near = NEAR, heightAt = null } = {}) {
+export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], materials, near = NEAR, heightAt = null, ground = null } = {}) {
+  // (the steps before the doors are made of the pavements' own stone and planks: the city's ground materials, once
+  // cityprops.js has read them into `ground` - { <city>: Map of materials by name })
+  const stepMat = (city, timber) => { const L = ground?.[city]; return L ? (timber ? L.get('walk') : null) ?? L.get('kerb') ?? L.get('footway') ?? null : null; };
   // (the glass at the back of each hole: the front's picture of its window, the rooms behind it - interiors.js, flat)
   const GLASS = {};
   const glassMat = (name) => {
@@ -48,7 +61,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const w = materials(name); if (!w) return null;
     const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.35, metalness: 0, name: name + '-glass' });
     interiors(m, 'facade-' + name.slice(6), { base, flat: true, far: CUT + 20, sky: U });
-    receiveSun(m, U);
+    receiveSun(m, U, { street: true });
     return (GLASS[name] = m);
   };
   // (the door at the back of its opening, and its threshold: the front's own picture, but not the wall's material - within
@@ -59,7 +72,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     if (DOORS[name]) return DOORS[name];
     const w = materials(name); if (!w) return null;
     const m = new THREE.MeshStandardMaterial({ map: w.map, normalMap: w.normalMap || null, roughness: 0.8, metalness: 0, name: name + '-door' });
-    receiveSun(m, U);
+    receiveSun(m, U, { street: true });
     return (DOORS[name] = m);
   };
   // (the window boxes' models: each mesh's geometry in the model's own frame, its material; null if not there)
@@ -138,7 +151,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     for (const w of walls) {
       // (k0, cut: a wall shared with a lower house - it shows from `cut` up, its windows from storey band k0 up:
       // dev/world/facade_bays.py)
-      const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0] = w;
+      // (lev: for each of the wall's doors, in their order along it, [the pavement's top before it, how far out the
+      // pavement reaches (m)] - dev/world/door_levels.py; room: [from, to] along the wall (m), the room between a
+      // portico's two middle columns' pedestals, which its door's steps keep to - dev/world/city_blender.py)
+      const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0, , lev = null, room = null] = w;
+      let dix = 0;
       const fname = T.I.fronts[fi], key = 'facade-' + fname.slice(6), fb = BAYS[key], fr = FRONTS[key];
       if (!fb || !fr) continue;
       fb.my ??= fr.my; fb.mx ??= fr.mx;
@@ -158,9 +175,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
         const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
         const L_ = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] >= 0 ? [[a, ua], [b, ub], [c, uc], [a, ua], [c, uc], [d, ud]] : [[a, ua], [c, uc], [b, ub], [a, ua], [d, ud], [c, uc]];
-        for (const [v, uv] of L_) { A.p.push(v[0], v[1], v[2]); A.n.push(n[0], n[1], n[2]); A.u.push(uv[0] / 1024, uv[1] / H); if (winC) A.c.push(winC[0], winC[1], winC[2]); }
+        for (const [v, uv] of L_) { A.p.push(v[0], v[1], v[2]); A.n.push(n[0], n[1], n[2]); if (raw) A.u.push(uv[0], uv[1]); else A.u.push(uv[0] / 1024, uv[1] / H); if (winC) A.c.push(winC[0], winC[1], winC[2]); }
       };
       let winC = null;              // (the glass's window centre, for its room: interiors.js)
+      let raw = false;              // (texture coordinates as given - the steps' stone, in its own tiles - not the picture's px)
       const out = [nx, 0, nz], up = [0, 1, 0], down = [0, -1, 0], along = [tx, 0, tz], back = [-tx, 0, -tz];
       // a box proud of the wall: s0..s1 along, h0..h1 up, o out; its face cut from the picture's px rectangle
       const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr') => {
@@ -195,7 +213,33 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           if (k < k0) { zb += hm; return; }                          // (behind the next house: nothing to model)
           const Z = (y) => zb + (by1 - y) / (by1 - by0) * hm;
           const shop = k === 0 && sh0 >= 0 && bi >= sh0 && bi < sh1;
-          if (!shop) for (const [ry0, ry1, cs] of fb.rows) {
+          // An arched opening (windows/bays.json: a row's fourth number, the door's doorArch - the arch's rise as a
+          // share of half the opening's width): its jambs' surrounds up to where the arch springs, its archivolt
+          // standing proud of the wall in segments, and the hole's sides and head back D m to the glass or the door -
+          // each face cut from the picture where it stands, the hole's from the plaster beyond the surround. (Every
+          // opening had been a rectangle: under an arch the wall between it and the rectangle's corners was cut away
+          // with the hole, and the hole's flat head stood across the arch like a plank.)
+          const arched = (x0, x1, y0p, y1p, vBot, af, mpx, e, ew, D) => {
+            const NA = Math.max(6, Math.round(12 * Math.min(1, af))), Ar = archOf(x0, x1, y0p, af, NA);
+            const a0 = S(x0), a1 = S(x1), am = mpx * fb.mx * sc, vs = Z(Ar.ys);
+            box(a0 - am, a0, vBot, vs, PROUD, [x0 - mpx, Ar.ys, x0, y1p], 'fl');
+            box(a1, a1 + am, vBot, vs, PROUD, [x1, Ar.ys, x1 + mpx, y1p], 'fr');
+            quad(V(a0, vBot, 0), V(a0, vBot, -D), V(a0, vs, -D), V(a0, vs, 0), [x0 - e, y1p], [x0 - e - ew, y1p], [x0 - e - ew, Ar.ys], [x0 - e, Ar.ys], along);
+            quad(V(a1, vBot, -D), V(a1, vBot, 0), V(a1, vs, 0), V(a1, vs, -D), [x1 + e + ew, y1p], [x1 + e, y1p], [x1 + e, Ar.ys], [x1 + e + ew, Ar.ys], back);
+            const W = (x, y, o) => V(S(x), Z(y), o);
+            for (let i = 0; i < NA; i++) {
+              const [ax_, ay_, anx, any] = Ar.pts[i], [bx_, by_, bnx, bny] = Ar.pts[i + 1];
+              const mxn = (anx + bnx) / 2, myn = (any + bny) / 2, ml = Math.hypot(mxn, myn) || 1;
+              const nr = [tx * mxn / ml, -myn / ml, tz * mxn / ml];           // (out from the arch, in the wall's plane)
+              const qa = [ax_ + anx * mpx, ay_ + any * mpx], qb = [bx_ + bnx * mpx, by_ + bny * mpx];
+              quad(W(ax_, ay_, PROUD), W(bx_, by_, PROUD), W(qb[0], qb[1], PROUD), W(qa[0], qa[1], PROUD), [ax_, ay_], [bx_, by_], qb, qa, out);       // (the archivolt's face)
+              quad(W(qa[0], qa[1], 0), W(qa[0], qa[1], PROUD), W(qb[0], qb[1], PROUD), W(qb[0], qb[1], 0), qa, qa, qb, qb, nr);                        // (its outer edge)
+              const ea = [ax_ + anx * e, ay_ + any * e], eb = [bx_ + bnx * e, by_ + bny * e];
+              const fa = [ax_ + anx * (e + ew), ay_ + any * (e + ew)], fq = [bx_ + bnx * (e + ew), by_ + bny * (e + ew)];
+              quad(W(ax_, ay_, 0), W(bx_, by_, 0), W(bx_, by_, -D), W(ax_, ay_, -D), ea, eb, fq, fa, [-nr[0], -nr[1], -nr[2]]);                         // (the hole's head)
+            }
+          };
+          if (!shop) for (const [ry0, ry1, cs, af = 0] of fb.rows) {
             if (ry0 < by0 - 1 || ry1 > by1 + 1) continue;
             for (const ci of cs) {
               const [cx0, cx1] = fb.cols[ci];
@@ -205,10 +249,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // under the sill - a timber house's carved casing with its crest and apron), that
               const tr = fb.trim, mpx = tr ? tr[0] : Math.max(6, Math.min(16, (cx1 - cx0) * 0.12)), hpx = tr ? tr[1] : mpx;
               const u0 = S(cx0), u1 = S(cx1), v0 = Z(ry1), v1 = Z(ry0), um = mpx * fb.mx * sc, vm = (Z(ry0 - hpx) - v1);
+              const e = Math.round(mpx) + 5, ew = 6;
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
-              box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
-              box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                               // (left)
-              box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                               // (right)
+              if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC);
+              else {
+                box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
+                box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                               // (left)
+                box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                               // (right)
+              }
               // the sill: a stone ledge under the window, a little wider than its surround
               const sp = Math.max(5, Math.round(0.08 / fb.my));
               box(u0 - um - 0.04, u1 + um + 0.04, v0 - 0.08, v0, SILL, [cx0 - mpx, ry1 + 1, cx1 + mpx, ry1 + 1 + sp], 'ftblr');
@@ -219,10 +267,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const B0 = V(u0, v0, -REC), B1 = V(u1, v0, -REC), B2 = V(u1, v1, -REC), B3 = V(u0, v1, -REC);
               // (the plaster from beyond the surround, a strip of the wall itself: the frame's own edge, a pixel or two
               // stretched over the reveal, had read as a flat grey-blue)
-              const e = Math.round(mpx) + 5, ew = 6;
-              quad(R0, B0, B3, R3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);        // (left side)
-              quad(B1, R1, R2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);       // (right side)
-              quad(R3, R2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);       // (head)
+              if (!(af > 0)) {
+                quad(R0, B0, B3, R3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);        // (left side)
+                quad(B1, R1, R2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);       // (right side)
+                quad(R3, R2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);       // (head)
+              }
               quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up);         // (sill)
               // the glass and its frame at the back: the picture's window
               const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -REC);
@@ -238,38 +287,56 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           }
           // the door: in the door bay's ground band, its opening as the picture draws it (facade-bays.json 'door') cut
           // 0.22 m into the wall, a surround standing proud round its sides and head, the door itself (the picture's) at
-          // the back, a stone step before it
-          if (k === 0 && b[2] === 'door' && fb.door) {
-            const [dx0, dy0, dx1, dy1] = fb.door;
-            if (dx0 >= b[0] - 2 && dx1 <= b[1] + 2) {
+          // the back, its steps before it
+          if (k === 0 && b[2] === 'door') {
+            const lv = lev?.[dix++] ?? null;
+            if (fb.door && fb.door[0] >= b[0] - 2 && fb.door[2] <= b[1] + 2) {
+              const [dx0, dy0, dx1, dy1] = fb.door, da = fb.doorArch ?? 0;
               const DR = 0.22, mp = Math.max(8, Math.min(18, (dx1 - dx0) * 0.08));
               const u0 = S(dx0), u1 = S(dx1), v0 = Math.max(y0 - 0.05, Z(dy1)), v1 = Z(dy0), um = mp * fb.mx * sc, vm = Z(dy0 - mp) - v1;
-              box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [dx0 - mp, dy0 - mp, dx1 + mp, dy0], 'ftlr');
-              box(u0 - um, u0, v0, v1, PROUD, [dx0 - mp, dy0, dx0, dy1], 'flt');
-              box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt');
               const R0 = V(u0, v0, 0), R1 = V(u1, v0, 0), R2 = V(u1, v1, 0), R3 = V(u0, v1, 0);
               const B0 = V(u0, v0, -DR), B1 = V(u1, v0, -DR), B2 = V(u1, v1, -DR), B3 = V(u0, v1, -DR);
               const e = Math.round(mp) + 5, ew = 6;
-              quad(R0, B0, B3, R3, [dx0 - e, dy1], [dx0 - e - ew, dy1], [dx0 - e - ew, dy0], [dx0 - e, dy0], along);
-              quad(B1, R1, R2, B2, [dx1 + e + ew, dy1], [dx1 + e, dy1], [dx1 + e, dy0], [dx1 + e + ew, dy0], back);
-              quad(R3, R2, B2, B3, [dx0, dy0 - e], [dx1, dy0 - e], [dx1, dy0 - e - ew], [dx0, dy0 - e - ew], down);
+              if (da > 0) arched(dx0, dx1, dy0, dy1, v0, da, mp, e, ew, DR);
+              else {
+                box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [dx0 - mp, dy0 - mp, dx1 + mp, dy0], 'ftlr');
+                box(u0 - um, u0, v0, v1, PROUD, [dx0 - mp, dy0, dx0, dy1], 'flt');
+                box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt');
+                quad(R0, B0, B3, R3, [dx0 - e, dy1], [dx0 - e - ew, dy1], [dx0 - e - ew, dy0], [dx0 - e, dy0], along);
+                quad(B1, R1, R2, B2, [dx1 + e + ew, dy1], [dx1 + e, dy1], [dx1 + e, dy0], [dx1 + e + ew, dy0], back);
+                quad(R3, R2, B2, B3, [dx0, dy0 - e], [dx1, dy0 - e], [dx1, dy0 - e - ew], [dx0, dy0 - e - ew], down);
+              }
               const A1 = A; A = AD;
               quad(B0, B1, R1, R0, [dx0, dy1 - 3], [dx1, dy1 - 3], [dx1, dy1 - 1], [dx0, dy1 - 1], up);   // (the threshold)
               quad(B0, B1, B2, B3, [dx0, dy1], [dx1, dy1], [dx1, dy0], [dx0, dy0], out);                  // (the door)
               A = A1;
-              // (the step: the picture's own threshold stone, 0.16 m high, 0.4 m out, a little wider than the opening)
-              const sp = Math.max(4, Math.round(0.1 / fb.my));
-              box(u0 - um, u1 + um, v0 - 0.16, v0, 0.42, [dx0 - mp, dy1 - sp, dx1 + mp, dy1], 'ftblr');
-              // (and a flight of steps down to the pavement where the floor stands high over it - a house on falling
-              // ground has its floor a step over the highest ground along its walls, and a door on its low side hung in
-              // the air: 117 of them in Petersburg, 0.75 m and more up. Each step 17 cm or less, 30 cm deep, the lower
-              // the further out)
-              if (heightAt) {
-                const dm = V((u0 + u1) / 2, 0, 0.9), rise = (v0 - 0.16) - (heightAt(dm[0], dm[2]) + 0.14);
-                if (rise > 0.2 && rise < 2.6) {
-                  const n = Math.ceil(rise / 0.17), h = rise / n;
-                  for (let q = 1; q <= n; q++)
-                    box(u0 - um - 0.12, u1 + um + 0.12, v0 - 0.16 - h * q, v0 - 0.16 - h * (q - 1), 0.42 + 0.3 * q, [dx0 - mp, dy1 - sp, dx1 + mp, dy1], 'ftlr');
+              // The steps: from the threshold down to the pavement before the door - the level the city's ground was
+              // built at there and how far out it reaches (the wall's own list, read off the ground as built:
+              // dev\world\door_levels.py) - in the pavement's stone, or planks before a timber house. They stand on the
+              // pavement and end inside its edge; a riser 19 cm at most. (They had been cut from the door's own rows
+              // of the picture, which the wall's material opens as a hole near the camera, so only their two ends
+              // showed; and they had run down to the bare ground under the pavement, through it and out of its side.)
+              const [yp, reach] = lv ?? [y0 - 0.03, 1.25];
+              {
+                // (between a porch's columns where the door has them, and a portico's)
+                let s0 = u0 - um - 0.06, s1 = u1 + um + 0.06;
+                for (const [cx0_, cx1_] of fb.hood?.cols ?? []) { if (cx1_ <= (dx0 + dx1) / 2) s0 = Math.max(s0, S(cx1_) + 0.04); else s1 = Math.min(s1, S(cx0_) - 0.04); }
+                if (room) { s0 = Math.max(s0, room[0]); s1 = Math.min(s1, room[1]); }
+                const rise = v0 - yp;
+                if (rise >= 0.025 && rise < 2.6 && s1 - s0 > 0.4) {
+                  const timber = /timber|wood/.test(fname), T = timber ? 1.4 : 2.774;
+                  const n = Math.max(1, Math.ceil((rise - 0.005) / 0.19)), hs = rise / n;
+                  const run = Math.max(0.3, reach - 0.25), d0 = Math.min(0.36, run), dt = n > 1 ? Math.min(0.27, Math.max(0.16, (run - d0) / (n - 1))) : 0;
+                  const A2 = A; A = get(fname + (timber ? '#stept' : '#steps'), ck_); raw = true;
+                  for (let q = 0; q < n; q++) {
+                    const h1 = v0 - hs * q, h0 = h1 - hs, o = d0 + dt * q;
+                    const a = V(s0, h0, o), bq = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o), a0 = V(s0, h0, 0), b0 = V(s1, h0, 0), c0 = V(s1, h1, 0), d0_ = V(s0, h1, 0);
+                    quad(a, bq, c, d, [s0 / T, h0 / T], [s1 / T, h0 / T], [s1 / T, h1 / T], [s0 / T, h1 / T], out);            // (its riser)
+                    quad(d, c, c0, d0_, [s0 / T, o / T], [s1 / T, o / T], [s1 / T, 0], [s0 / T, 0], up);                       // (its tread)
+                    quad(a0, a, d, d0_, [0, h0 / T], [o / T, h0 / T], [o / T, h1 / T], [0, h1 / T], back);                     // (its ends)
+                    quad(bq, b0, c0, c, [o / T, h0 / T], [0, h0 / T], [0, h1 / T], [o / T, h1 / T], along);
+                  }
+                  A = A2; raw = false;
                 }
               }
               // the door's hood: what the picture paints over the door - a gabled timber canopy on its brackets, a
@@ -287,6 +354,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                   quad(a, b, c, d, ua, ub, uc, ud, n);
                 };
                 if (h.wall) { const w = h.wall; quad(V(xl, zb_, 0.03), V(xr, zb_, 0.03), V(xr, zt, 0.03), V(xl, zt, 0.03), [w[0], w[3]], [w[2], w[3]], [w[2], w[1]], [w[0], w[1]], out); }
+                // (where a portico or a porch stands over the door - its columns on the door's own piers - its top is the
+                // door's shelter: the hood, as wide as the door's surround and more, would run into its columns)
+                if (room) { /* the painted hood covered, none built */ } else {
                 if (h.kind === 'gable') {
                   const xc = S(h.cx), ze = Z(h.ye);
                   const Al = V(xl, ze, D), Ar = V(xr, ze, D), Ap = V(xc, zt, D), Bl = V(xl, zb_, D), Br = V(xr, zb_, D);
@@ -307,8 +377,24 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                   face(T0b, T2b, T1b, T1b, [bx1, h.y1], [bx1, by], [bx0, h.y1], [bx0, h.y1], along);
                   face(T1a, T1b, T2b, T2a, [bx0, h.y1], [bx1, h.y1], [bx1, by], [bx0, by], [nx, -1, nz]);
                 }
-                // (a porch's columns: each a shaft standing out of the wall, the picture's own column on it)
-                for (const [cx0_, cx1_, cy0, cy1, pr] of h.cols ?? []) box(S(cx0_), S(cx1_), Math.max(y0, Z(cy1)), Z(cy0), pr, [cx0_, cy0, cx1_, cy1], 'flr');
+                // (a porch's columns: each a shaft standing out of the wall, the picture's own column on it - and under it,
+                // down to the pavement, a block of the steps' stone: the picture's column stops at the floor, and the
+                // pavement before the door is up to three quarters of a metre under it, so the columns stood in the air)
+                for (const [cx0_, cx1_, cy0, cy1, pr] of h.cols ?? []) {
+                  const c0 = S(cx0_), c1 = S(cx1_), cb = Math.max(y0, Z(cy1));
+                  box(c0, c1, cb, Z(cy0), pr, [cx0_, cy0, cx1_, cy1], 'flr');
+                  if (cb - yp > 0.02) {
+                    const timber = /timber|wood/.test(fname), T = timber ? 1.4 : 2.774, e0 = c0 - 0.03, e1 = c1 + 0.03, o1 = pr + 0.03;
+                    const A2 = A; A = get(fname + (timber ? '#stept' : '#steps'), ck_); raw = true;
+                    const a = V(e0, yp, o1), bq = V(e1, yp, o1), c = V(e1, cb, o1), d = V(e0, cb, o1), a0 = V(e0, yp, 0), b0 = V(e1, yp, 0), c0_ = V(e1, cb, 0), d0_ = V(e0, cb, 0);
+                    quad(a, bq, c, d, [e0 / T, yp / T], [e1 / T, yp / T], [e1 / T, cb / T], [e0 / T, cb / T], out);
+                    quad(d, c, c0_, d0_, [e0 / T, o1 / T], [e1 / T, o1 / T], [e1 / T, 0], [e0 / T, 0], up);
+                    quad(a0, a, d, d0_, [0, yp / T], [o1 / T, yp / T], [o1 / T, cb / T], [0, cb / T], back);
+                    quad(bq, b0, c0_, c, [o1 / T, yp / T], [0, yp / T], [0, cb / T], [o1 / T, cb / T], along);
+                    A = A2; raw = false;
+                  }
+                }
+                }
               }
             }
           }
@@ -318,7 +404,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     }
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
-      const name = a.name, mat = name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5)) : materials(name);
+      const name = a.name, mat = name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
+        : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name);
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
@@ -364,6 +451,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     for (const T of tiles.values()) {
       const d = Math.max(Math.abs(T.c[0] - pos.x), Math.abs(T.c[1] - pos.z)) - T.I.tile / 2;
       const want = d < near;
+      // (not before the city's ground materials are read - the steps are made of them - or eight seconds have gone)
+      if (want && T.state === 0 && ground && !ground[T.city] && performance.now() - (T.asked ??= performance.now()) < 8000) continue;
       if (want && T.state === 0) {
         T.state = 1;
         fetch(base + DIR + T.city + '-relief/' + T.key + '.json').then((r) => r.json()).then((walls) => {

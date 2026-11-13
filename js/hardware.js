@@ -65,9 +65,11 @@ for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 
 // How each older machine drew, as far as a browser can draw it again. lines: the picture's height (its width follows
 // the window); scaleUp: 'pixel' (each of its pixels a hard square) or 'smooth'; bits: the levels each colour channel
-// keeps (5: 32 levels, as a 15-bit picture) and dither, how its steps are broken up - 'bayer' (the ordered 4 x 4
-// pattern a PlayStation laid over every picture), 'noise' (a Nintendo 64's finer grain, softened by its own blur
-// on the way to the screen), or none; snap: corners moved to the picture's own pixels (a PlayStation had no finer
+// keeps (5: 32 levels, as a 15-bit picture; [5, 6, 5]: red, green and blue as a 16-bit picture keeps them) and
+// dither, how its steps are broken up - 'bayer' (the ordered 4 x 4 pattern a PlayStation laid over every picture),
+// 'ordered' (the regular 4 x 4 cross-hatch a Dreamcast's graphics chip laid over its 16-bit picture, sharp on a VGA
+// screen), 'noise' (a Nintendo 64's finer grain, softened by its own blur on the way to the screen), or none;
+// snap: corners moved to the picture's own pixels (a PlayStation had no finer
 // place to put them: its models shiver as they move); affine: how far a texture is drawn straight across each triangle
 // instead of in perspective (0 to 1: it swims on big walls seen at a slant, as it did); filter: 'nearest' (hard
 // texels), 'linear' (smeared, no smaller copies), 'trilinear'; sat: the picture's colour against the full look's.
@@ -77,7 +79,9 @@ for (const [was, now] of Object.entries(HEIR)) TIERS[was] = TIERS[now];
 // plain boxes, the landmarks as their light copies (dev\world\landmarks_lod.py).
 export const STYLES = {
   gamecube:  { name: 'GameCube',  about: '480 lines, soft and clean',          lines: 480, scaleUp: 'smooth', bits: 8, dither: 'none',  snap: false, affine: 0,    filter: 'trilinear', sat: 1.1 },
-  dreamcast: { name: 'Dreamcast', about: '480 lines, crisp, a little dither',  lines: 480, scaleUp: 'smooth', bits: 6, dither: 'bayer', snap: false, affine: 0,    filter: 'trilinear', sat: 1.06 },
+  // (a Dreamcast on its VGA box: every pixel of its 640 x 480 hard-edged, its 16-bit colour's dither plain to see, no
+  // smoothing anywhere - not the GameCube's soft picture, which it had been all but the same as: 12 Nov 2026)
+  dreamcast: { name: 'Dreamcast', about: '480 lines, hard VGA pixels, 16-bit dither', lines: 480, scaleUp: 'pixel', bits: [5, 6, 5], dither: 'ordered', snap: false, affine: 0, filter: 'trilinear', sat: 1.06 },
   n64:       { name: 'N64',       about: '240 lines, smeared textures',        lines: 240, scaleUp: 'smooth', bits: 5, dither: 'noise', snap: false, affine: 0,    filter: 'linear',    sat: 1.0 },
   ps1:       { name: 'PS1',       about: '240 lines, hard pixels, it shivers', lines: 240, scaleUp: 'pixel',  bits: 5, dither: 'bayer', snap: true,  affine: 0.55, filter: 'nearest',   sat: 1.0 },
 };

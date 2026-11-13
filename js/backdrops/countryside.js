@@ -92,7 +92,7 @@ uniform vec2 uSunUV; uniform float uSunVis; uniform float uRays; uniform vec3 uR
 uniform sampler2D uDepth; uniform float uRevZ; uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform float uAir; uniform float uSunLit; uniform float uAirSteps;
 uniform vec3 uSunDir;
 uniform sampler2D uMistH; uniform sampler2D uMistCov; uniform vec4 uMistCore; uniform float uMist; uniform float uTime;
-uniform vec4 uRetro;
+uniform vec4 uRetro; uniform vec3 uRetroLv;
 ${SHADOW_GLSL}
 float mHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float mNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -200,19 +200,24 @@ void main() {
   c *= 1.0 - uGrade.w * dot(q, q) * 2.2;
   c += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
   c = clamp(c, 0.0, 1.0);
-  // an older machine's colours (retro.js): so many levels a channel, their steps broken up by its own dither - the
-  // ordered 4 x 4 pattern laid over every picture (its numbers a PlayStation's), or a fine grain
+  // an older machine's colours (retro.js): so many levels a channel (red, green, blue: uRetroLv), their steps broken
+  // up by its own dither - the 4 x 4 pattern a PlayStation laid over every picture (its numbers), a fine grain, or the
+  // regular 4 x 4 cross-hatch of a Dreamcast's 16-bit picture (each of its pixels a hard square on the screen, so the
+  // pattern shows as it did on a VGA screen)
   if (uRetro.w > 0.5) {
     float lr = dot(c, vec3(0.2126, 0.7152, 0.0722));
     c = clamp(mix(vec3(lr), c, uRetro.z), 0.0, 1.0);
     float d = 0.0;
-    if (uRetro.y > 1.5) d = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+    ivec2 pd = ivec2(mod(floor(gl_FragCoord.xy), 4.0));
+    if (uRetro.y > 2.5) {
+      const float B[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+      d = (B[pd.x + pd.y * 4] + 0.5) / 16.0 - 0.5;
+    } else if (uRetro.y > 1.5) d = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
     else if (uRetro.y > 0.5) {
       const float M[16] = float[16](-4.0, 0.0, -3.0, 1.0, 2.0, -2.0, 3.0, -1.0, -3.0, 1.0, -4.0, 0.0, 3.0, -1.0, 2.0, -2.0);
-      ivec2 pd = ivec2(mod(floor(gl_FragCoord.xy), 4.0));
       d = M[pd.x + pd.y * 4] / 8.0;
     }
-    c = clamp(floor(c * uRetro.x + 0.5 + d) / uRetro.x, 0.0, 1.0);
+    c = clamp(floor(c * uRetroLv + 0.5 + d) / uRetroLv, 0.0, 1.0);
   }
   gl_FragColor.rgb = c;
 }`;
@@ -342,11 +347,11 @@ export class CountrysideScene {
       uMistH: { value: null }, uMistCov: { value: null }, uMistCore: { value: new THREE.Vector4(0, 0, 0, 0) }, uMist: { value: 1.0 },
       // (an older machine's picture - retro.js, hardware.js STYLES: its colours' levels, its dither (0 none, 1 the
       // ordered 4 x 4, 2 fine noise), its colour, whether on)
-      uRetro: { value: new THREE.Vector4(255, 0, 1, 0) } };
+      uRetro: { value: new THREE.Vector4(255, 0, 1, 0) }, uRetroLv: { value: new THREE.Vector3(255, 255, 255) } };
     this.retro = o.retro ?? null;
     if (this.retro) {
       const R = this.retro.show;
-      this.showU.uRetro.value.set(R.levels, R.dither, R.sat, 1);
+      this.showU.uRetro.value.set(Math.max(...R.levels), R.dither, R.sat, 1); this.showU.uRetroLv.value.set(...R.levels);
       // (none of the full look's finishing: no sharpening, no shafts, no lit air, no mist, no darkened corners - those
       // machines had none, and each is many taps a pixel)
       this.showU.uSharp.value = 0; this.showU.uRays.value = 0; this.showU.uAir.value = 0; this.showU.uMist.value = 0; this.showU.uGrade.value.w = 0;
@@ -522,13 +527,15 @@ export class CountrysideScene {
     // they take the sun's near shadows and cast them; the far cascade leaves them out (the city is the plate's)
     // (tiles of houses and yards come and go as the walker moves: the sun's pictures gather their casters again then)
     const changed = () => { if (this.shadow) this.shadow.casters = null; if (this.shadowFar) this.shadowFar.casters = null; };
-    const blocks = buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z) });
+    // (the cities' ground materials by city, once the furniture has read them: the houses' door steps are made of them)
+    const ground = {};
+    const blocks = buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground });
     // and their bridges (world/citybridges.js): the walker crosses them as the country ones (one deckAt for both)
     const bridges = buildCityBridges(this.U, { base });
     // the yards made gardens, and the yards' and streets' furniture: fountains, benches, lamps, gates, trees
     // (world/cityprops.js, dev\world\cityhouses.py), drawn near the camera only
     const props = buildCityProps(this.U, models, { base, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
-      addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed });
+      addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed, ground });
     // (and smoke over two in five of the houses' chimneys, near the walker: world/chimneys.js)
     const smoke = buildChimneySmoke(this.U, { base, near: G.smokeNear ?? 320 });
     this._later = { groups: [blocks, bridges, props], blocks, bridges, props, smoke };

@@ -195,8 +195,13 @@ export class SunShadow {
 }
 
 /** A lit material (MeshStandardMaterial and the like) made to take the sun's shadows: its sunlight is cut wherever
- *  the near or far picture says something stands between it and the sun. Chains any onBeforeCompile it already has. */
-export function receiveSun(mat, U) {
+ *  the near or far picture says something stands between it and the sun. Chains any onBeforeCompile it already has.
+ *  street: a thing of the cities' streets - what looks down on it is a pavement, not a meadow. The scene's light from
+ *  below is the meadow's green (the hemisphere light's ground colour), right under a tree and wrong under a cornice:
+ *  the head of every window's opening, the underside of every ledge and awning came out olive. With `street` the more
+ *  a face looks down the more that light is drawn to a warm grey of its own brightness, and a little dimmed - the
+ *  ledge's own shade; a wall, which looks at the horizon, is lit as it was. */
+export function receiveSun(mat, U, { street = false } = {}) {
   if (!mat || mat.userData.sunRecv || mat.isShaderMaterial) return mat;
   mat.userData.sunRecv = true;
   const prev = mat.onBeforeCompile, own = Object.prototype.hasOwnProperty.call(mat, 'customProgramCacheKey') ? mat.customProgramCacheKey.bind(mat) : null;
@@ -215,8 +220,20 @@ export function receiveSun(mat, U) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vShW;\n#ifndef SUN_DIR_DECL\nuniform vec3 uSunDir;\n#endif\n${SHADOW_GLSL}`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   { float shS = treeShade(vShW + uSunDir * 0.15); reflectedLight.directDiffuse *= shS; reflectedLight.directSpecular *= shS; }`);
+    if (street) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_pars_begin>', `#include <lights_pars_begin>
+#if ( NUM_HEMI_LIGHTS > 0 )
+vec3 streetHemi( in HemisphereLight hemiLight, in vec3 normal ) {
+  float d = dot( normal, hemiLight.direction ), down = 1.0 - smoothstep( -0.75, -0.05, d );
+  vec3 street = dot( hemiLight.groundColor, vec3( 0.2126, 0.7152, 0.0722 ) ) * vec3( 1.05, 1.0, 0.93 );
+  return mix( mix( hemiLight.groundColor, street, down ), hemiLight.skyColor, 0.5 * d + 0.5 ) * ( 1.0 - 0.2 * down );
+}
+#endif`).replace('#include <lights_fragment_begin>', `#if ( NUM_HEMI_LIGHTS > 0 )
+#define getHemisphereLightIrradiance streetHemi
+#endif
+#include <lights_fragment_begin>
+#undef getHemisphereLightIrradiance`);
   };
-  mat.customProgramCacheKey = () => keyBase + '-sunrecv';
+  mat.customProgramCacheKey = () => keyBase + (street ? '-sunrecv-street' : '-sunrecv');
   mat.needsUpdate = true;
   return mat;
 }
