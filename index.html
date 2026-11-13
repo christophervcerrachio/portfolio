@@ -59,8 +59,9 @@
       background: linear-gradient(transparent, var(--m) 50%, transparent); }
     /* (an older machine's look: its own lines, scaled up - hard pixels on the PS1, blended on the rest - and things
        rising a line or two at a time, as a picture of 240 lines can only move) */
-    .walk-load[data-style="ps1"] .walk-load-sky, .walk-load[data-style="ps1"] .walk-load-land, .walk-load[data-style="ps1"] .walk-load-piece { image-rendering: pixelated; }
-    .walk-load[data-style="ps1"] .walk-load-piece, .walk-load[data-style="n64"] .walk-load-piece { transition-timing-function: steps(var(--n, 20), end); }
+    .walk-load[data-style="ps1"] .walk-load-sky, .walk-load[data-style="ps1"] .walk-load-land, .walk-load[data-style="ps1"] .walk-load-piece,
+    .walk-load[data-style="dreamcast"] .walk-load-sky, .walk-load[data-style="dreamcast"] .walk-load-land, .walk-load[data-style="dreamcast"] .walk-load-piece { image-rendering: pixelated; }
+    .walk-load[data-style="ps1"] .walk-load-piece, .walk-load[data-style="n64"] .walk-load-piece, .walk-load[data-style="dreamcast"] .walk-load-piece { transition-timing-function: steps(var(--n, 20), end); }
     .walk-load-say { position: absolute; left: 0; right: 0; top: calc(89 * var(--vh)); transform: translateY(-50%); text-align: center;
       color: #e6e0d4; font: 400 clamp(14px, calc(.017 * var(--u) + 4px), 24px)/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; letter-spacing: .06em; }
     .walk-load-words { margin: 0; opacity: .88; }

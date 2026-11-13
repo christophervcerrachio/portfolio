@@ -71,7 +71,8 @@ if ( gl_Position.w > 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) {
 /**
  * Put a style in force. Call once, before any material or texture is made. Returns what the page needs of it:
  *   size(w, h)  the picture's size in pixels for a window w by h;
- *   show        what the show pass is told: { lines, levels, dither (0 none, 1 the ordered 4 x 4, 2 fine noise), sat }.
+ *   show        what the show pass is told: { lines, levels (red, green, blue), dither (0 none, 1 a PlayStation's 4 x 4,
+ *               2 fine noise, 3 the regular 4 x 4 cross-hatch of a 16-bit picture), sat }.
  */
 export function useStyle(style, canvas) {
   if (!style) return null;
@@ -84,6 +85,7 @@ export function useStyle(style, canvas) {
   canvas.style.imageRendering = style.scaleUp === 'pixel' ? 'pixelated' : 'auto';
   return {
     size,
-    show: { lines: style.lines, levels: 2 ** style.bits - 1, dither: style.dither === 'bayer' ? 1 : style.dither === 'noise' ? 2 : 0, sat: style.sat ?? 1 },
+    show: { lines: style.lines, levels: (Array.isArray(style.bits) ? style.bits : [style.bits, style.bits, style.bits]).map((b) => 2 ** b - 1),
+      dither: { bayer: 1, noise: 2, ordered: 3 }[style.dither] ?? 0, sat: style.sat ?? 1 },
   };
 }
