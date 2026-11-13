@@ -57,7 +57,8 @@ export async function initWalk(container, opts = {}) {
   const retro = useStyle(GFX.style ? STYLES[GFX.style] : null, canvas);
   renderer.setPixelRatio(retro ? 1 : Math.min(devicePixelRatio || 1, GFX.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.NeutralToneMapping;
+  // (a 360's picture finished with the film-like curve of its years - retro.js tone - the rest with the neutral one)
+  renderer.toneMapping = retro?.tone === 'filmic' ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   // (a laptop's built-in graphics holds its pictures in the machine's own memory: each kept no larger than the tier's
   // texMax, drawn down as it is read - texcap.js)

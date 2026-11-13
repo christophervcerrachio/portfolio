@@ -1,5 +1,5 @@
 {
- "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill.",
+ "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill. shutters: [[x0, y0, x1, y1, side], ...] the shutters standing open beside its windows, side -1 left, 1 right (measure_shutters.py).",
  "facade-spb-cream": {
   "H": 1238,
   "bays": [
@@ -1536,6 +1536,57 @@
    18,
    30,
    22
+  ],
+  "shutters": [
+   [
+    781.5,
+    110.0,
+    806,
+    190.5,
+    -1
+   ],
+   [
+    873,
+    107.5,
+    896.5,
+    193.5,
+    1
+   ],
+   [
+    101.5,
+    276.5,
+    134.5,
+    358.0,
+    -1
+   ],
+   [
+    204,
+    273.0,
+    233.5,
+    357.5,
+    1
+   ],
+   [
+    714,
+    273.0,
+    742.5,
+    356.0,
+    1
+   ],
+   [
+    787.5,
+    270.5,
+    816,
+    354.5,
+    -1
+   ],
+   [
+    885.0,
+    273.0,
+    916.0,
+    355.0,
+    1
+   ]
   ]
  }
 }

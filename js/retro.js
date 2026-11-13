@@ -9,7 +9,8 @@
 //     they move across it;
 //   - its textures' perspective (affine, 0-1): how far a texture is drawn straight across a triangle on the screen
 //     rather than in depth, so it swims on a wall seen at a slant;
-//   - its colours are the show pass's (backdrops/countryside.js SHOW_FRAG: uRetro).
+//   - its colours are the show pass's (backdrops/countryside.js SHOW_FRAG: uRetro, uRetroLv, uRetroFx): their levels and
+//     dither, a 360's bloom and film-like tone, a Game Boy's four greens.
 // No fog: the land is seen as far as in the full look; what makes the picture light to draw is what is drawn far off -
 // hardware.js TIERS. Everything here is set once, before any material is made: the shader pieces every material is
 // built from are changed in place (three's ShaderChunk), so the land, the houses, the trees and the furniture all
@@ -72,7 +73,9 @@ if ( gl_Position.w > 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) {
  * Put a style in force. Call once, before any material or texture is made. Returns what the page needs of it:
  *   size(w, h)  the picture's size in pixels for a window w by h;
  *   show        what the show pass is told: { lines, levels (red, green, blue), dither (0 none, 1 a PlayStation's 4 x 4,
- *               2 fine noise, 3 the regular 4 x 4 cross-hatch of a 16-bit picture), sat }.
+ *               2 fine noise, 3 the regular 4 x 4 cross-hatch of a 16-bit picture), sat, bloom (0: none), palette (0: the
+ *               picture's own colours, 1: a Game Boy's four greens) };
+ *   tone        'filmic' where the style finishes its picture with the film-like curve, else null.
  */
 export function useStyle(style, canvas) {
   if (!style) return null;
@@ -86,6 +89,7 @@ export function useStyle(style, canvas) {
   return {
     size,
     show: { lines: style.lines, levels: (Array.isArray(style.bits) ? style.bits : [style.bits, style.bits, style.bits]).map((b) => 2 ** b - 1),
-      dither: { bayer: 1, noise: 2, ordered: 3 }[style.dither] ?? 0, sat: style.sat ?? 1 },
+      dither: { bayer: 1, noise: 2, ordered: 3 }[style.dither] ?? 0, sat: style.sat ?? 1, bloom: style.bloom ?? 0, palette: style.palette === 'dmg' ? 1 : 0 },
+    tone: style.tone ?? null,
   };
 }
