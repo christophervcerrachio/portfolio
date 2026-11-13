@@ -5,6 +5,7 @@
 // as theirs are (models.js placeCopies).
 import * as THREE from 'three';
 import { placeCopies } from '../backdrops/models.js';
+import { unforced } from '../retro.js';
 
 // (the full copies out to 220 m, the light ones out to 900 m)
 // (the impostors out to 1800 m, and the land's raised crowns only past that: the crowns had sunk between 1000 and 820 m
@@ -354,6 +355,12 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     const prevRT = renderer.getRenderTarget(), prevVP = new THREE.Vector4(), prevSc = new THREE.Vector4(), scOn = renderer.getScissorTest();
     renderer.getViewport(prevVP); renderer.getScissor(prevSc);
     const prevClear = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), auto = renderer.autoClear;
+    // (each tree's textures read as the full look reads them, whatever the style: the pictures are drawn once and shown
+    // in the style afterwards, so every setting has the same trees. Read as a PlayStation reads, texel by texel with no
+    // smaller copies, a far leaf's alpha came and went from one pixel of the picture to the next, its cut was softened
+    // to match, the alpha left a half or less, and the crowns came out pale and half bare - 13 Nov 2026)
+    const copies = new Map();
+    const texOf = (t) => { if (!copies.has(t)) copies.set(t, unforced(t)); return copies.get(t); };
     for (const kk of allKinds) {
       const [k, tone = ''] = kk.split('|'), m = models[k], look = { leafGain: TONES[tone] };
       const conifer = /^(pine|spruce)/.test(k), farParts = m.far ?? m.near;
@@ -373,7 +380,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
       renderer.setClearColor(0x000000, 0); renderer.autoClear = false;
       renderer.setScissorTest(true);
       for (let v = 0; v < COLS; v++) {
-        const g = placeCopies(src, 'far', [{ x: 0, y: Y, z: 0, yaw: v * Math.PI / 2, scale: 1 }], U, { bough: 0, sway: 0, look });
+        const g = placeCopies(src, 'far', [{ x: 0, y: Y, z: 0, yaw: v * Math.PI / 2, scale: 1 }], U, { bough: 0, sway: 0, look, texOf });
         scene.add(g);
         renderer.setScissor(v * CW, 0, CW, CH); renderer.setViewport(v * CW, 0, CW, CH); renderer.clear();
         renderer.setViewport(v * CW + GUT, 0, CW - 2 * GUT, CH); renderer.render(scene, cam);
@@ -398,6 +405,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     }
     renderer.setRenderTarget(prevRT); renderer.setViewport(prevVP); renderer.setScissor(prevSc); renderer.setScissorTest(scOn);
     renderer.setClearColor(prevClear, prevA); renderer.autoClear = auto;
+    for (const [t, c] of copies) if (c !== t) c.dispose();   // (the copies' own textures: the pictures are drawn)
     last = null;                                   // (refill at once, into the pictures)
   };
   group.userData.solidNear = () => nearList.map((t) => ({ x: t.x, z: t.z, r: (t.kind.startsWith('oak') ? 0.5 : 0.18) + t.h * 0.01 }));
