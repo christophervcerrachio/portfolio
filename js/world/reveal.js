@@ -24,8 +24,9 @@ export function allowed(o, want) {
   if (!g) return want;
   if (want && !g.asked) {
     g.asked = true;
-    // (asked for once; it comes in whether or not it is still wanted by then - shown only while it is)
-    arrive(o, { gate: true, x: g.x, z: g.z, ...g.opts });
+    // (asked for once; it comes in whether or not it is still wanted by then - shown only while it is. Once it stands
+    // in its place, userData.risen says so: what belongs on it waits for that - citytiles.js risen)
+    arrive(o, { gate: true, x: g.x, z: g.z, ...g.opts }).then(() => { o.userData.risen = true; });
   }
   return false;
 }
