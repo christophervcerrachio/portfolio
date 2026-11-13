@@ -309,6 +309,11 @@ export async function initWalk(container, opts = {}) {
   // A browser refuses a capture asked for just after Esc (about a second): the next click tries again.
   const locked = () => document.pointerLockElement === canvas;
   let refusals = 0, noted = false, everHeld = false, menuOpen = false;
+  // (the note, the view-copy mark and the pose's units (below) are read by the keys, the mouse and the menu from the
+  // first moment, the walk still loading: declared here, before any of them is listened for - declared further down,
+  // an Esc while loading had stopped on them unread, and the menu never came up)
+  let note = null, marking = null;
+  const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   const hint = document.createElement('div');
   hint.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;padding:10px 18px;'
     + 'font:500 15px/1.3 system-ui,sans-serif;color:#fff;background:rgba(20,24,28,.55);border-radius:6px;'
@@ -588,7 +593,6 @@ export async function initWalk(container, opts = {}) {
   // ---- VIEW POSE (dev only; remove with the free-cam). pose() says where the view is: degrees right of ahead (yaw) and
   // up (pitch), the zoom, the clock, and where the eye stands (x, z on the hill) or flies (fly, x, y, z). goTo(pose)
   // puts the view back there exactly, so a fault is looked at again just as it was seen.
-  const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   function pose() {
     const L = s.look, p = { yaw: r2(L.yaw * DEG), pitch: r2(L.pitch * DEG), zoom: r2(L.zoom), t: Math.round(clock * 10) / 10 };
     if (s.freeCam.on) Object.assign(p, { fly: true, x: r2(s.freeCam.pos.x), y: r2(s.freeCam.pos.y), z: r2(s.freeCam.pos.z) });
@@ -610,7 +614,6 @@ export async function initWalk(container, opts = {}) {
   // P: the pose is copied at once; then a box may be dragged round the problem (the mouse is let go for it), and the
   // pose is copied again with the box as `mark` (fractions of the screen: left, top, right, bottom). Esc keeps it
   // without a box. `screen` says the size it was seen at, so the same picture can be made again.
-  let note = null, marking = null;
   function showNote(msg, ms) {
     if (!note) {
       note = document.createElement('div');
