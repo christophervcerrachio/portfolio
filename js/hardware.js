@@ -62,8 +62,8 @@ export const TIERS = {
   n64:       { style: 'n64', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 96, aniso: 1, woods: [[16, 'lighter']], shadowFarEvery: 1, woodsFar: 800, canopyAt: 680, propsFull: 0, propsNear: 110, footNear: 170, yardNear: 230, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1500, bridgesFar: 600, cribStones: 60, tilesNear: 240, reliefNear: 0, blocksFar: 1500, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 900 },
   ps1:       { style: 'ps1', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 128, aniso: 1, woods: [[12, 'lighter']], shadowFarEvery: 1, woodsFar: 700, canopyAt: 600, propsFull: 0, propsNear: 95, footNear: 140, yardNear: 190, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1300, bridgesFar: 500, cribStones: 50, tilesNear: 200, reliefNear: 0, blocksFar: 1300, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 800 },
   // (a Game Boy Advance's: 160 lines in its bright 15-bit colour - the least the walk is drawn with, for the weakest
-  // machine. Until 12 Nov 2026 a Game Boy's, 144 lines in four greens, with this same world: "i like game boy, but it's
-  // what too pixelated you cannot even tell what youre looking at, i prefer gameboy advance if you can")
+  // machine. Until 12 Nov 2026 a Game Boy's, 144 lines in four greens, with this same world: too few lines and colours
+  // to tell what stood in the view)
   gba:       { style: 'gba', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 64, aniso: 1, woods: [[10, 'lighter']], shadowFarEvery: 1, woodsFar: 600, canopyAt: 500, propsFull: 0, propsNear: 80, footNear: 120, yardNear: 160, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1100, bridgesFar: 400, cribStones: 40, tilesNear: 160, reliefNear: 0, blocksFar: 1100, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 700 },
 };
 // (the tiers these took the place of - medium, low and minimum on 11 Nov 2026, the Game Boy's on 12 Nov: an address or a

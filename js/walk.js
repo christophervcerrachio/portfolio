@@ -339,9 +339,8 @@ export async function initWalk(container, opts = {}) {
   // walk loads again where the walker stands. It is a pane of glass over the scene (index.html .walk-menu): the scene
   // shows through it, blurred, and a click on the scene beside it resumes as it always did. It comes up while the walk
   // is still loading too (over the loading picture), and the newest choice is the one kept: a heavy look's load is not
-  // waited out to choose another, and a second choice made while the page is going still counts (12 Nov 2026: "changing
-  // the graphics settings either disables subsequent graphics settings changes, or puts me in an infinite loading loop" -
-  // the menu had come up only once the walk was in, and every choice was greyed out until the next page)
+  // waited out to choose another, and a second choice made while the page is going still counts (until 12 Nov 2026 the
+  // menu came up only once the walk was in, and every choice was greyed out until the next page had loaded)
   const menu = document.createElement('div');
   menu.className = 'walk-menu'; menu.hidden = true;
   menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Menu');

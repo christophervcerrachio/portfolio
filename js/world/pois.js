@@ -196,8 +196,10 @@ function plankPanel() {      // (a closed yard's fence: boards on two rails, a p
   for (const x of [-PANEL / 2, PANEL / 2]) parts.push(box(0.14, 2.7, 0.14, x, 0.75, 0.09, '#5f4c36'));
   return kit([parts], { keep: 1.2, h: 2.1, fence: true });
 }
-// a post mill: the body turns on its post, which stands in a trestle of cross-trees and struts; a tail pole behind
-const MILL = { hub: 8.2, arm: 6.2 };
+// a post mill: the body turns on its post, which stands in a trestle of cross-trees and struts; a tail pole behind.
+// The sails' hub is out: 3 m in front of the body's middle, clear of the roof's eaves over the front gable, which the
+// upper sail sweeps past (country_kit.py's mill: MILL_HUB, MILL_ARM, MILL_OUT)
+const MILL = { hub: 8.2, arm: 6.2, out: 3.0 };
 function windmillBody() {
   const parts = [cyl(0.4, 0.5, 4.6, 0, -0.6, 0, '#5a4a38'), box(4, 5, 4.5, 0, 6.5, 0, '#6e5a44'), gableEnds(4.02, 4.5, 9, 2, '#665240').rotateY(Math.PI / 2),
     gable(4, 4.5, 9, 2, 0.3, 0.08, '#7a7266').rotateY(Math.PI / 2), box(0.3, 0.3, 6, 0, 3.5, -4, '#5a4a38'), box(1.4, 0.15, 2.6, 0, 3.8, -3.3, '#5f4e3c')];
@@ -286,10 +288,30 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     // (the country churches in brick, after my reference chapel: dev\world\chapel_kit.py in Blender, ComfyUI's tiles)
     church: [{ file: 'church-brick.glb', yaw: 0 }],
     chapel: [{ file: 'chapel-brick.glb', yaw: 0 }],
-    izba: [{ file: 'izba.glb', yaw: Math.PI }, { file: 'izba-b.glb', yaw: Math.PI / 2 }],
+    // (the country's own buildings and things: dev\world\models\country_kit.py in Blender, ComfyUI's photographed
+    // materials. Each is built in its stand-in's own frame - +x its gable end to the street, +z its long side with the
+    // door, the floor line at 0 - so none is turned. A village's izbas are under thatch or under boards, by their place)
+    izba: [{ file: 'izba.glb', yaw: 0 }, { file: 'izba-b.glb', yaw: 0 }],
+    izbaRich: [{ file: 'izba-rich.glb', yaw: 0 }],
+    bath: [{ file: 'bathhouse.glb', yaw: 0 }],
+    barn: [{ file: 'barn.glb', yaw: 0 }],
+    well: [{ file: 'well-sweep.glb', yaw: 0 }],
+    hay: [{ file: 'haystack.glb', yaw: 0 }],
+    wattle: [{ file: 'wattle.glb', yaw: 0 }],
+    fence: [{ file: 'fence-planks.glb', yaw: 0 }],
+    mill: [{ file: 'mill.glb', yaw: 0 }],
+    dock: [{ file: 'dock.glb', yaw: 0 }],
+    boat: [{ file: 'rowboat.glb', yaw: 0 }],
+    nets: [{ file: 'net-rack.glb', yaw: 0 }],
+    fisher: [{ file: 'fisher-hut.glb', yaw: 0 }],
+    post: [{ file: 'post-station.glb', yaw: 0 }],
+    verst: [{ file: 'verst-post.glb', yaw: 0 }],
     // (the hunting tower: dev\world\models\hunting_tower.py in Blender, ComfyUI's pine, planks and shingles)
     hunt: [{ file: 'hunting-tower.glb', yaw: 0 }],
   };
+  // (the mill's sails turn apart from its body: their model takes the place of the stand-in's sails once the mill's
+  // body has come - the hub at its origin, the sails across x and y, turning about z, as windmillSails() draws them)
+  const SAILS = 'mill-sails.glb';
   const stem = (f) => f.replace(/\.glb$/, '');
   const pickOf = (x, z, n) => Math.floor(Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453)) % n;
   // (the model that will stand at (x, z) for a kit, if its outline is known: { shape, turn, file })
@@ -736,7 +758,7 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   const sailGeo = windmillSails();
   for (const a of animate.filter((o) => o.kind === 'sails')) {
     const m = new THREE.Mesh(sailGeo, MAT);
-    m.position.set(a.x + Math.sin(a.ry) * 2.4, a.y + MILL.hub, a.z + Math.cos(a.ry) * 2.4); m.rotation.y = a.ry;
+    m.position.set(a.x + Math.sin(a.ry) * MILL.out, a.y + MILL.hub, a.z + Math.cos(a.ry) * MILL.out); m.rotation.y = a.ry;
     m.name = 'poi-sails';
     toPlace(a.place ?? '-', m); sails.push(m);
   }
@@ -787,6 +809,28 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       for (const st of stands) { st.visible = false; st.userData.replaced = true; st.userData.drawTo = -Infinity; }
     }));
     for (const list of byModelPlace.values()) arrive(list, { parent: group });
+    // (the mill's sails: once its body is the model's, each stand-in's sails give way to the model's, which come in
+    // as children of them - so they turn as the stand-in's did, and show and hide with their place. The stand-in's own
+    // triangles go only once the model's stand there: an empty geometry, which neither draws nor casts a shadow)
+    if (sails.length && standIns('mill').some((st) => st.userData.replaced)) {
+      const g = await gltfLoader().loadAsync(base + 'assets/world/models/' + SAILS).catch(() => null);
+      if (g) {
+        g.scene.updateMatrixWorld(true);
+        const parts = [];
+        g.scene.traverse((c) => {
+          if (!c.isMesh) return;
+          const mat = c.material;
+          if (!(mat.metalness > 0.3 || mat.roughness < 0.3)) { mat.metalness = 0; mat.roughness = Math.max(0.8, mat.roughness ?? 0.8); }
+          receiveSun(mat, U);
+          parts.push({ geo: c.geometry.clone().applyMatrix4(c.matrixWorld), mat });
+        });
+        const none = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        for (const m of sails) {
+          const its = parts.map(({ geo, mat }) => Object.assign(new THREE.Mesh(geo, mat), { name: 'model-sails' }));
+          arrive(its, { parent: m, rise: false, x: m.position.x, z: m.position.z }).then(() => { m.geometry = none; });
+        }
+      }
+    }
   };
   group.userData.update = (cam, t) => {
     for (const m of sails) m.rotation.z = -t * 0.6;
