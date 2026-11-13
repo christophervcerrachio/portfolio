@@ -458,11 +458,13 @@ vec3 gTake(int L, vec2 p) {
   vec3 b = texture(uGT, vec3(r, float(L))).rgb;
   return mix(a, b, smoothstep(0.38, 0.62, vnoise(p / (m * 2.6) + float(L) * 7.3)));
 }
-vec3 gBump(vec3 pos, vec3 nrm, float h, float k) {
-  vec3 dx = dFdx(pos), dz = dFdy(pos);
+// (the changes across a pixel - of the place, dx and dz, and of the height, hx and hz - are worked out by the caller,
+// where every pixel runs: main)
+vec3 gBump(vec3 dx, vec3 dz, vec3 nrm, float hx, float hz, float k) {
   vec3 r1 = cross(dz, nrm), r2 = cross(nrm, dx);
   float det = dot(dx, r1);
-  vec3 g = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2) * k;
+  if (det == 0.0) return nrm;                     // (a piece of ground seen exactly edge on: no relief to show)
+  vec3 g = sign(det) * (hx * r1 + hz * r2) * k;
   return normalize(abs(det) * nrm - g);
 }
 // parallax occlusion: the ground's tile seen at an angle shows its depth: the view ray marched down through the tile's
@@ -679,13 +681,20 @@ void main() {
     float rut = wy.b * nearW * (1.0 - cobV) * (1.0 - smoothstep(0.0, 0.25, under));
     // (a droshky's wheels: two pressed, darker, a little damp; the earth between them a touch lighter, worn by the hooves)
     c *= (1.0 - 0.42 * rut) * (1.0 + 0.06 * roadV * (1.0 - rut)); hgt -= rut * 1.2;
-    // (the relief faded where the tile's grain is finer than a pixel: no speckle at a glancing look)
-    // (only where it has any strength. At the near ground's edge - a ring 150 m round the walker - the height's change
-    // across a pixel is taken against a neighbour that never worked the height out, and a number that is no number
-    // times no strength is still no number: a ring of black dashes on the bare ground, seen once the 240-line pictures
-    // had no grass to hide it, 12 Nov 2026)
-    float bumpK = 0.035 * nearK * (1.0 - smoothstep(0.04, 0.2, fwidth(hgt)));
-    if (bumpK > 0.0005) n = gBump(vW, n, hgt, bumpK);
+  }
+  // the close tiles' relief, from how their height changes from one pixel to the next. The card works out such a change
+  // by comparing a pixel with its neighbour in the block of four pixels it draws together, so the change is asked for
+  // here, where every pixel runs, and the relief drawn only where all of the block worked the height out (inNear the
+  // same across it). Asked inside the near ground's branch, at its edge - a ring 150 m round the walker - a pixel's
+  // change had been taken against a neighbour that never worked the height out, and the ground's light came out black
+  // in short dashes along it, seen once the 240-line pictures had no grass to hide them (12 and 13 Nov 2026)
+  {
+    float inNear = nearK > 0.001 ? 1.0 : 0.0;
+    vec3 bdx = dFdx(vW), bdz = dFdy(vW);
+    float bhx = dFdx(hgt), bhz = dFdy(hgt);
+    // (and faded where the tile's grain is finer than a pixel: no speckle at a glancing look)
+    float bumpK = 0.035 * nearK * (1.0 - smoothstep(0.04, 0.2, abs(bhx) + abs(bhz))) * (1.0 - min(fwidth(inNear), 1.0));
+    if (bumpK > 0.0005) n = gBump(bdx, bdz, n, bhx, bhz, bumpK);
   }
   // the land further off, the hills and the mountains: the ground tiles laid on at a large scale as broad mottling (the
   // meadow's, and the rock's on the steep and the bare), and the small folds and hummocks of the ground in the relief,
