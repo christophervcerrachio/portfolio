@@ -93,6 +93,7 @@ uniform vec2 uSunUV; uniform float uSunVis; uniform float uRays; uniform vec3 uR
 uniform sampler2D uDepth; uniform float uRevZ; uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform float uAir; uniform float uSunLit; uniform float uAirSteps;
 uniform vec3 uSunDir;
 uniform sampler2D uMistH; uniform sampler2D uMistCov; uniform vec4 uMistCore; uniform float uMist; uniform float uTime;
+uniform vec3 uMistHaze; uniform vec3 uMistSun;
 uniform vec4 uRetro; uniform vec3 uRetroLv; uniform vec4 uRetroFx;
 ${SHADOW_GLSL}
 float mHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -163,29 +164,42 @@ void main() {
   }
   // mist in the woods (the plan's DayZ look): a low drift of it lying among the trunks, a few metres deep over the
   // ground where the woods stand (cover-a's red), in slow-moving banks, lit warm toward the low sun and cool away from
-  // it; only near (450 m): the open country keeps its clear vistas
+  // it; only near (450 m): the open country keeps its clear vistas.
+  // The ray is taken in 16 pieces, each piece's fall of the mist with height worked out whole, with no jitter between
+  // pixels: a jitter had laid a grain over it that stayed where it was on the screen as the walker moved, and from
+  // the open the woods' foot looked papered over with a white band. Lit as the land is lit - the air's own light
+  // (the haze) and the sun's - so the evening dims it with everything else; its fixed pale grey had glowed white
+  // against the evening's dark woods (13 Nov 2026)
   if (uMist > 0.0 && uMistCore.z > 0.0) {
     float dz2 = texture2D(uDepth, vUv).r; dz2 = mix(dz2, 1.0 - dz2, uRevZ);
     vec4 vq = uInvProj * vec4(vUv * 2.0 - 1.0, dz2 * 2.0 - 1.0, 1.0); vq /= vq.w;
     float dist2 = dz2 >= 0.99999 ? 1e5 : length(vq.xyz);
     vec3 dW = normalize((uCamWorld * vec4(normalize(vq.xyz), 0.0)).xyz), o2 = uCamWorld[3].xyz;
-    float maxM = min(dist2, 450.0), jm = fract(sin(dot(gl_FragCoord.xy, vec2(7.13, 113.9))) * 43758.5453), dens = 0.0, litM = 0.0;
-    for (int i = 0; i < 12; i++) {
-      float t = maxM * pow((float(i) + jm) / 12.0, 1.6);
-      vec3 q = o2 + dW * t;
+    float maxM = min(dist2, 450.0), dens = 0.0, litM = 0.0, t0 = 0.0;
+    for (int i = 0; i < 16; i++) {
+      // (pieces shorter near the eye, where the banks are seen whole)
+      float t1 = maxM * pow((float(i) + 1.0) / 16.0, 1.6), seg = t1 - t0;
+      vec3 qa = o2 + dW * t0, qb = o2 + dW * t1, q = (qa + qb) * 0.5;
+      t0 = t1;
       vec2 uv = (q.xz - uMistCore.xy) / uMistCore.z;
       if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) continue;
       float gh = texture2D(uMistH, uv).r, wood = smoothstep(0.3, 0.8, texture2D(uMistCov, uv).r);
-      float bank = mNoise(q.xz / 70.0 + vec2(uTime * 0.012, uTime * 0.007)) * 0.7 + mNoise(q.xz / 19.0 - vec2(uTime * 0.02, 0.0)) * 0.3;
-      float dd = wood * exp(-max(q.y - gh, 0.0) / 3.2) * smoothstep(0.3, 0.75, bank);
+      // (the banks' finer noise only where a piece is short enough to follow it: longer, it would come and go from one
+      // pixel to the next)
+      float fine = 1.0 - smoothstep(4.0, 16.0, seg);
+      float bank = mNoise(q.xz / 70.0 + vec2(uTime * 0.012, uTime * 0.007)) * (1.0 - 0.3 * fine) + mNoise(q.xz / 19.0 - vec2(uTime * 0.02, 0.0)) * 0.3 * fine;
+      // (the mist's fall with height, 3.2 m, over the piece from its first point's height to its last's)
+      float ha = max(qa.y - gh, 0.0), hb = max(qb.y - gh, 0.0);
+      float fall = abs(hb - ha) < 0.01 ? exp(-ha / 3.2) : 3.2 * (exp(-ha / 3.2) - exp(-hb / 3.2)) / (hb - ha);
+      float dd = wood * fall * smoothstep(0.3, 0.75, bank) * seg;
       dens += dd; litM += dd * shade1(q);
     }
-    float T = (1.0 - exp(-dens / 12.0 * maxM * 0.011 * uMist)) * 0.85;
+    float T = (1.0 - exp(-dens * 0.025 * uMist)) * 0.85;
     float cosM = max(dot(dW, uSunDir), 0.0);
     // (the sun through it where the trunks and boughs let it, read in the sun's shadow pictures: the low sun's shafts
     // standing in the mist between the trees)
     float sunPart = dens > 1e-4 ? litM / dens : 1.0;
-    vec3 mistCol = vec3(0.46, 0.51, 0.57) * (0.55 + 0.45 * uSunLit) + uRayTint * (0.2 + 2.2 * pow(cosM, 6.0)) * uSunLit * sunPart;
+    vec3 mistCol = uMistHaze * 0.8 + uMistSun * 0.2 * (0.06 + pow(cosM, 6.0)) * sunPart * uSunLit;
     sharp = mix(sharp, mistCol, T);
   }
   // a 360's bloom (retro.js): what is bright spreads a soft light round it, read from the scene picture's own smaller
@@ -358,6 +372,8 @@ export class CountrysideScene {
       uDepth: { value: null }, uRevZ: { value: DEPTH.reversed ? 1 : 0 }, uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uAir: { value: 0.14 },
       uSunLit: { value: 1 }, uAirSteps: { value: 16 },
       uMistH: { value: null }, uMistCov: { value: null }, uMistCore: { value: new THREE.Vector4(0, 0, 0, 0) }, uMist: { value: 1.0 },
+      // (the mist lit as the land is: the air's colour and the sun's, the same objects the evening moves)
+      uMistHaze: this.U.uHaze, uMistSun: this.U.uSunColor,
       // (an older machine's picture - retro.js, hardware.js STYLES: its colours' levels, its dither (0 none, 1 the
       // ordered 4 x 4, 2 fine noise), its colour, whether on)
       uRetro: { value: new THREE.Vector4(255, 0, 1, 0) }, uRetroLv: { value: new THREE.Vector3(255, 255, 255) },
