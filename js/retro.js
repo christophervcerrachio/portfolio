@@ -18,29 +18,45 @@
 // follow.
 import * as THREE from 'three';
 
-let active = null;
+let active = null, forcing = false;
 /** The style in force (hardware.js STYLES entry), or null: the full look. */
 export const styleNow = () => active;
 
+// (what the style sets of a texture's reading: each kept as the file or loader asked, under '_' + its name)
+const KEYS = ['magFilter', 'minFilter', 'generateMipmaps', 'anisotropy'];
+// (the textures the style's filtering is laid on: pictures. The world's maps (numbers: data textures), the renderer's
+// own pictures (render targets, depth) and anything marked userData.keepFilter are left as they are)
+const pic = (t) => !(t.isDataTexture || t.isRenderTargetTexture || t.isDepthTexture || t.isCubeTexture || t.isData3DTexture || t.isDataArrayTexture
+  || t.isCompressedTexture || t.isVideoTexture || t.isFramebufferTexture || t.userData?.keepFilter);
+
 /** Every picture's filtering as the style has it, whatever the file or the loader asks for: read where the renderer
- *  reads it (the texture's own properties), so a texture made at any time, by any loader, follows. The world's maps
- *  (numbers: data textures), the renderer's own pictures (render targets, depth) and anything marked
- *  userData.keepFilter are left as they are. */
+ *  reads it (the texture's own properties), so a texture made at any time, by any loader, follows. */
 function forceFilters(kind) {
   const P = THREE.Texture.prototype;
-  const pic = (t) => !(t.isDataTexture || t.isRenderTargetTexture || t.isDepthTexture || t.isCubeTexture || t.isData3DTexture || t.isDataArrayTexture
-    || t.isCompressedTexture || t.isVideoTexture || t.isFramebufferTexture || t.userData?.keepFilter);
   const F = kind === 'linear' ? THREE.LinearFilter : THREE.NearestFilter;
   // ('nearest-mip': each texel hard, as 'nearest', but read from the texture's smaller copies where it is seen small -
   // a picture of 160 lines otherwise glitters wherever a far field or wall has more texels than it has pixels)
   const mip = kind === 'nearest-mip';
-  for (const [key, forced] of [['magFilter', F], ['minFilter', mip ? THREE.NearestMipmapNearestFilter : F], ['generateMipmaps', mip], ['anisotropy', 1]]) {
+  const forced = { magFilter: F, minFilter: mip ? THREE.NearestMipmapNearestFilter : F, generateMipmaps: mip, anisotropy: 1 };
+  for (const key of KEYS) {
     Object.defineProperty(P, key, {
       configurable: true,
-      get() { return pic(this) ? forced : this['_' + key]; },
+      get() { return pic(this) ? forced[key] : this['_' + key]; },
       set(v) { this['_' + key] = v; },
     });
   }
+  forcing = true;
+}
+
+/** A copy of texture t read as its file and loader asked, whatever the style: for a picture drawn once from the
+ *  world's own models and shown in the style afterwards (woods.js, the far trees' pictures). It shares t's image;
+ *  dispose() it when the picture is drawn. t itself where the style forces no filtering, or leaves t as it is. */
+export function unforced(t) {
+  if (!forcing || !t?.isTexture || !pic(t)) return t;
+  const c = t.clone();
+  c.userData = { ...c.userData, keepFilter: true };
+  for (const key of KEYS) if (('_' + key) in t) c[key] = t['_' + key];
+  return c;
 }
 
 /** The corners snapped to the picture's pixels and the textures drawn straight across: three's own shader pieces,

@@ -107,27 +107,36 @@ mvPosition = viewMatrix * wp;
 gl_Position = projectionMatrix * mvPosition;
 `;
 
+// (the textures a model's own material can carry)
+const MAPS = ['map', 'alphaMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'bumpMap'];
+
 /**
  * A material from the model, with the wind in it and the scene's look: kind 'bark' (a birch's, drawn at full
  * resolution: birchlook.js), 'leaves' (leaf cards, each its own green), 'body' (as made). U: the shared uniforms.
  */
-export function windMaterial(src, { kind, height, sway = 0, bough = 1, U, look = {}, species = 'birch' }) {
+export function windMaterial(src, { kind, height, sway = 0, bough = 1, U, look = {}, species = 'birch', texOf = null }) {
+  // (texOf: each texture as this material is to read it - a picture drawn once from the model reads them as the full
+  // look does, whatever the style: woods.js, the far trees' pictures; retro.js unforced)
+  const tx = texOf ?? ((t) => t);
   const m = src.clone(), T = speciesTex(species), S = SPECIES[species];
+  if (texOf) for (const k of MAPS) if (m[k]) m[k] = texOf(m[k]);
   const ownBark = kind === 'bark' && S && T.bark;           // (a spruce's, pine's or oak's own bark, once its tile is here)
   m.side = kind === 'leaves' || src.side === THREE.DoubleSide ? THREE.DoubleSide : THREE.FrontSide;
   if (kind === 'leaves' && look.cards) {
-    m.map = T.leaf ?? leafTexture(); m.vertexColors = true; m.color.setRGB(1, 1, 1);
+    m.map = tx(T.leaf ?? leafTexture()); m.vertexColors = true; m.color.setRGB(1, 1, 1);
     m.alphaTest = 0.5; m.alphaToCoverage = true; m.roughness = 0.45; m.metalness = 0;
   }
   if (kind === 'bark') { m.roughness = 0.8; m.metalness = 0; }
   if (ownBark) m.defines = { ...(m.defines ?? {}), BARK_SPECIES: 1, ...(species === 'pine' ? { BARK_PINE: 1 } : {}), ...(species === 'oak' ? { BARK_OAK: 1 } : {}) };
-  const spU = ownBark ? { uSpA: { value: T.bark }, uSpB: { value: T.bark2 ?? T.bark }, uSpTileA: { value: new THREE.Vector2(...S.tile) },
+  const spU = ownBark ? { uSpA: { value: tx(T.bark) }, uSpB: { value: tx(T.bark2 ?? T.bark) }, uSpTileA: { value: new THREE.Vector2(...S.tile) },
     uSpTileB: { value: new THREE.Vector2(...(S.tile2 ?? S.tile)) }, uSpHi: { value: 0.32 } } : {};
   const own = { uModelH: { value: height }, uSway: { value: sway * 0.55 }, uBough: { value: bough },
     uLeafGain: { value: new THREE.Vector3(...(look.leafGain ?? [1, 1, 1])) }, uLeafGrow: { value: look.leafGrow ?? 1 } };
   if (kind === 'leaves' && look.leafGrow) m.defines = { ...(m.defines ?? {}), LEAF_GROW: 1 };
+  // (the birch's bark tile is one uniform shared by every birch; a material reading its own copy of it has its own)
+  const bark = kind !== 'bark' ? {} : texOf ? { ...BARK, uBarkTex: { value: tx(BARK.uBarkTex.value) } } : BARK;
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, U, own, kind === 'bark' ? BARK : {}, spU);
+    Object.assign(sh.uniforms, U, own, bark, spU);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\n${WIND_GLSL}\nuniform float uModelH; uniform float uSway; uniform float uBough; uniform float uLeafGrow; varying float vSunVis; varying vec3 vWPos;\n${kind === 'leaves' ? 'attribute vec3 aLeafBase;' : ''}${kind === 'bark' ? 'attribute vec2 aBarkScale; attribute vec2 aWrap; varying vec2 vBarkScale; varying vec2 vWrap; varying float vHgt; varying float vHf; varying float vSeedB; varying vec2 vBarkUv;' : ''}`)
       .replace('#include <project_vertex>', WIND_VERT);
@@ -215,7 +224,7 @@ function leafDensity(g, height) {
 /**
  * Copies of a model's close or far parts at `items` ([{ x, y, z, yaw, scale }]) as instanced meshes, in a group.
  */
-export function placeCopies(model, which, items, U, { sway, bough = 1, look, shadow = false, castOnly = false } = {}) {
+export function placeCopies(model, which, items, U, { sway, bough = 1, look, shadow = false, castOnly = false, texOf = null } = {}) {
   const group = new THREE.Group(), parts = model[which] ?? model.near ?? model.far;
   if (!parts || !items.length) return group;
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), s = new THREE.Vector3(), p = new THREE.Vector3();
@@ -226,7 +235,7 @@ export function placeCopies(model, which, items, U, { sway, bough = 1, look, sha
     const depth = shadow || castOnly ? windDepth(part.kind, { height: model.height, sway: sway ?? model.extras.sway ?? 0, bough, U, cards, species }) : null;
     // (the close copy's leaves grow toward a full crown: by how sparse its cards are for its height, up to 1.6 times)
     const leafGrow = part.kind === 'leaves' && which === 'near' && model.far ? Math.min(1.6, Math.max(1, Math.sqrt(1.3 / leafDensity(part.geometry, model.height)))) : 0;
-    const mat = castOnly ? depth : windMaterial(part.material, { kind: part.kind, height: model.height, sway: sway ?? model.extras.sway ?? 0, bough, U, look: { ...look, cards, leafGrow }, species });
+    const mat = castOnly ? depth : windMaterial(part.material, { kind: part.kind, height: model.height, sway: sway ?? model.extras.sway ?? 0, bough, U, look: { ...look, cards, leafGrow }, species, texOf });
     const mesh = new THREE.InstancedMesh(part.geometry, mat, items.length);
     items.forEach((it, i) => {
       q.setFromAxisAngle(up, it.yaw ?? 0); s.setScalar(it.scale ?? 1); p.set(it.x, it.y, it.z);
