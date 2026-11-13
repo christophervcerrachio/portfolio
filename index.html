@@ -37,7 +37,7 @@
     .walk-load[data-style="dreamcast"] .walk-load-sky { background-image: url("assets/load/sky-dreamcast.webp"), linear-gradient(#bbc7c9, #d5c7bc 70%, #c4a395); }
     .walk-load[data-style="n64"] .walk-load-sky { background-image: url("assets/load/sky-n64.webp"), linear-gradient(#bbc7c9, #d5c7bc 70%, #c4a395); }
     .walk-load[data-style="ps1"] .walk-load-sky { background-image: url("assets/load/sky-ps1.webp"), linear-gradient(#bbc7c9, #d5c7bc 70%, #c4a395); }
-    .walk-load[data-style="gameboy"] .walk-load-sky { background-image: url("assets/load/sky-gameboy.webp"), linear-gradient(#9bbc0f, #9bbc0f); }
+    .walk-load[data-style="gba"] .walk-load-sky { background-image: url("assets/load/sky-gba.webp"), linear-gradient(#c5cece, #decec5 70%, #cead9c); }
     @keyframes walk-load-drift { from { transform: translate3d(1.5%, 0, 0) scale(1); } to { transform: translate3d(-1.5%, 0, 0) scale(1.035); } }
     .walk-load-layer { position: absolute; inset: 0; }
     .walk-load-far { --g: .6; --g2: .675; --c: #798385; --c2: #4c5456; --m: rgba(196, 163, 149, .30); --lh: .1097; --land: url("assets/load/land-far-full.webp"); }
@@ -49,15 +49,12 @@
     .walk-load[data-style="n64"] .walk-load-far, .walk-load[data-style="ps1"] .walk-load-far { --land: url("assets/load/land-far-240.webp"); }
     .walk-load[data-style="n64"] .walk-load-mid, .walk-load[data-style="ps1"] .walk-load-mid { --land: url("assets/load/land-mid-240.webp"); }
     .walk-load[data-style="n64"] .walk-load-near, .walk-load[data-style="ps1"] .walk-load-near { --land: url("assets/load/land-near-240.webp"); }
-    /* (a Game Boy's: 144 lines in its four greens - the sky the lightest, each layer of land darker the nearer it is,
-       its ground one flat green, no mist) */
-    .walk-load[data-style="gameboy"] { background: #9bbc0f; }
-    .walk-load[data-style="gameboy"] .walk-load-far { --land: url("assets/load/land-far-144.webp"); --c: #8bac0f; --c2: #8bac0f; --m: transparent; }
-    .walk-load[data-style="gameboy"] .walk-load-mid { --land: url("assets/load/land-mid-144.webp"); --c: #306230; --c2: #306230; --m: transparent; }
-    .walk-load[data-style="gameboy"] .walk-load-near { --land: url("assets/load/land-near-144.webp"); --c: #0f380f; --c2: #0f380f; }
-    .walk-load[data-style="gameboy"] .walk-load-say { color: #9bbc0f; }
-    .walk-load[data-style="gameboy"] .walk-load-bar { background: rgba(155, 188, 15, .25); }
-    .walk-load[data-style="gameboy"] .walk-load-bar i { background: #9bbc0f; }
+    /* (a Game Boy Advance's: 160 lines, its colours drawn bright and full and cut to its 15 bits, as its picture is -
+       dev/load/frieze_compose.py writes these numbers) */
+    .walk-load[data-style="gba"] { background: #c5cece; }
+    .walk-load[data-style="gba"] .walk-load-far { --land: url("assets/load/land-far-160.webp"); --c: #849494; --c2: #5a6363; --m: rgba(206, 173, 156, .30); }
+    .walk-load[data-style="gba"] .walk-load-mid { --land: url("assets/load/land-mid-160.webp"); --c: #5a6363; --c2: #29313a; --m: rgba(206, 181, 173, .20); }
+    .walk-load[data-style="gba"] .walk-load-near { --land: url("assets/load/land-near-160.webp"); --c: #29313a; --c2: #101919; --m: transparent; }
     /* (what stands on a layer's ground rises out of it: the box it stands in ends at the ground line) */
     .walk-load-rise { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--g) * 100 * var(--vh) + 1px); overflow: hidden; }
     .walk-load-land, .walk-load-piece { position: absolute; bottom: 0; left: 50%; background-repeat: no-repeat;
@@ -68,13 +65,13 @@
       background: linear-gradient(var(--c), var(--c2) calc((var(--g2) - var(--g)) * 100 * var(--vh)), var(--c2)); }
     .walk-load-mist { position: absolute; left: 0; right: 0; top: calc(var(--g) * 100 * var(--vh) - .035 * var(--u)); height: calc(.07 * var(--u));
       background: linear-gradient(transparent, var(--m) 50%, transparent); }
-    /* (an older machine's look: its own lines, scaled up - hard pixels on the Dreamcast, the PS1 and the Game Boy, blended
+    /* (an older machine's look: its own lines, scaled up - hard pixels on the Dreamcast, the PS1 and the Game Boy Advance, blended
        on the rest - and things rising a line or two at a time, as a picture of so few lines can only move) */
     .walk-load[data-style="ps1"] .walk-load-sky, .walk-load[data-style="ps1"] .walk-load-land, .walk-load[data-style="ps1"] .walk-load-piece,
     .walk-load[data-style="dreamcast"] .walk-load-sky, .walk-load[data-style="dreamcast"] .walk-load-land, .walk-load[data-style="dreamcast"] .walk-load-piece,
-    .walk-load[data-style="gameboy"] .walk-load-sky, .walk-load[data-style="gameboy"] .walk-load-land, .walk-load[data-style="gameboy"] .walk-load-piece { image-rendering: pixelated; }
+    .walk-load[data-style="gba"] .walk-load-sky, .walk-load[data-style="gba"] .walk-load-land, .walk-load[data-style="gba"] .walk-load-piece { image-rendering: pixelated; }
     .walk-load[data-style="ps1"] .walk-load-piece, .walk-load[data-style="n64"] .walk-load-piece, .walk-load[data-style="dreamcast"] .walk-load-piece,
-    .walk-load[data-style="gameboy"] .walk-load-piece { transition-timing-function: steps(var(--n, 20), end); }
+    .walk-load[data-style="gba"] .walk-load-piece { transition-timing-function: steps(var(--n, 20), end); }
     .walk-load-say { position: absolute; left: 0; right: 0; top: calc(89 * var(--vh)); transform: translateY(-50%); text-align: center;
       color: #e6e0d4; font: 400 clamp(14px, calc(.017 * var(--u) + 4px), 24px)/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; letter-spacing: .06em; }
     .walk-load-words { margin: 0; opacity: .88; }
@@ -144,7 +141,7 @@
       // keeps - hardware.js; on a first visit the machine's own look follows once it is known, below)
       try {
         const t = new URLSearchParams(location.search).get('gfx') || (JSON.parse(localStorage.getItem('career-gfx-v3') || 'null') || {}).tier;
-        const st = { xbox360: 'xbox360', gamecube: 'gamecube', dreamcast: 'dreamcast', n64: 'n64', ps1: 'ps1', gameboy: 'gameboy' }[t];
+        const st = { xbox360: 'xbox360', gamecube: 'gamecube', dreamcast: 'dreamcast', n64: 'n64', ps1: 'ps1', gba: 'gba', gameboy: 'gba' }[t];
         if (st) document.querySelector('.walk-load').dataset.style = st;
       } catch { /* (no storage) */ }
     </script>

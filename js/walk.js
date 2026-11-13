@@ -309,6 +309,11 @@ export async function initWalk(container, opts = {}) {
   // A browser refuses a capture asked for just after Esc (about a second): the next click tries again.
   const locked = () => document.pointerLockElement === canvas;
   let refusals = 0, noted = false, everHeld = false, menuOpen = false;
+  // (the note, the view-copy mark and the pose's units (below) are read by the keys, the mouse and the menu from the
+  // first moment, the walk still loading: declared here, before any of them is listened for - declared further down,
+  // an Esc while loading had stopped on them unread, and the menu never came up)
+  let note = null, marking = null;
+  const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   const hint = document.createElement('div');
   hint.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;padding:10px 18px;'
     + 'font:500 15px/1.3 system-ui,sans-serif;color:#fff;background:rgba(20,24,28,.55);border-radius:6px;'
@@ -332,7 +337,10 @@ export async function initWalk(container, opts = {}) {
   // ---- the menu. Esc lets the mouse go and the menu comes up: whose page this is, Resume, and how the picture is
   // drawn - Full, or one of the older machines' ways (hardware.js CHOICES). A choice is kept for this browser and the
   // walk loads again where the walker stands. It is a pane of glass over the scene (index.html .walk-menu): the scene
-  // shows through it, blurred, and a click on the scene beside it resumes as it always did.
+  // shows through it, blurred, and a click on the scene beside it resumes as it always did. It comes up while the walk
+  // is still loading too (over the loading picture), and the newest choice is the one kept: a heavy look's load is not
+  // waited out to choose another, and a second choice made while the page is going still counts (until 12 Nov 2026 the
+  // menu came up only once the walk was in, and every choice was greyed out until the next page had loaded)
   const menu = document.createElement('div');
   menu.className = 'walk-menu'; menu.hidden = true;
   menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Menu');
@@ -350,8 +358,9 @@ export async function initWalk(container, opts = {}) {
   </div>`;
   container.appendChild(menu);
   const menuNote = menu.querySelector('.walk-menu-note'), resumeBtn = menu.querySelector('.walk-menu-resume');
+  let leaving = false;
   function showMenu(on) {
-    on = !!on && !still && s.ready;
+    on = !!on && !still;
     if (on === menuOpen) return;
     menuOpen = on; menu.hidden = !on;
     if (on) { held.clear(); resumeBtn.focus({ preventScroll: true }); } else canvas.focus({ preventScroll: true });
@@ -360,13 +369,18 @@ export async function initWalk(container, opts = {}) {
   resumeBtn.addEventListener('click', () => { startSound(); takeMouse(); if (refusals >= 2) showMenu(false); });
   menu.addEventListener('change', (e) => {
     const id = e.target?.value;
-    if (!id || id === nowIs) return;
-    // (kept for this browser; where the walker stands and looks kept for the page that loads next; the address's own
-    // ?gfx= dropped, so the choice is what the next page reads)
+    if (!id || (id === nowIs && !leaving)) return;
+    // (kept for this browser; where the walker stands and looks kept for the page that loads next - unless the place
+    // from the last change is still waiting to be put back, this page not yet in: that one; the address's own ?gfx=
+    // dropped, so the choice is what the next page reads)
     keepChoice(id, renderer.getContext());
-    try { sessionStorage.setItem('career-pose', JSON.stringify(pose())); sessionStorage.removeItem('career-gfx-tries'); } catch { /* (none) */ }
+    try {
+      if (!sessionStorage.getItem('career-pose')) sessionStorage.setItem('career-pose', JSON.stringify(pose()));
+      sessionStorage.removeItem('career-gfx-tries');
+    } catch { /* (none) */ }
     menuNote.textContent = 'Loading the walk again\u2026';
-    for (const i of menu.querySelectorAll('input')) i.disabled = true;
+    if (leaving) return;
+    leaving = true;
     const u = new URL(location.href); u.searchParams.delete('gfx');
     setTimeout(() => { if (u.href === location.href) location.reload(); else location.replace(u.href); }, 60);
   });
@@ -578,7 +592,6 @@ export async function initWalk(container, opts = {}) {
   // ---- VIEW POSE (dev only; remove with the free-cam). pose() says where the view is: degrees right of ahead (yaw) and
   // up (pitch), the zoom, the clock, and where the eye stands (x, z on the hill) or flies (fly, x, y, z). goTo(pose)
   // puts the view back there exactly, so a fault is looked at again just as it was seen.
-  const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   function pose() {
     const L = s.look, p = { yaw: r2(L.yaw * DEG), pitch: r2(L.pitch * DEG), zoom: r2(L.zoom), t: Math.round(clock * 10) / 10 };
     if (s.freeCam.on) Object.assign(p, { fly: true, x: r2(s.freeCam.pos.x), y: r2(s.freeCam.pos.y), z: r2(s.freeCam.pos.z) });
@@ -600,7 +613,6 @@ export async function initWalk(container, opts = {}) {
   // P: the pose is copied at once; then a box may be dragged round the problem (the mouse is let go for it), and the
   // pose is copied again with the box as `mark` (fractions of the screen: left, top, right, bottom). Esc keeps it
   // without a box. `screen` says the size it was seen at, so the same picture can be made again.
-  let note = null, marking = null;
   function showNote(msg, ms) {
     if (!note) {
       note = document.createElement('div');
