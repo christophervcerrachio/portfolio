@@ -394,10 +394,16 @@ export async function initWalk(container, opts = {}) {
   async function leave() {
     showMenu(false);
     const at = s.freeCam.on ? s.freeCam.pos : s.at;
-    s.U.uRise.value.set(at.x, at.z, clock, -2600);
+    // (the woods' wave by the page's own clock, not the walk's: the walk's holds a slow frame to a tenth of a second)
+    const SPEED = 5000, t0 = performance.now();
+    s.U.uRise.value.set(at.x, at.z, clock, -SPEED);
     const woodsDown = new Promise((r) => {
-      const far = 5200, t0 = clock;                 // (the far woods' edge at that speed, and each tree's own 1.25 s)
-      const chk = () => (clock - t0 > far / 2600 + 1.3 ? r() : setTimeout(chk, 100)); chk();
+      const step = () => {
+        const e = (performance.now() - t0) / 1000;
+        s.U.uRise.value.z = clock - e;
+        if (e > 5200 / SPEED + 0.7) r(); else requestAnimationFrame(step);   // (the far woods' edge, and a tree's own 0.6 s)
+      };
+      step();
     });
     await Promise.race([Promise.all([departAll(at), woodsDown]), new Promise((r) => setTimeout(r, 4000))]);
     await new Promise((r) => requestAnimationFrame(() => {

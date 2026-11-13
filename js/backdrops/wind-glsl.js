@@ -72,7 +72,7 @@ uniform vec4 uRise;
 float riseAt(vec2 root, float seed) {
   if (uRise.w == 0.0) return 1.0;
   float w = abs(uRise.w);
-  float r = clamp(((uTime - uRise.z) * w - length(root - uRise.xy) + seed * 30.0) / (w * 1.25), 0.0, 1.0);
+  float r = clamp(((uTime - uRise.z) * w - length(root - uRise.xy) + seed * 30.0) / (w * (uRise.w > 0.0 ? 1.25 : 0.6)), 0.0, 1.0);
   return uRise.w > 0.0 ? 1.0 - pow(1.0 - r, 3.2) : 1.0 - r * r * r;
 }
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyColor; uniform vec3 uGroundColor; uniform vec3 uHaze; uniform float uHazeDist;
