@@ -45,6 +45,30 @@ function archOf(x0, x1, y0, f, n) {
   return { ys: y0 + r, pts };
 }
 
+/** A reveal for a window of a front measured to its holes (bays.json 'frames') whose picture shows none of its own on
+ *  that face: the nearest window's of the same storey that shows one, upright as the picture has it. kind 'side': its
+ *  strip from the hole's edge at the wall to the frame's at the glass, as [wall's foot, frame's foot, frame's head,
+ *  wall's head]; 'head': its soffit, as [wall's left, wall's right, frame's right, frame's left] - px of the picture;
+ *  null if none does. */
+function borrowed(fb, ci, ry0, ry1, kind = 'side') {
+  const cache = (fb._borrowed ??= {}), key = kind + ci;
+  if (key in cache) return cache[key];
+  const mid = (fb.cols[ci][0] + fb.cols[ci][1]) / 2;
+  let best = null, bd = Infinity;
+  for (const [y0, y1, cs] of fb.rows) {
+    if (y1 < ry0 || y0 > ry1) continue;                       // (another storey)
+    for (const c of cs) {
+      const g = fb.frames?.[c]; if (!g || c === ci) continue;
+      const [x0, x1] = fb.cols[c], d = Math.abs((x0 + x1) / 2 - mid);
+      if (d >= bd) continue;
+      if (kind === 'head') { if (g[1] - y0 >= 2) { bd = d; best = [[x0, y0], [x1, y0], [g[2], g[1]], [g[0], g[1]]]; } continue; }
+      const s = g[0] - x0 >= 2 ? [x0, g[0]] : x1 - g[2] >= 2 ? [x1, g[2]] : null;
+      if (s) { bd = d; best = [[s[0], y1], [s[1], g[3]], [s[1], g[1]], [s[0], y0]]; }
+    }
+  }
+  return (cache[key] = best);
+}
+
 /** Each front's storey bands from the street up, st storeys high: [[y0 px, y1 px, metres], ...] (city_blender.py bands_for). */
 function bandsFor(fb, st, storey) {
   const B = fb.bands;
@@ -308,12 +332,13 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const rvL = gf && gx0 - cx0 >= 2 ? [cx0, gx0] : null, rvR = gf && cx1 - gx1 >= 2 ? [cx1, gx1] : null;
               const rev = rvL || rvR ? [rvL ?? rvR, rvR ?? rvL] : null;
               // (each strip's corners in the picture - at the wall's foot, the frame's foot, the frame's head, the wall's
-              // head - for a side: the left's, the right's, or the soffit's turned on its side where the window shows
-              // neither, as one near the picture's middle does; and the soffit's for the head where it shows)
+              // head - for a side: the left's, the right's, or, where the window shows neither (one near the picture's
+              // middle), the nearest window's of its storey that shows one, upright as the picture has it - the soffit's
+              // turned on its side had lain across the reveal; and the soffit's for the head where it shows)
               const hasH = gf && gy0 - ry0 >= 2;
               const SL = [[cx0, ry1], [gx0, gy1], [gx0, gy0], [cx0, ry0]], SR = [[cx1, ry1], [gx1, gy1], [gx1, gy0], [cx1, ry0]];
-              const SH = [[cx0, ry0], [gx0, gy0], [gx1, gy0], [cx1, ry0]];
-              const sideL = rvL ? SL : rvR ? SR : hasH ? SH : null, sideR = rvR ? SR : rvL ? SL : hasH ? SH : null;
+              const SB = gf && !rvL && !rvR ? borrowed(fb, ci, ry0, ry1) : null;
+              const sideL = rvL ? SL : rvR ? SR : SB, sideR = rvR ? SR : rvL ? SL : SB;
               // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
               // dev\world\cities\measure_shutters.py)
               // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
@@ -359,8 +384,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 else quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along);
                 if (sideR) { A = AD; quad(B1, F1, F2, B2, sideR[1], sideR[0], sideR[3], sideR[2], back); A = AW; }             // (right side)
                 else quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back);
+                const HB = gf && !hasH ? borrowed(fb, ci, ry0, ry1, 'head') : null;
                 if (hasH) { A = AD; quad(F3, F2, B2, B3, [cx0, ry0], [cx1, ry0], [gx1, gy0], [gx0, gy0], down); A = AW; }       // (head)
-                else if (rev) { A = AD; quad(F3, F2, B2, B3, [rev[0][0], ry1], [rev[0][0], ry0], [rev[0][1], gy0], [rev[0][1], gy1], down); A = AW; }
+                else if (HB) { A = AD; quad(F3, F2, B2, B3, ...HB, down); A = AW; }
                 else quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down);
               }
               if (gf && ry1 - gy1 >= 2) { A = AD; quad(B0, B1, R1, R0, [gx0, gy1], [gx1, gy1], [cx1, ry1], [cx0, ry1], up); A = AW; }             // (sill)
