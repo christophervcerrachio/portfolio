@@ -12,6 +12,7 @@ import { LANDMARKS } from './landmarks.js';
 import { loadModel } from './models.js';
 import { placeStones } from './stones.js';
 import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
+import { makeEvening } from './evening.js';
 import { makeWeather } from './weather.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
 import { loadBark, loadSpecies } from './birchlook.js';
@@ -384,7 +385,10 @@ export class CountrysideScene {
     const U = this.U;
     const sun = new THREE.DirectionalLight(U.uSunColor.value.clone().convertLinearToSRGB(), 2.1);
     sun.position.copy(U.uSunDir.value).multiplyScalar(100);
-    this.land.add(sun, new THREE.HemisphereLight(0xc2cdd8, 0x98a05e, 1.35));
+    const hemi = new THREE.HemisphereLight(0xc2cdd8, 0x98a05e, 1.35);
+    this.land.add(sun, hemi);
+    // (now and then the evening of the loading picture, and back: evening.js - ?sky=day or ?sky=evening holds one)
+    this.evening = makeEvening({ U, show: this.showU, sun, hemi, fog: () => this.land.fog, hold: o.sky ?? null, still: !!o.still });
   }
 
   async load(base = '', tl = () => {}) {
@@ -1022,6 +1026,7 @@ export class CountrysideScene {
     const w = this.windAt(t), dt = Math.min(0.1, Math.max(0, t - (this.t ?? t)));
     this.t = t; this.dt = dt;
     this.U.uTime.value = t; this.U.uGust.value = w.gust; this.U.uFront.value = w.frontM; if (this.U.uWindLevel) this.U.uWindLevel.value = w.level;
+    this.evening?.update(t);
     if (this.cam && this.U.uWindOrigin) this.U.uWindOrigin.value.set(this.cam.position.x, this.cam.position.z); this.U.uViewYaw.value = wrapAngle(this.look.yaw);
     this.wind = w;
     // the view eases toward where it is turned and how far zoomed (the walker's look is set outright: goal and view
