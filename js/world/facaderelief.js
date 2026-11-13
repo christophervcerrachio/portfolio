@@ -74,8 +74,9 @@ function bandsFor(fb, st, storey) {
   const B = fb.bands;
   let seq;
   if (st <= 1) {
+    // (a one-storey wall's top band ends at the front's 'eaves' where it was measured: facade_bays.py)
     const topWin = Math.min(...fb.rows.map((r) => r[0]));
-    seq = [B.ground, [B.top[0], Math.max(B.top[0] + 20, topWin - 12)]];
+    seq = [B.ground, [B.top[0], fb.eaves ?? Math.max(B.top[0] + 20, topWin - 12)]];
   } else if (st === 2) seq = [B.ground, B.top];
   else { seq = [B.ground]; for (let i = 0; i < st - 2; i++) seq.push(B.mid); seq.push(B.top); }
   const hs = seq.map(([a, b]) => (b - a) * fb.my), k = st * storey / hs.reduce((s, v) => s + v, 0);
@@ -106,6 +107,21 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const m = new THREE.MeshStandardMaterial({ map: w.map, normalMap: w.normalMap || null, roughness: 0.8, metalness: 0, name: name + '-door' });
     receiveSun(m, U, { street: true });
     return (DOORS[name] = m);
+  };
+  // (the open shutters: the front's picture with its shutters, before they were painted out of the wall's -
+  // fronts/<front>-shutters.jpg; its px as the wall's)
+  const SHUTS = {};
+  const shutMat = (name) => {
+    if (SHUTS[name]) return SHUTS[name];
+    const w = materials(name); if (!w) return null;
+    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: name + '-shutters' });
+    new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + '-shutters.jpg').then((t) => {
+      t.colorSpace = w.map?.colorSpace ?? THREE.SRGBColorSpace; t.flipY = w.map?.flipY ?? false;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
+      m.map = t; m.needsUpdate = true;
+    }).catch(() => {});
+    receiveSun(m, U, { street: true });
+    return (SHUTS[name] = m);
   };
   // (the window boxes' models: each mesh's geometry in the model's own frame, its material; null if not there)
   const BOXES = Promise.all([0, 1].map((v) => gltfLoader().loadAsync(base + 'assets/world/props/prop-window-box-' + v + '.glb').then((g) => {
@@ -264,7 +280,36 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         // (the cornice along the top of the bay, from the picture's top rows over it; its ends closed at the wall's)
         box(sa, s, top - CORN, top, CORN, [b[0], tb[0], b[1], tb[0] + cpx], 'fb' + (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : ''));
         // (the string course over the ground floor: the picture's rows where the ground band meets the next)
-        if (bands.length > 1 && k0 === 0) box(sa, s, zc - 0.08, zc + 0.08, COURSE, [b[0], bands[0][0] - cp / 2, b[1], bands[0][0] + cp / 2], 'ftb' + (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : ''));
+        // (a front measured for it ('course': its rows in the ground band's top) has its own course where the picture
+        // paints it; a front whose picture paints none has none modelled - the plain band across its wall had stood over
+        // nothing; the others as before)
+        const ends = (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : '');
+        if (fb.course) {
+          if (bands.length > 1 && k0 === 0) {
+            const [g0, g1, gh] = bands[0], Zg = (y) => y0 + (g1 - y) / (g1 - g0) * gh;
+            box(sa, s, Zg(fb.course[1]), Zg(fb.course[0]), COURSE, [b[0], fb.course[0], b[1], fb.course[1]], 'ftb' + ends);
+          }
+        } else if (fb.eaves === undefined && bands.length > 1 && k0 === 0) box(sa, s, zc - 0.08, zc + 0.08, COURSE, [b[0], bands[0][0] - cp / 2, b[1], bands[0][0] + cp / 2], 'ftb' + ends);
+        // (the pilasters (bays.json 'pilasters'): one at every joint of the bays, each bay's two halves of it standing out
+        // of the wall from capital to base in every band it crosses - all cut from the one pilaster of the picture, so they
+        // stand alike and in line; their sides closed only at the wall's ends)
+        const PL = fb.pilasters;
+        if (PL) {
+          const hw = PL.half, src = PL.src, [r0, r1] = PL.rows, dp = PL.depth;
+          let zp = y0;
+          bands.forEach(([py0, py1, phm], kk) => {
+            const lo = Math.max(py0, r0), hi = Math.min(py1, r1);
+            const shopB = kk === 0 && sh0 >= 0 && bi >= sh0 && bi < sh1;
+            if (kk >= k0 && hi - lo > 1 && !shopB) {
+              const Zp = (y) => zp + (py1 - y) / (py1 - py0) * phm, hl = hw * fb.mx * sc;
+              const fc = 'f' + (lo === r0 ? 't' : '') + (hi === r1 ? 'b' : '');            // (its top at the capital, its foot at the base)
+              // (the bay's left: the right half of the pilaster on its joint; its right: the left half)
+              if (PL.at.some((x) => Math.abs(x - b[0]) < 2)) box(sa, sa + hl, Zp(hi), Zp(lo), dp, [src, lo, src + hw, hi], fc + 'r' + (bi === 0 ? 'l' : ''));
+              if (PL.at.some((x) => Math.abs(x - b[1]) < 2)) box(s - hl, s, Zp(hi), Zp(lo), dp, [src - hw, lo, src, hi], fc + 'l' + (bi === bl.length - 1 ? 'r' : ''));
+            }
+            zp += phm;
+          });
+        }
         let zb = y0;
         bands.forEach(([by0, by1, hm], k) => {
           if (k < k0) { zb += hm; return; }                          // (behind the next house: nothing to model)
@@ -361,9 +406,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               if (tr && tr[2]) box(u0 - um, u1 + um, Z(ry1 + sp + tr[2]), v0 - 0.08, PROUD, [cx0 - mpx, ry1 + sp + 1, cx1 + mpx, ry1 + sp + tr[2]], 'fblr');
               // (each open shutter: a board 4 cm thick standing just out from the casing, the picture's whole shutter on
               // it, its foot at the sill)
-              for (const [qx0, qy0, qx1, qy1] of sh) {
-                const yb = Math.min(qy1, ry1 + 1);
-                box(S(qx0), S(qx1), Z(yb), Z(qy0), PROUD + 0.035, [qx0, qy0, qx1, yb], 'ftblr', PROUD - 0.005);
+              // (in the front's picture as it was before its shutters were painted out - fronts/<front>-shutters.jpg, the
+              // same px - the wall's own picture now has plain wall where they hung: a shutter is a model, not paint)
+              if (sh.length) {
+                const A0 = A; A = get(fname + '#shut', ck_);
+                for (const [qx0, qy0, qx1, qy1] of sh) {
+                  const yb = Math.min(qy1, ry1 + 1);
+                  box(S(qx0), S(qx1), Z(yb), Z(qy0), PROUD + 0.035, [qx0, qy0, qx1, yb], 'ftblr', PROUD - 0.005);
+                }
+                A = A0;
               }
               // the hole: its four sides back to the glass, plaster from just outside the window in the picture
               const R0 = V(u0, v0, 0), R1 = V(u1, v0, 0), R2 = V(u1, v1, 0), R3 = V(u0, v1, 0);
@@ -543,7 +594,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
       const name = a.name, mat = a.mat ?? (name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
-        : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
+        : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
