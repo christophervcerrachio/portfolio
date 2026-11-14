@@ -73,7 +73,12 @@ export function buildPaths(world, extra = []) {
   for (const p of J.paths ?? []) ways.push({ kind: p.kind, ...style(p.kind, p.w), pts: smoothLine(p.pts) });
   // (every street of a city paved, the lanes too: a lane's earth had run as a strip of dirt down the middle of the brick
   // street)
-  for (const list of Object.values(J.streets ?? {})) for (const s of list) ways.push({ kind: s.kind, ...style(s.kind, s.w), earth: 0, cobble: 1, ruts: 0, pts: s.pts });
+  // (Moscow's streets, beaten earth (terrain.js), carry the cart wheels' ruts as its period pictures show them; Petersburg's
+  // setts none)
+  for (const list of Object.values(J.streets ?? {})) for (const s of list) {
+    const msk = s.pts.reduce((a, q) => a + q[1], 0) / s.pts.length < -1200;
+    ways.push({ kind: s.kind, ...style(s.kind, s.w), earth: 0, cobble: 1, ruts: msk ? 0.7 : 0, pts: s.pts });
+  }
   // (a grid of the ways' segments, 64 m cells, to find the ones near a point quickly)
   const CELL = 64, grid = new Map(), segs = [];
   for (const w of ways) for (let i = 1; i < w.pts.length; i++) {
@@ -158,7 +163,9 @@ export function buildPaths(world, extra = []) {
           if (!w.ruts || !vis(w.pts)) continue;
           // (the wheels' tracks: two ruts 1.5 m apart)
           g.lineWidth = 0.4; g.strokeStyle = `rgb(0,0,${Math.round(255 * w.ruts)})`;
-          path(w.pts, 0.75); path(w.pts, -0.75);
+          // (a street wide enough for two carts: a pair in each half, the carts keeping to their side)
+          if (w.w > 9) for (const c of [w.w / 4, -w.w / 4]) { path(w.pts, c + 0.75); path(w.pts, c - 0.75); }
+          else { path(w.pts, 0.75); path(w.pts, -0.75); }
         }
       }
       g.filter = 'none';

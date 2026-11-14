@@ -610,7 +610,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // same px - the wall's own picture now has plain wall where they hung: a shutter is a model, not paint)
               if (sh.length) {
                 const A0 = A; A = get(fname + '#shut', ck_);
-                for (const [qx0, qy0, qx1, qy1] of sh) {
+                for (const q of sh) {
+                  // (a shutter modelled whole - the front's fittings, 'shutter-<n>' - is not the picture's board)
+                  if (FT?.['shutter-' + fb.shutters.indexOf(q)] && fb.models?.['shutter-' + fb.shutters.indexOf(q)]) continue;
+                  const [qx0, qy0, qx1, qy1] = q;
                   const yb = Math.min(qy1, ry1 + 1);
                   box(S(qx0), S(qx1), Z(yb), Z(qy0), PROUD + 0.035, [qx0, qy0, qx1, yb], 'ftblr', PROUD - 0.005);
                 }
@@ -810,6 +813,25 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                   face(Bl0, Br0, Br, Bl, [h.x0 + 6, h.y1 - 2], [h.x1 - 6, h.y1 - 2], [h.x1 - 6, h.y1 - 2], [h.x0 + 6, h.y1 - 2], down);   // (its underside)
                   face(Bl0, Bl, Al, Al0, [h.x0 + 2, h.y1], [h.x0 + 2, h.y1], [h.x0 + 2, h.ye], [h.x0 + 2, h.ye], back);     // (its ends)
                   face(Br, Br0, Ar0, Ar, [h.x1 - 2, h.y1], [h.x1 - 2, h.y1], [h.x1 - 2, h.ye], [h.x1 - 2, h.ye], along);
+                } else if (colH && !/timber|wood/.test(fname)) {
+                  // (a flat hood as a cornice is built: the fascia, the cap standing out past it on three sides with its
+                  // drip, and the cap's top weathered back to the wall - each face lit by its own plane, not one block)
+                  const P_ = (s_, z_, o_) => V(s_, z_, o_), U0 = [h.x0, h.y0], ov = 0.04, cH = Math.min(0.1, (zt - zb_) * 0.45);
+                  const prism = (s0, s1, z0, z1, o0, o1, fs) => {
+                    const a = P_(s0, z0, o1), b = P_(s1, z0, o1), c = P_(s1, z1, o1), d = P_(s0, z1, o1), a0 = P_(s0, z0, o0), b0 = P_(s1, z0, o0), c0 = P_(s1, z1, o0), d0 = P_(s0, z1, o0);
+                    if (fs.includes('f')) face(a, b, c, d, U0, U0, U0, U0, out);
+                    if (fs.includes('t')) face(d, c, c0, d0, U0, U0, U0, U0, up);
+                    if (fs.includes('b')) face(a0, b0, b, a, U0, U0, U0, U0, down);
+                    if (fs.includes('l')) face(a0, a, d, d0, U0, U0, U0, U0, back);
+                    if (fs.includes('r')) face(b, b0, c0, c, U0, U0, U0, U0, along);
+                  };
+                  const zc = zt - cH, D1 = Math.max(0.05, D - ov);
+                  prism(xl, xr, zb_, zc, 0, D1, 'fblr');                                        // (the fascia)
+                  prism(xl - ov, xr + ov, zc, zc + cH * 0.55, 0, D, 'fblr');                     // (the cap's edge)
+                  const zr = zt + Math.min(0.08, D * 0.15), e = zc + cH * 0.55;                   // (its top, weathered up to the wall)
+                  face(P_(xl - ov, e, D), P_(xr + ov, e, D), P_(xr + ov, zr, 0), P_(xl - ov, zr, 0), U0, U0, U0, U0, [nx, 2, nz]);
+                  face(P_(xl - ov, e, 0), P_(xl - ov, e, D), P_(xl - ov, zr, 0), P_(xl - ov, zr, 0), U0, U0, U0, U0, back);
+                  face(P_(xr + ov, e, D), P_(xr + ov, e, 0), P_(xr + ov, zr, 0), P_(xr + ov, zr, 0), U0, U0, U0, U0, along);
                 } else box(xl, xr, zb_, zt, D, [h.x0, h.y0, h.x1, h.y1], 'ftblr');
                 // (its brackets: each a strut from the wall under it out to its front edge, the picture's bracket on it)
                 for (const [bx0, bx1, by] of h.brackets ?? []) {
