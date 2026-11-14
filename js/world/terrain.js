@@ -449,7 +449,7 @@ uniform vec3 uRock; uniform vec3 uMud; uniform vec3 uBloom; uniform vec3 uFieldC
 // the ground up close: ComfyUI's tiles of each ground (meadow, ploughed soil, forest floor, cart road, river bank, rock;
 // GROUND below), each at its true size, two takes of it turned and shifted in patches so its repeats never line up;
 // tinted to the land's colour there (the tile's own colour over its average), so near and far agree
-uniform highp sampler2DArray uGT; uniform float uGOn; uniform float uGM[8]; uniform vec3 uGMean[8]; uniform float uGOk[8];
+uniform highp sampler2DArray uGT; uniform float uGOn; uniform float uGM[9]; uniform vec3 uGMean[9]; uniform float uGOk[9];
 ${WAYS_GLSL}
 vec3 gTake(int L, vec2 p) {
   float m = uGM[L];
@@ -471,7 +471,7 @@ vec3 gBump(vec3 dx, vec3 dz, vec3 nrm, float hx, float hz, float k) {
 // own height (its light and dark: stones, clods and needles stand proud, cracks and hollows sink), ten steps and a
 // refinement, the place it meets taken for the colour and the relief. Its depth in metres by the ground (uGDepth), only
 // near the camera.
-uniform float uGDepth[8];
+uniform float uGDepth[9];
 float gHgt(int L, vec2 q) {
   vec3 t = gTake(L, q);
   return clamp(dot(t, vec3(0.2126, 0.7152, 0.0722)) / max(dot(uGMean[L], vec3(0.2126, 0.7152, 0.0722)), 0.02) * 0.5, 0.0, 1.0);
@@ -639,7 +639,8 @@ void main() {
   cobV = max(cobV, townW * (1.0 - earthT));
   // the ground up close, by what the land is here
   float hgt = 0.0;
-  float nearK = uGOn * (1.0 - smoothstep(35.0, 150.0, cd)) * max(1.0 - smoothstep(0.25, 0.7, town), cobV);
+  // (in a town only on its paving - and on Moscow's earth streets: their own tile of packed sand, close up)
+  float nearK = uGOn * (1.0 - smoothstep(35.0, 150.0, cd)) * max(max(1.0 - smoothstep(0.25, 0.7, town), cobV), roadV * earthT);
   if (nearK > 0.001) {
     float wRoad = roadV * (1.0 - cobV), wRock = bare, wBank = max(max(under, wet > 0.95 ? 0.6 : 0.0), beach);
     float wWood = fw2, wField = smoothstep(0.25, 0.6, field) * (1.0 - balk);
@@ -647,21 +648,24 @@ void main() {
     float dirtP = smoothstep(0.6, 0.78, vnoise(p / 11.0 + 5.3)) * 0.85 + smoothstep(0.7, 0.85, vnoise(p / 3.2 - 2.1)) * 0.4;
     float debrisP = smoothstep(0.5, 0.72, vnoise(p / 6.5 - 8.7)) * 0.9;
     wField = max(wField, wWood * min(dirtP, 1.0));
-    float w[8]; w[0] = 1.0; w[1] = wField; w[2] = wWood; w[3] = wBank; w[4] = wRock; w[5] = wRoad; w[6] = cobV; w[7] = wWood * debrisP;
+    // (Moscow's earth - its streets and the roads near it: ComfyUI's packed street sand, street-earth; the land's trail tile
+    // elsewhere)
+    float w[9]; w[0] = 1.0; w[1] = wField; w[2] = wWood; w[3] = wBank; w[4] = wRock; w[5] = wRoad * (1.0 - earthT * uGOk[8]); w[6] = cobV; w[7] = wWood * debrisP;
+    w[8] = wRoad * earthT;
     // (the parallax: the ray marched through the ground that lies uppermost here, its place used for every layer)
     float pk = 1.0 - smoothstep(18.0, 40.0, cd);
     if (pk > 0.0) {
       int top = 0; float tw = 0.0;
-      for (int L = 1; L < 8; L++) if (w[L] * uGOk[L] > 0.35) { top = L; tw = w[L]; }
+      for (int L = 1; L < 9; L++) if (w[L] * uGOk[L] > 0.35) { top = L; tw = w[L]; }
       // (none on the ways' beaten earth: its march stepped into fine bands across the path, like a plank floor, at a
       // low look)
-      if (top == 5) top = -1;
+      if (top == 5 || top == 8) top = -1;
       vec3 V = normalize(cameraPosition - vW);
       if (top >= 0) p = mix(p, gParallax(top, p, V, uGDepth[top]), pk);
     }
     // (each layer laid over the ones before it, as the colour above was)
     vec3 tint = vec3(1.0); hgt = 0.0;
-    for (int L = 0; L < 8; L++) {
+    for (int L = 0; L < 9; L++) {
       if (L > 0 && w[L] * uGOk[L] < 0.01) continue;
       vec3 t = gTake(L, p);
       // (the meadow keeps the land's own greens, varied by its tile; the others are their own ground, as drawn: needles,
@@ -673,6 +677,7 @@ void main() {
       // (the way's earth: ComfyUI's new trail tile (soft trodden soil, grit and pebbles, no lines), 3 m to a repeat,
       // its colour kept half and half with the land's earth so near and far agree)
       if (L == 5) own = mix(own, rel, 0.3 + 0.7 * earthT);   // (mostly the tile's own grey-brown: the land's earth tint had read orange; Moscow's streets their sandy earth, the tile's grain on it)
+      if (L == 8) own = mix(own, rel, 0.85);   // (the street's sand in the street's own colour (earthMos), the tile's grain on it)
       if (L == 3) own = mix(own, rel, 0.5);
       if (L == 1) own = mix(own, rel, 0.7);   // (a field's soil keeps its strip's colour up close, the tile's grain on it: the strips never melt into one brown as the walker nears them)   // (the beach: the tile's pebbles over the sand's own colour, half and half)
       float wl = w[L] * uGOk[L];
@@ -869,13 +874,13 @@ function ringGeometry(n) {
 // The ground tiles, in the order the land's shader blends them (its layer), each covering m metres: meadow, ploughed
 // soil, forest floor, river bank, rock, cart road, city cobbles. Seamless tiles from ComfyUI's material picture and make_tile.py
 // (art\comfy\out\pass; detail-pass), at assets/world/ground/<name>.jpg.
-export const GROUND = [['meadow', 1.5], ['field-soil', 2.0], ['forest-floor', 1.5], ['bank-pebbles', 2.0], ['rock', 2.0], ['road', 3.0], ['cobble', 2.0], ['forest-debris', 1.5]];
+export const GROUND = [['meadow', 1.5], ['field-soil', 2.0], ['forest-floor', 1.5], ['bank-pebbles', 2.0], ['rock', 2.0], ['road', 3.0], ['cobble', 2.0], ['forest-debris', 1.5], ['street-earth', 3.0]];
 const WAYS_OFF = { uWayT: { value: null }, uWayC: { value: new THREE.Vector2(1e9, 1e9) }, uWaySpan: { value: 512 }, uWayT2: { value: null }, uWayC2: { value: new THREE.Vector2(1e9, 1e9) }, uWaySpan2: { value: 2048 } };
 /** Whether the ground's close-up tiles are in (the page holds its veil until they are). */
 export const groundLoaded = () => groundU.uGOn.value > 0.5;
 const groundU = { uGT: { value: null }, uGOn: { value: 0 }, uGM: { value: GROUND.map((g) => g[1]) }, uGMean: { value: GROUND.map(() => new THREE.Vector3(0.5, 0.5, 0.5)) }, uGOk: { value: GROUND.map(() => 0) },
   // (each ground's depth for its parallax, m: grass and soil shallow, pebbles and rock deeper)
-  uGDepth: { value: [0.025, 0.03, 0.04, 0.05, 0.07, 0.035, 0.04, 0.05] } };
+  uGDepth: { value: [0.025, 0.03, 0.04, 0.05, 0.07, 0.035, 0.04, 0.05, 0.03] } };
 // (asked for once, as early as the walk can: countryside.js starts it with the world's pictures)
 let groundAsked = null;
 export const preloadGround = (base = '') => (groundAsked ??= loadGround(base));
