@@ -71,6 +71,14 @@
       background: linear-gradient(var(--c), var(--c2) calc((var(--g2) - var(--g)) * 100 * var(--vh)), var(--c2)); }
     .walk-load-mist { position: absolute; left: 0; right: 0; top: calc(var(--g) * 100 * var(--vh) - .035 * var(--u)); height: calc(.07 * var(--u));
       background: linear-gradient(transparent, var(--m) 50%, transparent); }
+    /* (the mist moving along the land while the walk loads - the far bank one way, the near the other - so the picture is
+       plainly alive: compositor transforms, moving on while the page itself is held up reading and compiling) */
+    .walk-load-mist::before { content: ""; position: absolute; top: -60%; bottom: -60%; left: 0; width: 200%;
+      background: radial-gradient(ellipse 30% 42% at 25% 50%, var(--m), transparent 72%) 0 0 / 25% 100% repeat-x,
+                  radial-gradient(ellipse 22% 30% at 70% 58%, var(--m), transparent 70%) 0 0 / 25% 100% repeat-x;
+      animation: walk-load-mist 52s linear infinite; }
+    .walk-load-mid .walk-load-mist::before { animation-duration: 34s; animation-direction: reverse; }
+    @keyframes walk-load-mist { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-25%, 0, 0); } }
     /* (an older machine's look: its own lines, scaled up - hard pixels on the Dreamcast, the PS1 and the Game Boy Advance, blended
        on the rest - and things rising a line or two at a time, as a picture of so few lines can only move) */
     .walk-load[data-style="ps1"] .walk-load-sky, .walk-load[data-style="ps1"] .walk-load-land, .walk-load[data-style="ps1"] .walk-load-piece,
@@ -80,13 +88,27 @@
     .walk-load[data-style="gba"] .walk-load-piece { transition-timing-function: steps(var(--n, 20), end); }
     .walk-load-say { position: absolute; left: 0; right: 0; top: calc(89 * var(--vh)); transform: translateY(-50%); text-align: center;
       color: #e6e0d4; font: 400 clamp(14px, calc(.017 * var(--u) + 4px), 24px)/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; letter-spacing: .06em; }
-    .walk-load-words { margin: 0; opacity: .88; }
-    .walk-load-bar { width: clamp(140px, calc(.2 * var(--u)), 320px); height: 2px; margin: .8em auto 0; background: rgba(230, 224, 212, .16); overflow: hidden; }
+    .walk-load-words { margin: 0; opacity: .88; animation: walk-load-breathe 2.4s ease-in-out infinite; }
+    @keyframes walk-load-breathe { 50% { opacity: .5; } }
+    .walk-load-bar { position: relative; width: clamp(140px, calc(.2 * var(--u)), 320px); height: 2px; margin: .8em auto 0; background: rgba(230, 224, 212, .16); overflow: hidden; }
+    /* (a gleam running along the bar, round and round, whether or not the load has moved on: it is working) */
+    .walk-load-bar::after { content: ""; position: absolute; inset: 0; width: 35%;
+      background: linear-gradient(90deg, transparent, rgba(255, 250, 238, .95) 50%, transparent);
+      animation: walk-load-gleam 1.7s cubic-bezier(.45, 0, .55, 1) infinite; }
+    @keyframes walk-load-gleam { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(290%, 0, 0); } }
+    .walk-load[data-style="ps1"] .walk-load-bar::after, .walk-load[data-style="n64"] .walk-load-bar::after, .walk-load[data-style="dreamcast"] .walk-load-bar::after,
+    .walk-load[data-style="gba"] .walk-load-bar::after { animation-timing-function: steps(14, end); }
+    /* (a change of look: the walk's last picture held, breathing in a slow light, the mist's band moving over its land) */
+    .walk-load.is-held .walk-load-held::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 60%;
+      background: linear-gradient(100deg, transparent, rgba(255, 246, 228, .13) 50%, transparent);
+      animation: walk-load-sweep 3.4s cubic-bezier(.45, 0, .55, 1) infinite; }
+    .walk-load-held { overflow: hidden; }
+    @keyframes walk-load-sweep { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(267%, 0, 0); } }
     .walk-load-bar i { display: block; height: 100%; background: rgba(230, 224, 212, .8); transform-origin: 0 50%; transform: scaleX(0); transition: transform 1.2s cubic-bezier(.3, .7, .3, 1); }
     /* (the browser cannot draw the walk: the picture stays, all of it risen; with less motion asked for, nothing drifts or rises) */
     .walk-load.is-idle .walk-load-land, .walk-load.is-idle .walk-load-piece, .walk-load.is-calm .walk-load-land, .walk-load.is-calm .walk-load-piece { transition: none; }
     .walk-load.is-idle .walk-load-sky { animation: none; }
-    @media (prefers-reduced-motion: reduce) { .walk-load-sky { animation: none; } .walk-load-land, .walk-load-piece { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .walk-load-sky, .walk-load-mist::before, .walk-load-held::after { animation: none; } .walk-load-land, .walk-load-piece { transition: none; } }
     .walk-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; opacity: 0;
       transition: opacity 0.9s ease; outline: none; touch-action: none; }
     .walk.is-live .walk-canvas { opacity: 1; }
