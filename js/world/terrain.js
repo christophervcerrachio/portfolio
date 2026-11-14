@@ -621,8 +621,14 @@ void main() {
   // sand had come up through their paving)
   if (wc > 0.5) townW *= smoothstep(wc * 0.5 - 20.0 + 0.15, wc * 0.5 - 20.0 + 0.6, vW.y + (vnoise(p * 0.8) - 0.5) * 0.35 + (vnoise(p * 3.3) - 0.5) * 0.15);
   vec3 setts = (uGOk[6] > 0.5 ? uGMean[6] : uTown) * (0.92 + 0.12 * vnoise(p * 0.05));
-  c = mix(c, setts, townW);
-  cobV = max(cobV, townW);
+  // (Moscow's streets, squares and yards of beaten earth and sand, as the period's pictures show them - Nikolskaya
+  // street, a monastery's square, Strastnaya square: setts only inside the Kremlin and on Red Square. Petersburg's
+  // paved. Moscow lies south of z -1200, Petersburg north of +1600)
+  float earthT = (1.0 - smoothstep(-1400.0, -1000.0, p.y)) * (1.0 - paved(p));
+  vec3 earthC = (uGOk[5] > 0.5 ? uGMean[5] * 0.88 : uRoad) * (0.86 + 0.2 * vnoise(p * 0.5) + 0.08 * vnoise(p * 2.3));
+  c = mix(c, mix(setts, earthC, earthT), townW);
+  roadV = max(roadV, townW * earthT);
+  cobV = max(cobV, townW * (1.0 - earthT));
   // the ground up close, by what the land is here
   float hgt = 0.0;
   float nearK = uGOn * (1.0 - smoothstep(35.0, 150.0, cd)) * max(1.0 - smoothstep(0.25, 0.7, town), cobV);
@@ -712,7 +718,7 @@ void main() {
     macro = mix(vec3(dot(macro, vec3(0.333))), macro, 0.6);
     // (none of the meadow's mottling on the cities' paving: far off it had laid brown blotches of grass over the setts;
     // the paving keeps its own even stone)
-    macro = mix(macro, vec3(1.0), cobV);
+    macro = mix(macro, vec3(1.0), max(cobV, townW));   // (Moscow's earth streets too: no grass blotches on them)
     // (nor on the beaches, the shallows and the river's bed: the meadow's blades, laid 37 m large, read there as giant
     // sticks)
     float nearW_ = wc > 0.5 ? 1.0 - smoothstep(1.0, 2.5, vW.y - (wc * 0.5 - 20.0)) : 0.0;   // (any ground near a water's level)
