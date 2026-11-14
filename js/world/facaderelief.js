@@ -115,7 +115,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const key = name + suffix;
     if (PICS[key]) return PICS[key];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: key });
+    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: key, side: THREE.DoubleSide });
     new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + suffix + '.jpg').then((t) => {
       t.colorSpace = w.map?.colorSpace ?? THREE.SRGBColorSpace; t.flipY = w.map?.flipY ?? false;
       t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
@@ -125,6 +125,22 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     return (PICS[key] = m);
   };
   const shutMat = (name) => picMat(name, '-shutters');
+  // (a carved casing's boards cut to their own outline: the wall's picture on them, fronts/<front>-cut.png the carving's
+  // shape in it - white where the board is, black where the logs show through - so a crest's curve, an apron's scallops
+  // and the openwork stand free of the wall instead of a board's rectangle with logs painted on its corners)
+  const CUTS = {};
+  const cutMat = (name) => {
+    if (CUTS[name]) return CUTS[name];
+    const w = materials(name); if (!w) return null;
+    const m = new THREE.MeshStandardMaterial({ map: w.map, normalMap: w.normalMap || null, roughness: 0.8, metalness: 0, name: name + '-cut', alphaTest: 0.5, side: THREE.DoubleSide, transparent: false });
+    m.visible = false;
+    new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + '-cut.png').then((t) => {
+      t.flipY = w.map?.flipY ?? false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
+      m.alphaMap = t; m.visible = true; m.needsUpdate = true;
+    }).catch(() => {});
+    receiveSun(m, U, { street: true });
+    return (CUTS[name] = m);
+  };
   // (the fittings' iron and a lantern's frosted panes: one material each, whatever the front)
   const IRON = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide, name: 'fittings-iron' });
   const PANES = new THREE.MeshStandardMaterial({ color: 0xd7dbd6, roughness: 0.3, metalness: 0, side: THREE.DoubleSide, name: 'fittings-glass' });
@@ -415,7 +431,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // the surround: a frame round the window's rectangle, its width a tenth of the window's - or, where the
               // front's own surround was measured off its picture (bays.json 'trim': px at the sides, over the head,
               // under the sill - a timber house's carved casing with its crest and apron), that
-              const tr = fb.trim, mpx = tr ? tr[0] : Math.max(6, Math.min(16, (cx1 - cx0) * 0.12)), hpx = tr ? tr[1] : mpx;
+              const tr = fb.trim && (!fb.trimRows || (ry0 >= fb.trimRows[0] && ry1 <= fb.trimRows[1])) ? fb.trim : null, mpx = tr ? tr[0] : Math.max(6, Math.min(16, (cx1 - cx0) * 0.12)), hpx = tr ? tr[1] : mpx;
               const u0 = S(cx0), u1 = S(cx1), v0 = Z(ry1), v1 = Z(ry0), um = mpx * fb.mx * sc, vm = (Z(ry0 - hpx) - v1);
               const e = Math.round(mpx) + 5, ew = 6;
               // (a window measured to its hole (bays.json 'frames'): its painted frame's place in the picture, and at each
@@ -440,20 +456,26 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= ex0 + 1.5 && ex0 - q[2] <= mpx + 2 + (ex0 - cx0) : q[0] >= ex1 - 1.5 && q[0] - ex1 <= mpx + 2 + (cx1 - ex1)) && q[1] < ry1 && q[3] > ry0) : [];
               const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
+              // (a front whose casings are carved boards (bays.json 'cut'): the head, sides and apron cut to the carving)
+              const AC_ = A, cut = tr && fb.cut;
               if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC, rev);
               else {
+                if (cut) A = get(fname + '#cut', ck_);
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
                 // (a side of the casing under an open shutter is not built: its strip of the picture is the shutter's
                 // own edge, and raised with the casing it had cut every shutter along the casing's line - seen live,
                 // 12 Nov 2026)
                 if (!shL) box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                     // (left)
                 if (!shR) box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                     // (right)
+                A = AC_;
               }
               // the sill: a stone ledge under the window, a little wider than its surround
               const sp = Math.max(5, Math.round(0.08 / fb.my));
               box(u0 - um - 0.04, u1 + um + 0.04, v0 - 0.08, v0, SILL, [cx0 - mpx, ry1 + 1, cx1 + mpx, ry1 + 1 + sp], 'ftblr');
               // (and the casing's apron under the sill, where the front has one)
+              if (cut) A = get(fname + '#cut', ck_);
               if (tr && tr[2]) box(u0 - um, u1 + um, Z(ry1 + sp + tr[2]), v0 - 0.08, PROUD, [cx0 - mpx, ry1 + sp + 1, cx1 + mpx, ry1 + sp + tr[2]], 'fblr');
+              A = AC_;
               // (each open shutter: a board 4 cm thick standing just out from the casing, the picture's whole shutter on
               // it, its foot at the sill)
               // (in the front's picture as it was before its shutters were painted out - fronts/<front>-shutters.jpg, the
@@ -648,11 +670,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           // a balcony on the upper storeys hangs on down over the band below, as in the picture; a sign that names the
           // street (plaque-st) once a wall
           if (FT && fb.models && k >= k0) for (const mk in fb.models) {
-            const box = fb.models[mk], parts = FT[mk];
-            if (!parts || fb.doorParts?.[mk] || box[0] < b[0] - 1 || box[2] > b[1] + 1 || box[1] < by0 - 1 || box[1] >= by1) continue;
-            if (shop) continue;
-            if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }
-            fit(parts, box, S, Z);
+            // (a model may stand at several places - a pediment over every window: a list of boxes)
+            const parts = FT[mk], boxes = Array.isArray(fb.models[mk][0]) ? fb.models[mk] : [fb.models[mk]];
+            if (!parts || fb.doorParts?.[mk] || shop) continue;
+            for (const box of boxes) {
+              if (box[0] < b[0] - 1 || box[2] > b[1] + 1 || box[1] < by0 - 1 || box[1] >= by1) continue;
+              if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }
+              fit(parts, box, S, Z);
+            }
           }
           zb += hm;
         });
@@ -661,7 +686,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
       const name = a.name, mat = a.mat ?? (name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
-        : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
+        : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#cut') ? cutMat(name.slice(0, -4)) : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
