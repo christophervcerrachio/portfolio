@@ -39,6 +39,11 @@ const A = {
   // of it at most this long after the first (s)
   wave: { speed: 1400, most: 3.2 },
   far: 4500,                       // (m: past this a thing grows up from its foot rather than rising through the ground)
+  // (m: nothing comes in farther from the walker than this - a city, a bridge, a landmark waits, unmade and unshown,
+  // until he comes within it, and then rises: what was read under the loading picture had all come in at once, both
+  // cities risen behind the first treeline)
+  reach: 2000,
+  pos: null,
   sorted: 0,
 };
 
@@ -56,6 +61,7 @@ export function openArrivals(pos) {
   A.open = true;
   for (const a of A.queue) {
     const d = Math.hypot(a.x - pos.x, a.z - pos.z);
+    if (d > (a.reach ?? A.reach)) continue;            // (beyond the walker's reach: it rises when he comes to it)
     a.delay = Math.max(a.delay, Math.min(A.wave.most, d / A.wave.speed));
   }
 }
@@ -205,6 +211,7 @@ function bytesOf(list) {
  *   batch, wave   a name shared by the pieces of one thing (a city's skyline) and a speed (m/s): its pieces rise in a
  *           wave from the nearest, each the later the farther it is
  *   cancel  a function: true once they are no longer wanted at all (taken out before they came in)
+ *   reach   m: they come in once the walker is within this of them (else A.reach)
  * Returns a promise, resolved once they stand in their place.
  */
 export function arrive(objs, opts = {}) {
@@ -219,12 +226,15 @@ export function arrive(objs, opts = {}) {
       x = c.x; z = c.z;
     }
     A.queue.push({ list, parent: opts.parent ?? null, gate: !!opts.gate, x, z, rise: opts.rise ?? true, depth: opts.depth, dur: opts.dur,
-      delay: opts.delay ?? 0, batch: opts.batch ?? null, wave: opts.wave ?? 2500, stage: 0, tex: null, bytes: -1, res, cancel: opts.cancel ?? null });
+      delay: opts.delay ?? 0, batch: opts.batch ?? null, wave: opts.wave ?? 2500, stage: 0, tex: null, bytes: -1, res, cancel: opts.cancel ?? null,
+      reach: opts.reach });
   });
 }
 
 /** How many are waiting to come in or still rising (tests: everything in once this is 0). */
-export const arrivalsWaiting = () => A.queue.length + A.rising.length;
+export const arrivalsWaiting = () => A.queue.filter((a) => !beyond(a)).length + A.rising.length;
+/** Whether `a` waits for the walker to come within its reach (arrive's `reach`, else A.reach). */
+const beyond = (a) => !!A.pos && a.stage === 0 && Math.hypot(a.x - A.pos.x, a.z - A.pos.z) > (a.reach ?? A.reach);
 
 /** For tests: how many wait at each step (to be begun, shaders being made, pictures, triangles), how many are rising,
  *  and what the first few held at their pictures are waiting for. */
@@ -250,6 +260,7 @@ export function pumpArrivals(pos, now = performance.now()) {
   // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's, one of 30 a second 2)
   const k = Math.min(2.5, Math.max(0.3, (A.last ? now - A.last : 16.7) / 16.7));
   A.last = now;
+  if (pos) A.pos = { x: pos.x, z: pos.z };
   if (!A.open || A.leaving || !A.queue.length || !A.renderer) return;
   // (nearest first; sorted again every few frames, or when the walker has moved on)
   // (what has come in and has since been taken out of the walk - a tile left behind - forgotten now and then)
@@ -265,6 +276,7 @@ export function pumpArrivals(pos, now = performance.now()) {
       a.stage = 9; a.res(); continue;
     }
     if (a.stage === 0) {
+      if (beyond(a)) continue;           // (not yet within the walker's reach)
       // (a program's making is begun here and goes on in the background, but the beginning is the page's own work -
       // each material's shader written out: no more begun once this frame's time is spent)
       if (began >= Math.max(1, Math.round(B.compiles * k)) || (began > 0 && performance.now() - t0 > B.ms)) continue;

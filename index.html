@@ -108,7 +108,9 @@
     /* (the browser cannot draw the walk: the picture stays, all of it risen; with less motion asked for, nothing drifts or rises) */
     .walk-load.is-idle .walk-load-land, .walk-load.is-idle .walk-load-piece, .walk-load.is-calm .walk-load-land, .walk-load.is-calm .walk-load-piece { transition: none; }
     .walk-load.is-idle .walk-load-sky { animation: none; }
-    @media (prefers-reduced-motion: reduce) { .walk-load-sky, .walk-load-mist::before, .walk-load-held::after { animation: none; } .walk-load-land, .walk-load-piece { transition: none; } }
+    /* (with less motion asked for, the sky stays and nothing rises; the mist's slow drift, the bar's gleam and the words'
+       breathing go on even so: they are what says the walk is loading, small and slow) */
+    @media (prefers-reduced-motion: reduce) { .walk-load-sky { animation: none; } .walk-load-land, .walk-load-piece { transition: none; } }
     .walk-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; opacity: 0;
       transition: opacity 0.9s ease; outline: none; touch-action: none; }
     .walk.is-live .walk-canvas { opacity: 1; }

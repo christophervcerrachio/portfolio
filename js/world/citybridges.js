@@ -21,31 +21,35 @@ export function buildCityBridges(U, { base = '' } = {}) {
     }
     return null;
   };
-  fetch(base + DIR + 'city-bridges.json').then((r) => r.json()).then((J) => {
-    decks = J.bridges.map((b) => { const dx = b.b[0] - b.a[0], dz = b.b[1] - b.a[1], L = Math.hypot(dx, dz); return { ...b, ux: dx / L, uz: dz / L, L }; });
-  }).catch(() => {});
-  loadInTurn(base + DIR + 'city-bridges.glb').then(async (g) => {
-    g.scene.traverse((o) => {
-      if (!o.isMesh) return;
-      o.material.side = THREE.FrontSide;
-      const nm = (o.material.name || '').toLowerCase();
-      if (o.material.map && /granite/.test(nm)) parallax(o.material, { depth: 0.012, scale: 2.774 });
-      else if (o.material.map && /timber|log/.test(nm)) parallax(o.material, { depth: 0.01, scale: 1.5 });
-      receiveSun(o.material, U);
-    });
-    // (the bridges of each 800 m of a city as their own pieces, so those out of the view or out of reach are not drawn:
-    // the file is both cities' bridges merged by material, and all 75,000 triangles of it had been drawn from anywhere
-    // on the map - measured 11 Nov 2026)
-    g.scene.updateMatrixWorld(true);
-    const parts = [];
-    g.scene.traverse((o) => { if (o.isMesh) parts.push(o); });
-    // (cut a few thousand triangles at a time between frames; each piece then comes in and rises out of the water, the
-    // nearest first: arrive.js)
-    for (const o of parts) for (const m of await splitByCells(o, 800, breathe)) {
-      if (m === o) { m.matrixAutoUpdate = false; m.matrix.copy(o.matrixWorld); }
-      arrive(m, { parent: group, batch: 'city-bridges', wave: 2200 });
-    }
-  }).catch(() => {});
+  // (the cities' bridges, and those on the high roads where they run into a river short of a city's streets:
+  // city-bridges-roads, citybridges.py's roads)
+  for (const name of ['city-bridges', 'city-bridges-roads']) {
+    fetch(base + DIR + name + '.json').then((r) => r.json()).then((J) => {
+      decks = decks.concat(J.bridges.map((b) => { const dx = b.b[0] - b.a[0], dz = b.b[1] - b.a[1], L = Math.hypot(dx, dz); return { ...b, ux: dx / L, uz: dz / L, L }; }));
+    }).catch(() => {});
+    loadInTurn(base + DIR + name + '.glb').then(async (g) => {
+      g.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material.side = THREE.FrontSide;
+        const nm = (o.material.name || '').toLowerCase();
+        if (o.material.map && /granite/.test(nm)) parallax(o.material, { depth: 0.012, scale: 2.774 });
+        else if (o.material.map && /timber|log/.test(nm)) parallax(o.material, { depth: 0.01, scale: 1.5 });
+        receiveSun(o.material, U);
+      });
+      // (the bridges of each 800 m of a city as their own pieces, so those out of the view or out of reach are not drawn:
+      // the file is both cities' bridges merged by material, and all 75,000 triangles of it had been drawn from anywhere
+      // on the map - measured 11 Nov 2026)
+      g.scene.updateMatrixWorld(true);
+      const parts = [];
+      g.scene.traverse((o) => { if (o.isMesh) parts.push(o); });
+      // (cut a few thousand triangles at a time between frames; each piece then comes in and rises out of the water, the
+      // nearest first: arrive.js)
+      for (const o of parts) for (const m of await splitByCells(o, 800, breathe)) {
+        if (m === o) { m.matrixAutoUpdate = false; m.matrix.copy(o.matrixWorld); }
+        arrive(m, { parent: group, batch: 'city-bridges', wave: 2200 });
+      }
+    }).catch(() => {});
+  }
   return group;
 }
 
