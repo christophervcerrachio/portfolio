@@ -708,13 +708,26 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // painted one behind it is covered with a piece of the plain wall beside it ('wall').
               if (fb.hood) {
                 const h = fb.hood, D = h.depth, xl = S(h.x0), xr = S(h.x1), zt = Z(h.y0), zb_ = Z(h.y1);
+                // (the hood's gable, beam, slopes and brackets in the mouldings' material and the hood's own paint, by
+                // their own metres: s along the wall, h up, o out - whichever two its face lies across)
+                const colH = paintAt(fname, H, [h.x0, h.y0, h.x1, h.y1]);
+                const HQ = (a, b, c, d, ua, ub, uc, ud, n) => {
+                  if (!colH) { quad(a, b, c, d, ua, ub, uc, ud, n); return; }
+                  const T = MOULD_TILE, al = Math.abs(n[0] * tx + n[2] * tz), up_ = Math.abs(n[1]);
+                  const m = (v) => { const s_ = (v[0] - ax) * tx + (v[2] - az) * tz, o_ = (v[0] - ax) * nx + (v[2] - az) * nz; return up_ > 0.6 ? [s_ / T, o_ / T] : al > 0.6 ? [o_ / T, v[1] / T] : [s_ / T, v[1] / T]; };
+                  // (a timber house's canopy: the steps' planks, not stucco)
+                  const wood = /timber|wood/.test(fname);
+                  const A1 = A, r1 = raw; A = wood ? get(fname + '#stept', ck_) : AMo; raw = true; colK = wood ? null : colH;
+                  quad(a, b, c, d, m(a), m(b), m(c), m(d), n);
+                  A = A1; raw = r1; colK = null;
+                };
                 // (a face wound and lit by its own plane, turned toward `hint`)
                 const face = (a, b, c, d, ua, ub, uc, ud, hint) => {
                   const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
                   let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
                   const l = Math.hypot(n[0], n[1], n[2]) || 1; n = [n[0] / l, n[1] / l, n[2] / l];
                   if (n[0] * hint[0] + n[1] * hint[1] + n[2] * hint[2] < 0) n = [-n[0], -n[1], -n[2]];
-                  quad(a, b, c, d, ua, ub, uc, ud, n);
+                  HQ(a, b, c, d, ua, ub, uc, ud, n);
                 };
                 if (h.wall) { const w = h.wall; quad(V(xl, zb_, 0.03), V(xr, zb_, 0.03), V(xr, zt, 0.03), V(xl, zt, 0.03), [w[0], w[3]], [w[2], w[3]], [w[2], w[1]], [w[0], w[1]], out); }
                 // (where a portico or a porch stands over the door - its columns on the door's own piers - its top is the
@@ -724,8 +737,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                   const xc = S(h.cx), ze = Z(h.ye);
                   const Al = V(xl, ze, D), Ar = V(xr, ze, D), Ap = V(xc, zt, D), Bl = V(xl, zb_, D), Br = V(xr, zb_, D);
                   const Al0 = V(xl, ze, 0), Ar0 = V(xr, ze, 0), Ap0 = V(xc, zt, 0), Bl0 = V(xl, zb_, 0), Br0 = V(xr, zb_, 0);
-                  quad(Al, Ar, Ap, Ap, [h.x0, h.ye], [h.x1, h.ye], [h.cx, h.y0], [h.cx, h.y0], out);                    // (the gable)
-                  quad(Bl, Br, Ar, Al, [h.x0, h.y1], [h.x1, h.y1], [h.x1, h.ye], [h.x0, h.ye], out);                    // (the beam under it)
+                  HQ(Al, Ar, Ap, Ap, [h.x0, h.ye], [h.x1, h.ye], [h.cx, h.y0], [h.cx, h.y0], out);                    // (the gable)
+                  HQ(Bl, Br, Ar, Al, [h.x0, h.y1], [h.x1, h.y1], [h.x1, h.ye], [h.x0, h.ye], out);                    // (the beam under it)
                   face(Al0, Al, Ap, Ap0, [h.x0 + 2, h.ye - 1], [h.x0 + 2, h.ye - 1], [h.cx, h.y0 + 2], [h.cx, h.y0 + 2], up);   // (its two slopes)
                   face(Ap0, Ap, Ar, Ar0, [h.cx, h.y0 + 2], [h.cx, h.y0 + 2], [h.x1 - 2, h.ye - 1], [h.x1 - 2, h.ye - 1], up);
                   face(Bl0, Br0, Br, Bl, [h.x0 + 6, h.y1 - 2], [h.x1 - 6, h.y1 - 2], [h.x1 - 6, h.y1 - 2], [h.x0 + 6, h.y1 - 2], down);   // (its underside)

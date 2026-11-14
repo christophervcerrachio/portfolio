@@ -602,6 +602,11 @@ void main() {
   roadV = max(roadV, cobV * earthT); cobV *= 1.0 - earthT;
   // (the ways' earth colour, near and far alike)
   vec3 roadCol = uGOk[5] > 0.5 ? uGMean[5] * 0.82 : uRoad;   // (the trail tile's own colour, near and far alike)
+  // (Moscow's streets the pale sandy earth of its pictures, mottled - packed sand, dust, a darker damp patch here and
+  // there; the trail tile's own colour had read as dark grey asphalt in the evening light)
+  vec3 earthMos = vec3(0.43, 0.34, 0.23) * (0.84 + 0.3 * vnoise(p * 0.31)) * (0.93 + 0.14 * vnoise(p * 2.3));
+  earthMos *= 1.0 - 0.18 * smoothstep(0.66, 0.8, vnoise(p * 0.09 + 3.3));
+  roadCol = mix(roadCol, earthMos, earthT);
   c = mix(c, roadCol * (0.9 + 0.2 * vnoise(p * 0.8)), roadV * (1.0 - cobV));
   c = mix(c, uTown * 0.95, cobV);
   // (the cities: their houses stand as models now (world/cityblocks.js), so the ground between them is the streets'
@@ -628,7 +633,7 @@ void main() {
   // (Moscow's streets, squares and yards of beaten earth and sand, as the period's pictures show them - Nikolskaya
   // street, a monastery's square, Strastnaya square: setts only inside the Kremlin and on Red Square. Petersburg's
   // paved. Moscow lies south of z -1200, Petersburg north of +1600)
-  vec3 earthC = (uGOk[5] > 0.5 ? uGMean[5] * 0.88 : uRoad) * (0.86 + 0.2 * vnoise(p * 0.5) + 0.08 * vnoise(p * 2.3));
+  vec3 earthC = earthMos;
   c = mix(c, mix(setts, earthC, earthT), townW);
   roadV = max(roadV, townW * earthT);
   cobV = max(cobV, townW * (1.0 - earthT));
