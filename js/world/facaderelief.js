@@ -125,6 +125,46 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     return (PICS[key] = m);
   };
   const shutMat = (name) => picMat(name, '-shutters');
+  // (the fronts' mouldings - surrounds, sills, aprons, cornices, courses, pilasters, hoods - each in a material of its
+  // own, not the wall's picture laid over it: painted lime stucco (fronts/moulding.jpg, ComfyUI's, made seamless; its
+  // normal map), laid by its own metres along each face, in the paint the picture shows at that moulding's place - the
+  // colour of each box read off the front's picture (its middle half by brightness), carried as the box's vertex colour)
+  let MOULD = null;
+  const mouldMat = () => {
+    if (MOULD) return MOULD;
+    MOULD = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, name: 'fronts-moulding' });
+    const L = new THREE.TextureLoader();
+    L.loadAsync(base + DIR + 'fronts/moulding.jpg').then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; MOULD.map = t; MOULD.needsUpdate = true; }).catch(() => {});
+    L.loadAsync(base + DIR + 'fronts/moulding_n.png').then((t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; MOULD.normalMap = t; MOULD.normalScale.set(0.6, 0.6); MOULD.needsUpdate = true; }).catch(() => {});
+    receiveSun(MOULD, U, { street: true });
+    return MOULD;
+  };
+  const MOULD_TILE = 0.5, MOULD_MEAN = 0.75;              // (m the tile covers; its mean, linear: the paint divided by it)
+  const PIX = {};
+  const pixOf = (name) => {
+    if (PIX[name] !== undefined) return PIX[name];
+    const img = materials(name)?.map?.image;
+    if (!img || !img.width) return null;                                  // (not in yet: asked again next time)
+    try {
+      const w = 256, h = Math.max(1, Math.round(img.height * 256 / img.width));
+      const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+      const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0, w, h);
+      return (PIX[name] = { w, h, d: cx.getImageData(0, 0, w, h).data });
+    } catch { return (PIX[name] = false); }
+  };
+  const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const paintAt = (name, H, [x0, y0, x1, y1]) => {
+    const P = pixOf(name); if (!P) return null;
+    const fx = P.w / 1024, fy = P.h / H;
+    const i0 = Math.max(0, Math.floor(Math.min(x0, x1) * fx)), i1 = Math.min(P.w - 1, Math.max(i0, Math.ceil(Math.max(x0, x1) * fx) - 1));
+    const j0 = Math.max(0, Math.floor(Math.min(y0, y1) * fy)), j1 = Math.min(P.h - 1, Math.max(j0, Math.ceil(Math.max(y0, y1) * fy) - 1));
+    const px = [];
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = (j * P.w + i) * 4; px.push([P.d[k], P.d[k + 1], P.d[k + 2]]); }
+    px.sort((a, b) => a[0] + a[1] + a[2] - b[0] - b[1] - b[2]);
+    const a = Math.floor(px.length * 0.35), b = Math.max(a + 1, Math.ceil(px.length * 0.85)); let r = 0, g = 0, bl = 0;
+    for (let q = a; q < b; q++) { r += px[q][0]; g += px[q][1]; bl += px[q][2]; }
+    const n = b - a; return [lin(r / n) / MOULD_MEAN, lin(g / n) / MOULD_MEAN, lin(bl / n) / MOULD_MEAN];
+  };
   // (a carved casing's boards cut to their own outline: the wall's picture on them, fronts/<front>-cut.png the carving's
   // shape in it - white where the board is, black where the logs show through - so a crest's curve, an apron's scallops
   // and the openwork stand free of the wall instead of a board's rectangle with logs painted on its corners)
@@ -261,7 +301,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   function build(T, walls) {
     // per front material: positions, normals, uvs
     const acc = new Map(); const boxes = [];
-    const get = (name, ck, cell = CELL) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, cell, p: [], n: [], u: [], c: [] })); return a; };
+    const get = (name, ck, cell = CELL) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, cell, p: [], n: [], u: [], c: [], k: [] })); return a; };
     // (the windows' frames are not built for an older machine's picture of 240 lines: its windows are the picture's own,
     // no holes - interiors.js)
     const frOK = !(styleNow() && styleNow().lines <= 240);
@@ -292,15 +332,33 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
         const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
         const L_ = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] >= 0 ? [[a, ua], [b, ub], [c, uc], [a, ua], [c, uc], [d, ud]] : [[a, ua], [c, uc], [b, ub], [a, ua], [d, ud], [c, uc]];
-        for (const [v, uv] of L_) { A.p.push(v[0], v[1], v[2]); A.n.push(n[0], n[1], n[2]); if (raw) A.u.push(uv[0], uv[1]); else A.u.push(uv[0] / 1024, uv[1] / H); if (winC) A.c.push(winC[0], winC[1], winC[2]); }
+        for (const [v, uv] of L_) { A.p.push(v[0], v[1], v[2]); A.n.push(n[0], n[1], n[2]); if (raw) A.u.push(uv[0], uv[1]); else A.u.push(uv[0] / 1024, uv[1] / H); if (winC) A.c.push(winC[0], winC[1], winC[2]); if (colK) A.k.push(colK[0], colK[1], colK[2]); }
       };
       let winC = null;              // (the glass's window centre, for its room: interiors.js)
+      let colK = null;              // (a moulding's paint, its vertex colour)
+      const AW0 = A, AMo = get(fname + '#mould', ck_);
       let raw = false;              // (texture coordinates as given - the steps' stone, in its own tiles - not the picture's px)
       const out = [nx, 0, nz], up = [0, 1, 0], down = [0, -1, 0], along = [tx, 0, tz], back = [-tx, 0, -tz];
       // a box proud of the wall: s0..s1 along, h0..h1 up, o out; its face cut from the picture's px rectangle
       // (o0: where its back stands, 0 the wall's face - a board out from the wall stands from o0 to o)
       const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0) => {
         const [x0, y0p, x1, y1p] = pr;                               // (px: left, top, right, bottom)
+        if (A === AW0) {                                              // (a moulding: its own stucco, in its paint)
+          const col = paintAt(fname, H, pr);
+          if (col) {
+            const T = MOULD_TILE, A1 = A, raw1 = raw; A = AMo; raw = true; colK = col;
+            const a = V(s0, h0, o), b = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o);
+            const a0 = V(s0, h0, o0), b0 = V(s1, h0, o0), c0 = V(s1, h1, o0), d0 = V(s0, h1, o0);
+            const S0 = s0 / T, S1 = s1 / T, H0 = h0 / T, H1 = h1 / T, O0 = o0 / T, O1 = o / T;
+            if (faces.includes('f')) quad(a, b, c, d, [S0, H0], [S1, H0], [S1, H1], [S0, H1], out);
+            if (faces.includes('t')) quad(d, c, c0, d0, [S0, O1], [S1, O1], [S1, O0], [S0, O0], up);
+            if (faces.includes('b')) quad(a0, b0, b, a, [S0, O0], [S1, O0], [S1, O1], [S0, O1], down);
+            if (faces.includes('l')) quad(a0, a, d, d0, [O0, H0], [O1, H0], [O1, H1], [O0, H1], back);
+            if (faces.includes('r')) quad(b, b0, c0, c, [O1, H0], [O0, H0], [O0, H1], [O1, H1], along);
+            A = A1; raw = raw1; colK = null;
+            return;
+          }
+        }
         const a = V(s0, h0, o), b = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o);
         const a0 = V(s0, h0, o0), b0 = V(s1, h0, o0), c0 = V(s1, h1, o0), d0 = V(s0, h1, o0);
         if (faces.includes('f')) quad(a, b, c, d, [x0, y1p], [x1, y1p], [x1, y0p], [x0, y0p], out);
@@ -694,13 +752,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
       const name = a.name, mat = a.mat ?? (name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
-        : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#cut') ? cutMat(name.slice(0, -4)) : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
+        : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#cut') ? cutMat(name.slice(0, -4)) : name.endsWith('#mould') ? mouldMat() : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(a.n, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(a.u, 2));
       if (a.c.length) geo.setAttribute('aWinC', new THREE.Float32BufferAttribute(a.c, 3));
+      if (a.k.length) geo.setAttribute('color', new THREE.Float32BufferAttribute(a.k, 3));
       geo.computeBoundingSphere();
       const m = new THREE.Mesh(geo, mat);
       m.name = 'relief.' + name; m.matrixAutoUpdate = false;
