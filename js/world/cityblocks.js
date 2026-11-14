@@ -42,7 +42,7 @@ export function readChannel(url, channel = 0) {
   });
 }
 
-export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null } = {}) {
+export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'spb-embankments-joints.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null } = {}) {
   reliefReach(reliefNear);
   const pieces = [];                     // (each tile's object and its middle: drawn within `far` m, the machine's setting)
   const group = new THREE.Group(); group.name = 'cityblocks';
