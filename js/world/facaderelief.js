@@ -169,44 +169,6 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     let b = 0; while (b < lim && dark(col[col.length - 1 - b])) b++;
     return [x0 + a / fx, x1 - b / fx];
   };
-  // (a window head as tall as the picture has it, and its top's shape: for n+1 columns across the surround, how far up
-  // from the hole's top the surround reaches before three px of the wall's own colour (read beside the surround, the
-  // side whose patch is the more even); a parabola through them - level for a block, rising to its middle for a
-  // segmental head. The measured head had been a fixed sixth of the hole's width: a short bar of stucco with the rest
-  // of the head, and its curve, painted on the wall above it - seen live, 13 Nov 2026)
-  const headShape = (name, H, cx0, cx1, mpx, ry0, up, n = 8) => {
-    const P = pixOf(name); if (!P) return null;
-    const fx = P.w / 1024, fy = P.h / H;
-    const px = (x, y) => { const i = Math.min(P.w - 1, Math.max(0, Math.round(x * fx))), j = Math.min(P.h - 1, Math.max(0, Math.round(y * fy))), k = (j * P.w + i) * 4; return [P.d[k], P.d[k + 1], P.d[k + 2]]; };
-    let wall = null, best = Infinity;
-    for (const [xa, xb] of [[cx0 - mpx - 12, cx0 - mpx - 3], [cx1 + mpx + 3, cx1 + mpx + 12]]) {
-      const ps = []; for (let x = xa; x < xb; x++) for (let y = ry0 - up; y < ry0; y++) ps.push(px(x, y));
-      const med = [0, 1, 2].map((c) => ps.map((q) => q[c]).sort((p_, q_) => p_ - q_)[ps.length >> 1]);
-      const sd = [0, 1, 2].reduce((a_, c) => a_ + Math.sqrt(ps.reduce((s_, q) => s_ + (q[c] - med[c]) ** 2, 0) / ps.length), 0);
-      if (sd < best) { best = sd; wall = med; }
-    }
-    if (!wall) return null;
-    const isWall = (x, y) => { const q = px(x, y); return Math.abs(q[0] - wall[0]) + Math.abs(q[1] - wall[1]) + Math.abs(q[2] - wall[2]) < 45; };
-    const us = [], ts = [];
-    for (let c = 0; c <= n; c++) {
-      const u = -1 + 2 * c / n, x = cx0 - mpx + (cx1 - cx0 + 2 * mpx) * (0.5 + 0.47 * u);
-      let run = 0;
-      for (let y = ry0 - 3; y > ry0 - up; y--) { run = isWall(x, y) ? run + 1 : 0; if (run >= 3) { us.push(u); ts.push(ry0 - (y + 2)); break; } }
-    }
-    if (ts.length < n * 0.7) return null;
-    // (least squares t = a + b u + c u^2)
-    const S_ = (f) => us.reduce((s_, u, i) => s_ + f(u, ts[i]), 0);
-    const m = [[ts.length, S_((u) => u), S_((u) => u * u)], [S_((u) => u), S_((u) => u * u), S_((u) => u ** 3)], [S_((u) => u * u), S_((u) => u ** 3), S_((u) => u ** 4)]];
-    const r = [S_((u, t) => t), S_((u, t) => u * t), S_((u, t) => u * u * t)];
-    const det = (M) => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
-    const D = det(m); if (Math.abs(D) < 1e-9) return null;
-    const col = (k) => m.map((row, i) => row.map((v, j) => (j === k ? r[i] : v)));
-    const A_ = det(col(0)) / D, B_ = det(col(1)) / D, C_ = det(col(2)) / D;
-    const res = Math.sqrt(us.reduce((s_, u, i) => s_ + (ts[i] - (A_ + B_ * u + C_ * u * u)) ** 2, 0) / us.length);
-    if (res > 4) return null;                                      // (no one clean edge: left as it was)
-    const curved = -C_ > 1.5, at = (u) => (curved ? A_ + B_ * u + C_ * u * u : A_ + C_ / 3);
-    return { curved, tops: Array.from({ length: n + 1 }, (_, c) => Math.max(1, at(-1 + 2 * c / n))) };
-  };
   const paintAt = (name, H, [x0, y0, x1, y1]) => {
     const P = pixOf(name); if (!P) return null;
     const fx = P.w / 1024, fy = P.h / H;
@@ -404,8 +366,12 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // head's, it is the reveal's shadow painted beside the frame, not the casing, and the side takes the head's paint;
       // read from the strip it had stood in the opening as a dark board - seen live, 13 Nov 2026)
       const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0, head = null) => {
+      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0, head = null, picFront = false) => {
         const [x0, y0p, x1, y1p] = pr;                               // (px: left, top, right, bottom)
+        if (A === AW0 && picFront && faces.includes('f')) {
+          quad(V(s0, h0, o), V(s1, h0, o), V(s1, h1, o), V(s0, h1, o), [x0, y1p], [x1, y1p], [x1, y0p], [x0, y0p], out);
+          faces = faces.replace('f', '');
+        }
         if (A === AW0) {                                      // (a moulding: its own stucco, in its paint)
           let col = paintAt(fname, H, pr);
           if (col && head && lum(col) < 0.7 * lum(head)) col = head;
@@ -631,25 +597,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, Dw, rev);
               else {
                 if (cut) A = get(fname + '#cut', ck_);
-                // (a segmental head - its top rising toward the middle in the picture - is built to its own curve: as a
-                // flat block of the measured strip in plain stucco it had stood as a bar under the curve painted on the
-                // wall above it - seen live, 13 Nov 2026)
-                const colH_ = paintAt(fname, H, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0]) ?? colR;
-                const hs = cut || tr || !colH_ ? null : headShape(fname, H, cx0, cx1, mpx, ry0, 7 * hpx);
-                const hFlat = hs && !hs.curved ? Math.min(6 * hpx, hs.tops[0]) : 0;
-                if (hs && hs.curved) {
-                  // (built to that curve, in the surround's stucco and paint: its front, its top round the curve, its ends)
-                  const n = hs.tops.length - 1, pts = hs.tops.map((t, c) => [u0 - um + (u1 - u0 + 2 * um) * c / n, Z(ry0 - Math.min(6 * hpx, t))]);
-                  for (let c = 0; c < n; c++) {
-                    const [sa, ta] = pts[c], [sb, tb] = pts[c + 1];
-                    MQ(V(sa, v1, PROUD), V(sb, v1, PROUD), V(sb, tb, PROUD), V(sa, ta, PROUD), out, colH_);
-                    const e1 = [sb - sa, tb - ta], el = Math.hypot(e1[0], e1[1]) || 1, nu = [-e1[1] / el, e1[0] / el];
-                    MQ(V(sa, ta, PROUD), V(sb, tb, PROUD), V(sb, tb, 0), V(sa, ta, 0), [tx * nu[0], nu[1], tz * nu[0]], colH_);
-                  }
-                  MQ(V(u0 - um, v1, 0), V(u0 - um, v1, PROUD), V(u0 - um, pts[0][1], PROUD), V(u0 - um, pts[0][1], 0), back, colH_);
-                  MQ(V(u1 + um, v1, PROUD), V(u1 + um, v1, 0), V(u1 + um, pts[n][1], 0), V(u1 + um, pts[n][1], PROUD), along, colH_);
-                } else if (hFlat > hpx * 1.3) box(u0 - um, u1 + um, v1, Z(ry0 - hFlat), PROUD, [cx0 - mpx, ry0 - hFlat, cx1 + mpx, ry0], 'ftlr');
-                else box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
+                // (the head's face keeps the picture: a segmental or arched surround runs on up the wall above the strip the
+                // head was measured to, and its face in plain stucco had stood as a flat bar under the curve painted above
+                // it - seen live, 13 Nov 2026; its top and ends in the stucco)
+                box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr', 0, null, true);          // (head)
                 // (a side of the casing under an open shutter is not built: its strip of the picture is the shutter's
                 // own edge, and raised with the casing it had cut every shutter along the casing's line - seen live,
                 // 12 Nov 2026)
