@@ -379,6 +379,16 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // (a fitting's model set on this wall: its box [x0, y0, x1, y1] px of the picture, its back o0 m out from the wall's
       // face, S and Z the bay's and band's own mapping; each part in its material - iron, a lantern's panes, brass, the
       // picture before the fittings were painted out ('fix'), the wall's picture as it is ('wall'))
+      // (a quad in the mouldings' stucco and paint `col`, by its own metres: a window's reveal, its soffit and its sill's top
+      // - the opening's own plaster, lit as it lies, not the picture's strip of shadow beside the frame, which had stood in
+      // the opening as a dark board - seen live, 13 Nov 2026)
+      const MQ = (a, b, c, d, n, col) => {
+        const T = MOULD_TILE, al = Math.abs(n[0] * tx + n[2] * tz), up_ = Math.abs(n[1]);
+        const m = (v) => { const s_ = (v[0] - ax) * tx + (v[2] - az) * tz, o_ = (v[0] - ax) * nx + (v[2] - az) * nz; return up_ > 0.6 ? [s_ / T, o_ / T] : al > 0.6 ? [o_ / T, v[1] / T] : [s_ / T, v[1] / T]; };
+        const A1 = A, r1 = raw; A = AMo; raw = true; colK = col;
+        quad(a, b, c, d, m(a), m(b), m(c), m(d), n);
+        A = A1; raw = r1; colK = null;
+      };
       const fit = (parts, [fx0, fy0, fx1, fy1], S, Z, o0 = 0) => {
         const f0 = S(fx0), sx = (S(fx1) - f0) / ((fx1 - fx0) * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / ((fy1 - fy0) * fb.my);
         const mid = V((f0 + S(fx1)) / 2, f1, 0), ckF = Math.floor(mid[0] / CELL) + ',' + Math.floor(mid[2] / CELL);
@@ -544,6 +554,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const SL = [[cx0, ry1], [gx0, gy1], [gx0, gy0], [cx0, ry0]], SR = [[cx1, ry1], [gx1, gy1], [gx1, gy0], [cx1, ry0]];
               const SB = gf && !rvL && !rvR ? borrowed(fb, ci, ry0, ry1) : null;
               const sideL = rvL ? SL : rvR ? SR : SB, sideR = rvR ? SR : rvL ? SL : SB;
+              const colR = paintAt(fname, H, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0]);   // (the reveal's plaster: the surround's paint)
               // (the shutters standing open beside it, where the picture has them: bays.json 'shutters', measured off it -
               // dev\world\cities\measure_shutters.py)
               // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
@@ -599,17 +610,17 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // the front's picture with no hole in it)
               const AW = A;
               if (!(af > 0)) {
-                if (sideL) { A = AD; quad(F0, B0, B3, F3, ...sideL, along); A = AW; }                                          // (left side)
-                else { A = AD; quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along); A = AW; }
-                if (sideR) { A = AD; quad(B1, F1, F2, B2, sideR[1], sideR[0], sideR[3], sideR[2], back); A = AW; }             // (right side)
-                else { A = AD; quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back); A = AW; }
+                if (sideL) { if (colR) MQ(F0, B0, B3, F3, along, colR); else { A = AD; quad(F0, B0, B3, F3, ...sideL, along); A = AW; } }                                          // (left side)
+                else { if (colR) MQ(F0, B0, B3, F3, along, colR); else { A = AD; quad(F0, B0, B3, F3, [cx0 - e, ry1], [cx0 - e - ew, ry1], [cx0 - e - ew, ry0], [cx0 - e, ry0], along); A = AW; } }
+                if (sideR) { if (colR) MQ(B1, F1, F2, B2, back, colR); else { A = AD; quad(B1, F1, F2, B2, sideR[1], sideR[0], sideR[3], sideR[2], back); A = AW; } }             // (right side)
+                else { if (colR) MQ(B1, F1, F2, B2, back, colR); else { A = AD; quad(B1, F1, F2, B2, [cx1 + e + ew, ry1], [cx1 + e, ry1], [cx1 + e, ry0], [cx1 + e + ew, ry0], back); A = AW; } }
                 const HB = gf && !hasH ? borrowed(fb, ci, ry0, ry1, 'head') : null;
-                if (hasH) { A = AD; quad(F3, F2, B2, B3, [cx0, ry0], [cx1, ry0], [gx1, gy0], [gx0, gy0], down); A = AW; }       // (head)
-                else if (HB) { A = AD; quad(F3, F2, B2, B3, ...HB, down); A = AW; }
-                else { A = AD; quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down); A = AW; }
+                if (hasH) { if (colR) MQ(F3, F2, B2, B3, down, colR); else { A = AD; quad(F3, F2, B2, B3, [cx0, ry0], [cx1, ry0], [gx1, gy0], [gx0, gy0], down); A = AW; } }       // (head)
+                else if (HB) { if (colR) MQ(F3, F2, B2, B3, down, colR); else { A = AD; quad(F3, F2, B2, B3, ...HB, down); A = AW; } }
+                else { if (colR) MQ(F3, F2, B2, B3, down, colR); else { A = AD; quad(F3, F2, B2, B3, [cx0, ry0 - e], [cx1, ry0 - e], [cx1, ry0 - e - ew], [cx0, ry0 - e - ew], down); A = AW; } }
               }
-              if (gf && ry1 - gy1 >= 2) { A = AD; quad(B0, B1, R1, R0, [gx0, gy1], [gx1, gy1], [cx1, ry1], [cx0, ry1], up); A = AW; }             // (sill)
-              else { A = AD; quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up); A = AW; }
+              if (gf && ry1 - gy1 >= 2) { if (colR) MQ(B0, B1, R1, R0, up, colR); else { A = AD; quad(B0, B1, R1, R0, [gx0, gy1], [gx1, gy1], [cx1, ry1], [cx0, ry1], up); A = AW; } }             // (sill)
+              else { if (colR) MQ(B0, B1, R1, R0, up, colR); else { A = AD; quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up); A = AW; } }
               // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
               // was measured to its hole
               if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -REC);   // (a balcony's door, its own model)

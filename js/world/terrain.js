@@ -672,7 +672,7 @@ void main() {
       vec3 own = t * clamp(bright, 0.6, 1.4) / max(c, vec3(0.02));
       // (the way's earth: ComfyUI's new trail tile (soft trodden soil, grit and pebbles, no lines), 3 m to a repeat,
       // its colour kept half and half with the land's earth so near and far agree)
-      if (L == 5) own = mix(own, rel, 0.3);   // (mostly the tile's own grey-brown: the land's earth tint had read orange)
+      if (L == 5) own = mix(own, rel, 0.3 + 0.7 * earthT);   // (mostly the tile's own grey-brown: the land's earth tint had read orange; Moscow's streets their sandy earth, the tile's grain on it)
       if (L == 3) own = mix(own, rel, 0.5);
       if (L == 1) own = mix(own, rel, 0.7);   // (a field's soil keeps its strip's colour up close, the tile's grain on it: the strips never melt into one brown as the walker nears them)   // (the beach: the tile's pebbles over the sand's own colour, half and half)
       float wl = w[L] * uGOk[L];
