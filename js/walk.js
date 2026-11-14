@@ -272,14 +272,20 @@ export async function initWalk(container, opts = {}) {
     } catch (e) { console.warn('prewarm', e); }
     warming = false; warmed = true;
   }
+  // (where the walk begins: on the open land by the windmill, the field before it, looking toward it and the evening sun -
+  // the walker's own chosen place, 13 Nov 2026; degrees right of ahead and up, m)
+  const SPAWN = { yaw: 318.67, pitch: 14.73, zoom: 1, x: 1068.76, z: -775.02 };
   tl('scene load: start');
   const loaded = s.load(base, tl).then(() => {
     tl('scene load: built'); s.setFree(true);
     if (!still) prime();
     // (a change of graphics in the menu loads the walk again: the walker put back where he stood, looking the way he looked)
+    // (else the walk begins where it begins: SPAWN)
+    let kept = null;
+    try { kept = sessionStorage.getItem('career-pose'); if (kept) sessionStorage.removeItem('career-pose'); } catch { /* (none) */ }
     try {
-      const kept = sessionStorage.getItem('career-pose');
-      if (kept) { sessionStorage.removeItem('career-pose'); const p = JSON.parse(kept); delete p.t; setTimeout(() => goTo(p), 0); }
+      const p = kept ? JSON.parse(kept) : (still ? null : { ...SPAWN });
+      if (p) { delete p.t; setTimeout(() => goTo(p), 0); }
     } catch { /* (none) */ }
   });
 
