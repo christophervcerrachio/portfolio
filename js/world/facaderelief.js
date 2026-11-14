@@ -140,10 +140,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     return MOULD;
   };
   const MOULD_TILE = 0.5, MOULD_MEAN = 0.75;              // (m the tile covers; its mean, linear: the paint divided by it)
-  const PIX = {};
+  const PIX = {}, FIXIMG = {};
   const pixOf = (name) => {
     if (PIX[name] !== undefined) return PIX[name];
-    const img = materials(name)?.map?.image;
+    const img = name.endsWith('#fix') ? FIXIMG[name] : materials(name)?.map?.image;
     if (!img || !img.width) return null;                                  // (not in yet: asked again next time)
     try {
       const w = 256, h = Math.max(1, Math.round(img.height * 256 / img.width));
@@ -161,7 +161,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const px = [];
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = (j * P.w + i) * 4; px.push([P.d[k], P.d[k + 1], P.d[k + 2]]); }
     px.sort((a, b) => a[0] + a[1] + a[2] - b[0] - b[1] - b[2]);
-    const a = Math.floor(px.length * 0.35), b = Math.max(a + 1, Math.ceil(px.length * 0.85)); let r = 0, g = 0, bl = 0;
+    const a = Math.floor(px.length * 0.55), b = Math.max(a + 1, Math.ceil(px.length * 0.92)); let r = 0, g = 0, bl = 0;
     for (let q = a; q < b; q++) { r += px[q][0]; g += px[q][1]; bl += px[q][2]; }
     const n = b - a; return [lin(r / n) / MOULD_MEAN, lin(g / n) / MOULD_MEAN, lin(bl / n) / MOULD_MEAN];
   };
@@ -233,6 +233,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       (F[nm] ??= []).push({ p: geo.attributes.position.array, n: geo.attributes.normal.array, u: uv ? uv.array : new Float32Array(geo.attributes.position.count * 2), kind });
     });
     FITS[key] = F;
+    // (the front's picture before its fittings were painted out: the paint of each fitting's faces read from it)
+    if (Object.values(F).some((l) => l.some((pt) => pt.kind === 'fix'))) {
+      return fetch(base + DIR + 'fronts/' + key.slice(7) + '-fixtures.jpg').then((r) => (r.ok ? r.blob() : null)).then((b) => (b ? createImageBitmap(b) : null))
+        .then((im) => { if (im) FIXIMG['front-' + key.slice(7) + '#fix'] = im; }).catch(() => {});
+    }
   }).catch(() => {});
   const group = new THREE.Group(); group.name = 'facade-relief';
   const tiles = new Map();         // key -> { c: [x, z], state: 0 none 1 loading 2 built, mesh group }
@@ -378,6 +383,31 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         const f0 = S(fx0), sx = (S(fx1) - f0) / ((fx1 - fx0) * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / ((fy1 - fy0) * fb.my);
         const mid = V((f0 + S(fx1)) / 2, f1, 0), ckF = Math.floor(mid[0] / CELL) + ',' + Math.floor(mid[2] / CELL);
         for (const pt of parts) {
+          if (pt.kind === 'fix' && pixOf(fname + '#fix')) {
+            // (a stone or stucco fitting - a pediment, a slab, a plaque: the moulding's stucco by its own metres, each
+            // triangle in the paint the picture shows where its face is)
+            const { p: fp, n: fn, u: fu } = pt, AFm = get('fit-mould', ckF); AFm.mat ??= mouldMat();
+            const cols = ((pt.cols ??= {})[fname] ??= (() => {
+              const out = [];
+              for (let t = 0; t < fp.length / 9; t++) {
+                const us = [fu[t * 6], fu[t * 6 + 2], fu[t * 6 + 4]], vs = [fu[t * 6 + 1], fu[t * 6 + 3], fu[t * 6 + 5]];
+                const c = paintAt(fname + '#fix', H, [Math.min(...us) * 1024 - 1, Math.min(...vs) * H - 1, Math.max(...us) * 1024 + 1, Math.max(...vs) * H + 1]) ?? [1, 1, 1];
+                out.push(c);
+              }
+              return out;
+            })());
+            for (let i = 0; i < fp.length; i += 3) {
+              const s_ = f0 + fp[i] * sx, h_ = f1 + fp[i + 1] * sy, o_ = o0 + fp[i + 2];
+              AFm.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
+              let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
+              AFm.n.push(tx * q0 + nx * q2, q1, tz * q0 + nz * q2);
+              const ax_ = Math.abs(fn[i]), ay_ = Math.abs(fn[i + 1]), az_ = Math.abs(fn[i + 2]);
+              const U_ = az_ >= ax_ && az_ >= ay_ ? [fp[i] * sx, fp[i + 1] * sy] : ay_ >= ax_ ? [fp[i] * sx, fp[i + 2]] : [fp[i + 2], fp[i + 1] * sy];
+              AFm.u.push(U_[0] / MOULD_TILE, U_[1] / MOULD_TILE);
+              const c = cols[Math.floor(i / 9)]; AFm.k.push(c[0], c[1], c[2]);
+            }
+            continue;
+          }
           const AF = get('fit-' + pt.kind + (pt.kind === 'fix' || pt.kind === 'wall' ? ':' + fname : ''), ckF);
           AF.mat ??= pt.kind.startsWith('paint:') ? paintMat(pt.kind.slice(6)) : pt.kind === 'dglass' ? DGLASS : pt.kind === 'iron' ? IRON : pt.kind === 'glass' ? PANES : pt.kind === 'brass' ? BRASS : pt.kind === 'wall' ? doorMat(fname) : picMat(fname, '-fixtures');
           const { p: fp, n: fn, u: fu } = pt;
