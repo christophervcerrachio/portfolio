@@ -768,7 +768,38 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 // (where a portico or a porch stands over the door - its columns on the door's own piers - its top is the
                 // door's shelter: the hood, as wide as the door's surround and more, would run into its columns)
                 if (room) { /* the painted hood covered, none built */ } else {
-                if (h.kind === 'gable') {
+                if (h.kind === 'gable' && colH && !/timber|wood/.test(fname)) {
+                  // (a stucco front's pediment over the door as a pediment is built: the frieze a little proud over the
+                  // door, the level cornice standing out over it with its drip, the tympanum set back inside the two raking
+                  // cornices that run up to the apex over it - each face lit by its own plane; built as one prism with the
+                  // gable and the beam in one plane it had read as a flat slab - seen live, 13 Nov 2026)
+                  const xc = S(h.cx), ze = Z(h.ye), ov = 0.05, cT = Math.min(0.12, (ze - zb_) * 0.4), rT = Math.min(0.11, (zt - ze) * 0.3);
+                  const sL = xl - ov, sR = xr + ov, sl = (zt - ze) / (xc - sL), rTv = rT * Math.hypot(1, sl), oT = D * 0.4, oF = D * 0.55;
+                  const P_ = (s_, z_, o_) => V(s_, z_, o_), U0 = [h.cx, h.y0];
+                  const prism = (s0, s1, z0, z1, o0, o1, fs) => {
+                    const a = P_(s0, z0, o1), b = P_(s1, z0, o1), c = P_(s1, z1, o1), d = P_(s0, z1, o1), a0 = P_(s0, z0, o0), b0 = P_(s1, z0, o0), c0 = P_(s1, z1, o0), d0 = P_(s0, z1, o0);
+                    if (fs.includes('f')) face(a, b, c, d, U0, U0, U0, U0, out);
+                    if (fs.includes('t')) face(d, c, c0, d0, U0, U0, U0, U0, up);
+                    if (fs.includes('b')) face(a0, b0, b, a, U0, U0, U0, U0, down);
+                    if (fs.includes('l')) face(a0, a, d, d0, U0, U0, U0, U0, back);
+                    if (fs.includes('r')) face(b, b0, c0, c, U0, U0, U0, U0, along);
+                  };
+                  prism(xl, xr, zb_, ze - cT, 0, oF, 'fblr');                                  // (the frieze)
+                  prism(sL, sR, ze - cT, ze, 0, D, 'fblr');                                    // (the level cornice and its drip)
+                  prism(sL, sR, ze - cT - 0.03, ze - cT, 0, oF + 0.04, 'fblr');                 // (the bed moulding under it)
+                  // (the tympanum, set back between the rakes)
+                  const iL = sL + rTv / sl, iR = sR - rTv / sl, iA = zt - rTv;
+                  face(P_(iL, ze, oT), P_(iR, ze, oT), P_(xc, iA, oT), P_(xc, iA, oT), U0, U0, U0, U0, out);
+                  face(P_(iL, ze, 0), P_(iR, ze, 0), P_(iR, ze, oT), P_(iL, ze, oT), U0, U0, U0, U0, up);   // (the cornice's top before it)
+                  face(P_(iL, ze, oT), P_(iR, ze, oT), P_(iR, ze, D), P_(iL, ze, D), U0, U0, U0, U0, up);
+                  // (the two raking cornices: front, top, soffit and the end over the eaves)
+                  for (const [e0, eI, sg] of [[sL, iL, -1], [sR, iR, 1]]) {
+                    face(P_(e0, ze, D), P_(xc, zt, D), P_(xc, iA, D), P_(eI, ze, D), U0, U0, U0, U0, out);
+                    face(P_(e0, ze, 0), P_(xc, zt, 0), P_(xc, zt, D), P_(e0, ze, D), U0, U0, U0, U0, [up[0] + sg * tx, 1, up[2] + sg * tz]);
+                    face(P_(eI, ze, oT), P_(xc, iA, oT), P_(xc, iA, D), P_(eI, ze, D), U0, U0, U0, U0, [-sg * tx, -1, -sg * tz]);
+                    face(P_(e0, ze - cT, 0), P_(e0, ze, 0), P_(e0, ze, D), P_(e0, ze - cT, D), U0, U0, U0, U0, sg < 0 ? back : along);
+                  }
+                } else if (h.kind === 'gable') {
                   const xc = S(h.cx), ze = Z(h.ye);
                   const Al = V(xl, ze, D), Ar = V(xr, ze, D), Ap = V(xc, zt, D), Bl = V(xl, zb_, D), Br = V(xr, zb_, D);
                   const Al0 = V(xl, ze, 0), Ar0 = V(xr, ze, 0), Ap0 = V(xc, zt, 0), Bl0 = V(xl, zb_, 0), Br0 = V(xr, zb_, 0);
