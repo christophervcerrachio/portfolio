@@ -766,7 +766,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         if (d > near + 400) { T.g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.isMesh) o.geometry.dispose(); }); T.g.removeFromParent(); T.g = null; T.arriving = false; unhashWalls(T); T.state = 0; continue; }
         if (want) {
           const nearF = Math.min(SHOW, CUT, FRAMES_NEAR) + FCELL / 2;
-          for (const c of T.g.userData.cells) c.m.visible = Math.max(Math.abs(c.x - pos.x), Math.abs(c.z - pos.z)) < (c.near ? nearF : SHOW);
+          // (a cell drawn while the camera is within SHOW of its nearest edge, not its middle: with a small reach - an older
+          // machine's 60 m - a wall 30 m off whose cell's middle lay 100 m off had its glass and door left undrawn while
+          // its holes were open, the yard behind seen through every window - seen live at GameCube and Dreamcast,
+          // 13 Nov 2026)
+          for (const c of T.g.userData.cells) c.m.visible = Math.max(Math.abs(c.x - pos.x), Math.abs(c.z - pos.z)) - (c.near ? 0 : CELL / 2) < (c.near ? nearF : SHOW);
         }
       }
     }
