@@ -19,8 +19,9 @@
 const STEPS = [
   ['scene load: start', 0.06], ['scene load: models', 0.24], ['scene load: world', 0.34],
   ['scene load: meadow, trees, stones', 0.42], ['scene load: land, woods', 0.48], ['scene load: built', 0.54],
-  ['programs: made', 0.76], ['first view in', 0.84], ['shaders: start', 0.9], ['shaders: land compiled', 0.94],
-  ['shaders: the look round drawn', 0.98], ['veil lifted', 1],
+  ['programs: made', 0.6], ['first view in', 0.66], ['shaders: start', 0.7], ['shaders: land compiled', 0.73],
+  ['shaders: the look round drawn', 0.76], ['cities: loading', 0.8], ['cities: in', 0.88], ['cities: shown', 0.93],
+  ['settling', 0.96], ['veil lifted', 1],
 ];
 const STEP = new Map(STEPS);
 // (each look's pictures: its lines for the whole screen - hardware.js STYLES)

@@ -150,12 +150,40 @@ export async function initWalk(container, opts = {}) {
     // (in for a second and a couple of frames drawn, then the shaders (a window behind others gets a frame a second)
     settledAt = settled ? (settledAt ?? now) : null;
     if (((framesSince > 2 && now - settledAt > 1000) || framesSince > 60 || now - veilStart > 30000) && !warmed && !warming) { prewarm(); return; }
-    if (warmed) {
-      veilUp = false; tl('veil lifted');
-      loading?.done();
-      open();
+    // (the bulk load - the rest of the land, the cities and their pieces arriving - done under the picture too, and the
+    // picture lifted only once the frames come at an even pace (13 Nov 2026). Steady: two windows of 45 frames running, each one's slowest tenth
+    // within twice its middle and 6 ms, the two middles within 12 % of each other. A window behind others gets a frame a
+    // second from the browser and can never be steady: there, 3 s after the load is done. At most 90 s past the shaders,
+    // whatever the frames)
+    if (warmed && !opened) { opened = true; openedAt = now; open(); }
+    if (opened) {
+      const bulkDone = laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
+      if (bulkDone && doneAt === null) { doneAt = now; tl('settling'); }
+      if (!bulkDone) { doneAt = null; paceLast = null; pace.length = 0; paceMid = null; }
+      let steady = false;
+      if (doneAt !== null) {
+        if (watched) {
+          if (paceLast !== null) pace.push(now - paceLast);
+          paceLast = now;
+          if (pace.length >= 45) {
+            const w = pace.splice(0, 45).sort((a, b) => a - b), mid = w[22], slow = w[40];
+            const even = slow <= Math.max(2 * mid, mid + 6);
+            steady = even && paceMid !== null && Math.abs(mid - paceMid) <= 0.12 * paceMid;
+            paceMid = even ? mid : null;
+            if (steady) console.info('[load] frames steady at', mid.toFixed(1), 'ms, slowest tenth', slow.toFixed(1));
+          }
+        } else { paceLast = null; steady = now - doneAt > 3000; }
+      }
+      if (steady || now - openedAt > 90000) {
+        if (!steady) console.info('[load] lifted at the 90 s limit; frames not yet steady');
+        veilUp = false; tl('veil lifted');
+        loading?.done();
+        rise();
+      }
     }
   }
+  let opened = false, openedAt = 0, doneAt = null, paceLast = null, paceMid = null;
+  const pace = [];
   // (every shader the first view will draw made before the picture lifts, in the background and for the picture it is
   // drawn into (world/arrive.js compileView): a wood of a kind not yet seen, or the gold birches, coming into view had
   // stopped the frame for a fifth of a second while the card built its program)
@@ -184,15 +212,18 @@ export async function initWalk(container, opts = {}) {
   function open() {
     const at = s.freeCam.on ? s.freeCam.pos : s.at;
     openArrivals(at);
-    // (the woods rise out of the ground in a wave from the walker: wind-glsl.js riseAt; off again once it has passed
-    // the farthest tree)
+    s.loadRest();
+    later();
+  }
+  // (as the picture lifts: the woods rise out of the ground in a wave from the walker - wind-glsl.js riseAt; off again
+  // once it has passed the farthest tree - so the wave is seen, not spent under the picture)
+  function rise() {
+    const at = s.freeCam.on ? s.freeCam.pos : s.at;
     if (!still && !noRise) {
       s.U.uRise.value.set(at.x, at.z, clock, 450);
       const off = () => { if (s.U.uRise.value.w <= 0) return; if (clock - s.U.uRise.value.z > 7.5) s.U.uRise.value.w = 0; else setTimeout(off, 500); };
       setTimeout(off, 7000);
     }
-    s.loadRest();
-    later();
   }
   // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
   // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
