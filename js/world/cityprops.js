@@ -37,7 +37,9 @@ const KINDS = { fountain: 'prop-fountain', bench: 'prop-bench', lamp: 'prop-lamp
   // statues TRELLIS.2's from FLUX.2 pictures (props\statue_blender.py), the rest Blender's from props.py)
   'park-railing': 'prop-railing', 'park-gate': 'prop-canal-gate',
   'statue-a': 'prop-statue-a', 'statue-b': 'prop-statue-b', bust: 'prop-bust', pedestal: 'prop-pedestal',
-  urn: 'prop-urn', 'urn-ped': 'prop-urn-ped', 'topiary-cone': 'prop-topiary-cone', pavilion: 'prop-pavilion', kiosk: 'prop-kiosk' };
+  urn: 'prop-urn', 'urn-ped': 'prop-urn-ped', 'topiary-cone': 'prop-topiary-cone', pavilion: 'prop-pavilion', kiosk: 'prop-kiosk',
+  // (a lantern on an iron bracket on a garden wall along a Moscow street - dev\world\cities\street_lamps.py, 13 Nov 2026)
+  'lamp-wall': 'prop-lamp-wall' };
 
 /** A city's furniture lists, read and packed off the page's own thread (props-worker.js): a promise of packProps's
  *  result, or null. Where no worker can be made, read and packed here. */
