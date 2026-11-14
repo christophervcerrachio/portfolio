@@ -567,6 +567,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               const gf = fb.frames?.[ci], [gx0, gy0, gx1, gy1] = gf ?? [cx0, ry0, cx1, ry1];
               const rvL = gf && gx0 - cx0 >= 2 ? [cx0, gx0] : null, rvR = gf && cx1 - gx1 >= 2 ? [cx1, gx1] : null;
               const rev = rvL || rvR ? [rvL ?? rvR, rvR ?? rvL] : null;
+              // (how deep the glass stands: a window whose painted frame fills its hole - no reveal measured either side - is
+              // set nearly flush, as its picture shows it; at a quarter of a metre its reveals had filled the narrow arched
+              // windows seen along the wall, the glass a sliver at the back - seen live, 13 Nov 2026)
+              const Dw = gf && !rvL && !rvR ? 0.09 : REC;
               // (each strip's corners in the picture - at the wall's foot, the frame's foot, the frame's head, the wall's
               // head - for a side: the left's, the right's, or, where the window shows neither (one near the picture's
               // middle), the nearest window's of its storey that shows one, upright as the picture has it - the soffit's
@@ -586,7 +590,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
               // (a front whose casings are carved boards (bays.json 'cut'): the head, sides and apron cut to the carving)
               const AC_ = A, cut = tr && fb.cut;
-              if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, REC, rev);
+              if (af > 0) arched(cx0, cx1, ry0, ry1, v0, af, mpx, e, ew, Dw, rev);
               else {
                 if (cut) A = get(fname + '#cut', ck_);
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [cx0 - mpx, ry0 - hpx, cx1 + mpx, ry0], 'ftlr');          // (head)
@@ -621,7 +625,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               }
               // the hole: its four sides back to the glass, plaster from just outside the window in the picture
               const R0 = V(u0, v0, 0), R1 = V(u1, v0, 0), R2 = V(u1, v1, 0), R3 = V(u0, v1, 0);
-              const B0 = V(u0, v0, -REC), B1 = V(u1, v0, -REC), B2 = V(u1, v1, -REC), B3 = V(u0, v1, -REC);
+              const B0 = V(u0, v0, -Dw), B1 = V(u1, v0, -Dw), B2 = V(u1, v1, -Dw), B3 = V(u0, v1, -Dw);
               // (the sides and head from the surround's front, which stands PROUD out: from the wall's face they had left
               // a crack along the opening's edge, where the wall's own cut and these faces meet, and the light behind
               // showed through it in dots at 480 lines)
@@ -648,9 +652,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
               // was measured to its hole
               const fm0 = FM?.['c' + ci];          // (a window with its frame modelled keeps its measure: the model is the frame)
-              if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -REC);   // (a balcony's door, its own model)
+              if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -Dw);   // (a balcony's door, its own model)
               else {
-                const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -REC);
+                const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -Dw);
                 const [tg0, tg1] = fm0 ? [gx0, gx1] : trimDark(fname, H, [gx0, gy0, gx1, gy1]);
                 quad(B0, B1, B2, B3, [tg0, gy1], [tg1, gy1], [tg1, gy0], [tg0, gy0], out); A = A0; winC = null;
               }
@@ -663,7 +667,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 AF.mat = fm.mat;
                 const { p: fp, n: fn, u: fu } = fm;
                 for (let i = 0; i < fp.length; i += 3) {
-                  const s_ = u0 + fp[i] * sx, h_ = v0 + fp[i + 1] * sy, o_ = -REC + fp[i + 2];
+                  const s_ = u0 + fp[i] * sx, h_ = v0 + fp[i + 1] * sy, o_ = -Dw + fp[i + 2];
                   AF.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
                   // (a normal stretched the other way to the shape)
                   let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
