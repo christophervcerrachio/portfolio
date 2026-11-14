@@ -145,7 +145,11 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   const IRON = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide, name: 'fittings-iron' });
   const PANES = new THREE.MeshStandardMaterial({ color: 0xd7dbd6, roughness: 0.3, metalness: 0, side: THREE.DoubleSide, name: 'fittings-glass' });
   const BRASS = new THREE.MeshStandardMaterial({ color: 0x8c6a2e, roughness: 0.35, metalness: 0.85, name: 'fittings-brass' });
-  receiveSun(IRON, U, { street: true }); receiveSun(PANES, U, { street: true }); receiveSun(BRASS, U, { street: true });
+  // (a modelled door's own paint or varnish, by its colour; the dark glass of its transom light)
+  const DGLASS = new THREE.MeshStandardMaterial({ color: 0x0d0f11, roughness: 0.08, metalness: 0.0, name: 'fittings-darkglass' });
+  const PAINTS = {};
+  const paintMat = (hex) => { if (!PAINTS[hex]) { PAINTS[hex] = new THREE.MeshStandardMaterial({ color: new THREE.Color('#' + hex), roughness: 0.55, metalness: 0, name: 'fittings-paint-' + hex }); receiveSun(PAINTS[hex], U, { street: true }); } return PAINTS[hex]; };
+  receiveSun(IRON, U, { street: true }); receiveSun(PANES, U, { street: true }); receiveSun(BRASS, U, { street: true }); receiveSun(DGLASS, U, { street: true });
   // (the window boxes' models: each mesh's geometry in the model's own frame, its material; null if not there)
   const BOXES = Promise.all([0, 1].map((v) => gltfLoader().loadAsync(base + 'assets/world/props/prop-window-box-' + v + '.glb').then((g) => {
     g.scene.updateMatrixWorld(true); const parts = [];
@@ -184,7 +188,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       if (!o.isMesh) return;
       const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
       const uv = geo.attributes.uv, nm = o.parent?.isMesh ? o.parent.name : o.name.replace(/_\d+$/, '');
-      const mn = o.material.name, kind = /iron/.test(mn) ? 'iron' : /glass/.test(mn) ? 'glass' : /brass/.test(mn) ? 'brass' : /wall/.test(mn) ? 'wall' : 'fix';
+      const mn = o.material.name, pm = /paint-([0-9a-f]{6})/.exec(mn);
+      const kind = pm ? 'paint:' + pm[1] : /darkglass/.test(mn) ? 'dglass' : /iron/.test(mn) ? 'iron' : /glass/.test(mn) ? 'glass' : /brass/.test(mn) ? 'brass' : /wall/.test(mn) ? 'wall' : 'fix';
       (F[nm] ??= []).push({ p: geo.attributes.position.array, n: geo.attributes.normal.array, u: uv ? uv.array : new Float32Array(geo.attributes.position.count * 2), kind });
     });
     FITS[key] = F;
@@ -316,7 +321,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         const mid = V((f0 + S(fx1)) / 2, f1, 0), ckF = Math.floor(mid[0] / CELL) + ',' + Math.floor(mid[2] / CELL);
         for (const pt of parts) {
           const AF = get('fit-' + pt.kind + (pt.kind === 'fix' || pt.kind === 'wall' ? ':' + fname : ''), ckF);
-          AF.mat ??= pt.kind === 'iron' ? IRON : pt.kind === 'glass' ? PANES : pt.kind === 'brass' ? BRASS : pt.kind === 'wall' ? doorMat(fname) : picMat(fname, '-fixtures');
+          AF.mat ??= pt.kind.startsWith('paint:') ? paintMat(pt.kind.slice(6)) : pt.kind === 'dglass' ? DGLASS : pt.kind === 'iron' ? IRON : pt.kind === 'glass' ? PANES : pt.kind === 'brass' ? BRASS : pt.kind === 'wall' ? doorMat(fname) : picMat(fname, '-fixtures');
           const { p: fp, n: fn, u: fu } = pt;
           for (let i = 0; i < fp.length; i += 3) {
             const s_ = f0 + fp[i] * sx, h_ = f1 + fp[i + 1] * sy, o_ = o0 + fp[i + 2];
@@ -348,7 +353,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         // paints it; a front whose picture paints none has none modelled - the plain band across its wall had stood over
         // nothing; the others as before)
         const ends = (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : '');
-        if (fb.course) {
+        // (none across a shop's bays: its front and its sign stand up past the course, which had cut across the sign's
+        // top - seen live, 13 Nov 2026)
+        if (sh0 >= 0 && bi >= sh0 && bi < sh1) { /* the shop's front */ }
+        else if (fb.course) {
           if (bands.length > 1 && k0 === 0) {
             const [g0, g1, gh] = bands[0], Zg = (y) => y0 + (g1 - y) / (g1 - g0) * gh;
             box(sa, s, Zg(fb.course[1]), Zg(fb.course[0]), COURSE, [b[0], fb.course[0], b[1], fb.course[1]], 'ftb' + ends);
@@ -672,7 +680,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           if (FT && fb.models && k >= k0) for (const mk in fb.models) {
             // (a model may stand at several places - a pediment over every window: a list of boxes)
             const parts = FT[mk], boxes = Array.isArray(fb.models[mk][0]) ? fb.models[mk] : [fb.models[mk]];
-            if (!parts || fb.doorParts?.[mk] || shop) continue;
+            if (!parts || fb.doorParts?.[mk] || fb.doorSpec?.[mk] || shop) continue;
             for (const box of boxes) {
               if (box[0] < b[0] - 1 || box[2] > b[1] + 1 || box[1] < by0 - 1 || box[1] >= by1) continue;
               if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }

@@ -1,5 +1,5 @@
 {
- "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill. shutters: [[x0, y0, x1, y1, side], ...] the shutters standing open beside its windows, side -1 left, 1 right (measure_shutters.py). A front measured to its openings (13 Nov 2026, msk2-white): its 'cols' and 'rows' (a row a window) are each window's hole in the wall's plane, to the outer edge of its reveal, and 'frames' {column: [x0, y0, x1, y1]} its painted frame inside the hole, the picture's reveal or soffit between the two; 'frameColours' {column: [r, g, b]} a frame that is not white (a glazed door's wood); 'doorCols' the columns whose opening is a door (a balcony's), modelled with the doors. The frames are models of their own (fixtures\\frames_spec.py, frames_blender.py) and the window maps are made from the holes and frames (make_window_maps.py). 'eaves': the row a one-storey wall's top band ends at (under the cornice, over the windows' heads), joined there to the ground band's top. 'course': the string course's rows [y0, y1] in the ground band's top, modelled as a band proud of the wall. 'pilasters' (spb-ochre): {at: their middles' x px, half: half their breadth px, rows: [y0, y1] from the capital to the base, src: the one pilaster in the picture every one is cut from, depth m} - modelled standing out of the wall at each bay's joint (13 Nov 2026, the fronts straightened and made seamless). 'fittings' (msk2-white): what hangs on the wall or stands out of it, each [x0, y0, x1, y1] as the picture shows it (the balcony's slab, rail and brackets, 'balcony-edge' the rows of its slab's front edge, the French railings, lamps and plaques); 'models': the boxes the fittings' models are built to (fixtures\\\\fittings_blender.py, fronts/<front>-fittings.glb), each set where its bay and storey band stand (facaderelief.js); painted out of the picture, which keeps them in fronts/<front>-fixtures.jpg for the models' faces. 'doorParts': a door built as a model - each part [x0, y0, x1, y1, z from, z to (m out from the door's back), kind] ('wall': its face the front's picture there; 'brass'), and 'fan' [x0, y0, x1, y1, arch] a fanlight under an arch, flat at the back; set at the back of the door's opening (facaderelief.js). 13 Nov 2026: every front measured to its holes - 'cols' and 'rows' a window each, the hole in the wall's plane (out to where the picture's reveal ends: the surround is square to the wall, so the hole is centred in it), 'frames' the painted frame inside it (as the windows had been measured). 'frameModels': the front's windows' frames are models of their own (fronts/<front>.glb). A hole is widened past its painted frame only where the picture's reveal there is in shade against the surround's face beyond it (a frame flush in its surround - Petersburg's ochre front - has none). 'models' a box or a list of boxes: a model standing at several places (a pediment over every window, the bars of every basement window), built to the first; 'pedSpec' a window pediment's apex, eaves, level cornice, rake and depth, an entablature's frieze, cornice and consoles; 'grilles' {name: v bars upright, h rails at shares of the height, lattice diamonds, z m out}; 'depths' {name: m} a plaque's or letter box's own; 'trimRows' [y0, y1] the rows the 'trim' is for; 'cut' the casing's boards cut to the carving's shape (fronts/<front>-cut.png).",
+ "about": "Each house front's picture read as bays and storey bands (px in its 1024-px picture, y down): bays [x0, x1] pier middle to pier middle, one window column each, 'door' where the ground floor has the front's door; bands: the rows a wall is built from (ground at the street, mid repeated for a taller house, top with the cornice); windows: the glass of every window [x0, y0, x1, y1], for the rooms seen through them (interiors.js). Read by eye from the pictures, 9 Nov 2026. 'hood': what the picture paints over the door, to be built out from the wall (js/world/facaderelief.js): kind 'gable' (x0, x1 its eaves' ends, cx, y0 its top, ye the eaves, y1 its underside) or 'flat' (the box x0, y0, x1, y1), depth in m, brackets [x0, x1, to y], cols [x0, x1, y0, y1, m proud], wall [x0, y0, x1, y1] plain wall to cover the painted one; A row's fourth number and the door's 'doorArch': the opening's head is an arch - its rise as a share of half the opening's width (1: a half circle), from its crown at the opening's top; the door [x0, y0, x1, y1] is the opening in the wall, its frame and transom with it (the six Moscow doors measured again on 12 Nov 2026: they had stood 8 to 20 px left of their doors). 'trim': a window casing's px at the sides, over the head and under the sill. shutters: [[x0, y0, x1, y1, side], ...] the shutters standing open beside its windows, side -1 left, 1 right (measure_shutters.py). A front measured to its openings (13 Nov 2026, msk2-white): its 'cols' and 'rows' (a row a window) are each window's hole in the wall's plane, to the outer edge of its reveal, and 'frames' {column: [x0, y0, x1, y1]} its painted frame inside the hole, the picture's reveal or soffit between the two; 'frameColours' {column: [r, g, b]} a frame that is not white (a glazed door's wood); 'doorCols' the columns whose opening is a door (a balcony's), modelled with the doors. The frames are models of their own (fixtures\\frames_spec.py, frames_blender.py) and the window maps are made from the holes and frames (make_window_maps.py). 'eaves': the row a one-storey wall's top band ends at (under the cornice, over the windows' heads), joined there to the ground band's top. 'course': the string course's rows [y0, y1] in the ground band's top, modelled as a band proud of the wall. 'pilasters' (spb-ochre): {at: their middles' x px, half: half their breadth px, rows: [y0, y1] from the capital to the base, src: the one pilaster in the picture every one is cut from, depth m} - modelled standing out of the wall at each bay's joint (13 Nov 2026, the fronts straightened and made seamless). 'fittings' (msk2-white): what hangs on the wall or stands out of it, each [x0, y0, x1, y1] as the picture shows it (the balcony's slab, rail and brackets, 'balcony-edge' the rows of its slab's front edge, the French railings, lamps and plaques); 'models': the boxes the fittings' models are built to (fixtures\\\\fittings_blender.py, fronts/<front>-fittings.glb), each set where its bay and storey band stand (facaderelief.js); painted out of the picture, which keeps them in fronts/<front>-fixtures.jpg for the models' faces. 'doorParts': a door built as a model - each part [x0, y0, x1, y1, z from, z to (m out from the door's back), kind] ('wall': its face the front's picture there; 'brass'), and 'fan' [x0, y0, x1, y1, arch] a fanlight under an arch, flat at the back; set at the back of the door's opening (facaderelief.js). 13 Nov 2026: every front measured to its holes - 'cols' and 'rows' a window each, the hole in the wall's plane (out to where the picture's reveal ends: the surround is square to the wall, so the hole is centred in it), 'frames' the painted frame inside it (as the windows had been measured). 'frameModels': the front's windows' frames are models of their own (fronts/<front>.glb). A hole is widened past its painted frame only where the picture's reveal there is in shade against the surround's face beyond it (a frame flush in its surround - Petersburg's ochre front - has none). 'models' a box or a list of boxes: a model standing at several places (a pediment over every window, the bars of every basement window), built to the first; 'pedSpec' a window pediment's apex, eaves, level cornice, rake and depth, an entablature's frieze, cornice and consoles; 'grilles' {name: v bars upright, h rails at shares of the height, lattice diamonds, z m out}; 'depths' {name: m} a plaque's or letter box's own; 'trimRows' [y0, y1] the rows the 'trim' is for; 'cut' the casing's boards cut to the carving's shape (fronts/<front>-cut.png). 'doorSpec' {door: {transom, split, colour, varnish}}: a front door modelled whole in its own paint (fittings_blender.py door_model) - the frame, the transom bar and its light, one leaf or two with stiles, rails and raised panels, a brass lever.",
  "facade-spb-cream": {
   "H": 1238,
   "bays": [
@@ -223,73 +223,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      433.0,
-      821.0,
-      569.0,
-      892.5,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      433.0,
-      897.5,
-      569.0,
-      1180.0,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      433.0,
-      892.5,
-      569.0,
-      897.5,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      433.0,
-      897.5,
-      445.24,
-      1180.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      556.76,
-      897.5,
-      569.0,
-      1180.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      445.24,
-      897.5,
-      556.76,
-      914.45,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      445.24,
-      1157.4,
-      556.76,
-      1180.0,
-      0.004,
-      0.024,
-      "wall"
-     ]
-    ]
+    "transom": 895.0,
+    "split": null,
+    "colour": "8a8b8d",
+    "varnish": false
    }
   }
  },
@@ -519,118 +458,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      441.0,
-      745.0,
-      563.0,
-      802.5,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      441.0,
-      807.5,
-      563.0,
-      975.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      441.0,
-      802.5,
-      563.0,
-      807.5,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      441.0,
-      807.5,
-      447.57,
-      975.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      507.43,
-      807.5,
-      514.0,
-      975.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      447.57,
-      807.5,
-      507.43,
-      817.58,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      447.57,
-      962.06,
-      507.43,
-      975.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      514.0,
-      807.5,
-      518.41,
-      975.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      558.59,
-      807.5,
-      563.0,
-      975.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      518.41,
-      807.5,
-      558.59,
-      817.58,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      518.41,
-      962.06,
-      558.59,
-      975.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      512.8,
-      807.5,
-      515.2,
-      975.5,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 805.0,
+    "split": 514.0,
+    "colour": "65635f",
+    "varnish": false
    }
   }
  },
@@ -862,100 +695,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      461.0,
-      788.0,
-      570.0,
-      987.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      461.0,
-      788.0,
-      466.58,
-      987.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      517.42,
-      788.0,
-      523.0,
-      987.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      466.58,
-      788.0,
-      517.42,
-      799.97,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      466.58,
-      971.54,
-      517.42,
-      987.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      523.0,
-      788.0,
-      527.23,
-      987.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      565.77,
-      788.0,
-      570.0,
-      987.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      527.23,
-      788.0,
-      565.77,
-      799.97,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      527.23,
-      971.54,
-      565.77,
-      987.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      521.8,
-      788.0,
-      524.2,
-      987.5,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": null,
+    "split": 523.0,
+    "colour": "565757",
+    "varnish": false
    }
   }
  },
@@ -1273,118 +1018,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      444.0,
-      775.5,
-      571.0,
-      846.0,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      444.0,
-      851.0,
-      571.0,
-      1007.0,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      444.0,
-      846.0,
-      571.0,
-      851.0,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      444.0,
-      851.0,
-      450.3,
-      1007.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      507.7,
-      851.0,
-      514.0,
-      1007.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      450.3,
-      851.0,
-      507.7,
-      860.36,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      450.3,
-      994.52,
-      507.7,
-      1007.0,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      514.0,
-      851.0,
-      519.13,
-      1007.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      565.87,
-      851.0,
-      571.0,
-      1007.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      519.13,
-      851.0,
-      565.87,
-      860.36,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      519.13,
-      994.52,
-      565.87,
-      1007.0,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      512.8,
-      851.0,
-      515.2,
-      1007.0,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 848.5,
+    "split": 514.0,
+    "colour": "565656",
+    "varnish": false
    }
   }
  },
@@ -1736,55 +1375,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      452.0,
-      756.5,
-      568.0,
-      984.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      452.0,
-      756.5,
-      462.44,
-      984.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      557.56,
-      756.5,
-      568.0,
-      984.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      462.44,
-      756.5,
-      557.56,
-      770.18,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      462.44,
-      966.26,
-      557.56,
-      984.5,
-      0.004,
-      0.024,
-      "wall"
-     ]
-    ]
+    "transom": null,
+    "split": null,
+    "colour": "838482",
+    "varnish": false
    }
   }
  },
@@ -2569,118 +2165,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      470.0,
-      323.5,
-      551.0,
-      360.0,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      470.0,
-      365.0,
-      551.0,
-      492.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      470.0,
-      360.0,
-      551.0,
-      365.0,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      470.0,
-      365.0,
-      473.56,
-      492.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      505.94,
-      365.0,
-      509.5,
-      492.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      473.56,
-      365.0,
-      505.94,
-      372.65,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      473.56,
-      482.3,
-      505.94,
-      492.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      509.5,
-      365.0,
-      513.24,
-      492.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      547.26,
-      365.0,
-      551.0,
-      492.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      513.24,
-      365.0,
-      547.26,
-      372.65,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      513.24,
-      482.3,
-      547.26,
-      492.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      508.3,
-      365.0,
-      510.7,
-      492.5,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 362.5,
+    "split": 509.5,
+    "colour": "592e1b",
+    "varnish": true
    }
   }
  },
@@ -3107,118 +2597,12 @@
     "z": 0.05
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      481.0,
-      255.0,
-      555.0,
-      280.0,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      481.0,
-      285.0,
-      555.0,
-      441.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      481.0,
-      280.0,
-      555.0,
-      285.0,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      481.0,
-      285.0,
-      484.11,
-      441.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      512.39,
-      285.0,
-      515.5,
-      441.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      484.11,
-      285.0,
-      512.39,
-      294.39,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      484.11,
-      428.98,
-      512.39,
-      441.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      515.5,
-      285.0,
-      519.05,
-      441.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      551.45,
-      285.0,
-      555.0,
-      441.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      519.05,
-      285.0,
-      551.45,
-      294.39,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      519.05,
-      428.98,
-      551.45,
-      441.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      514.3,
-      285.0,
-      516.7,
-      441.5,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 282.5,
+    "split": 515.5,
+    "colour": "66391c",
+    "varnish": true
    }
   }
  },
@@ -3564,118 +2948,12 @@
     "z": 0.04
    }
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      473.0,
-      358.0,
-      557.0,
-      390.5,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      473.0,
-      395.5,
-      557.0,
-      562.0,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      473.0,
-      390.5,
-      557.0,
-      395.5,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      473.0,
-      395.5,
-      476.11,
-      562.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      504.39,
-      395.5,
-      507.5,
-      562.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      476.11,
-      395.5,
-      504.39,
-      405.49,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      476.11,
-      548.68,
-      504.39,
-      562.0,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      507.5,
-      395.5,
-      511.95,
-      562.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      552.54,
-      395.5,
-      557.0,
-      562.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      511.95,
-      395.5,
-      552.54,
-      405.49,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      511.95,
-      548.68,
-      552.54,
-      562.0,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      506.3,
-      395.5,
-      508.7,
-      562.0,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 393.0,
+    "split": 507.5,
+    "colour": "60310a",
+    "varnish": true
    }
   }
  },
@@ -4831,118 +4109,12 @@
     498.5
    ]
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      453.0,
-      310.0,
-      559.0,
-      331.5,
-      0.0,
-      0.002,
-      "wall"
-     ],
-     [
-      453.0,
-      336.5,
-      559.0,
-      498.5,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      453.0,
-      331.5,
-      559.0,
-      336.5,
-      0.0,
-      0.05,
-      "wall"
-     ],
-     [
-      453.0,
-      336.5,
-      457.81,
-      498.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      501.69,
-      336.5,
-      506.5,
-      498.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      457.81,
-      336.5,
-      501.69,
-      346.22,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      457.81,
-      485.54,
-      501.69,
-      498.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      506.5,
-      336.5,
-      511.23,
-      498.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      554.27,
-      336.5,
-      559.0,
-      498.5,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      511.23,
-      336.5,
-      554.27,
-      346.22,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      511.23,
-      485.54,
-      554.27,
-      498.5,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      505.3,
-      336.5,
-      507.7,
-      498.5,
-      0.026,
-      0.036,
-      "wall"
-     ]
-    ]
+    "transom": 334.0,
+    "split": 506.5,
+    "colour": "51332d",
+    "varnish": true
    }
   }
  },
@@ -5244,55 +4416,12 @@
     438.0
    ]
   },
-  "doorParts": {
+  "doorSpec": {
    "door": {
-    "parts": [
-     [
-      475.0,
-      292.5,
-      551.0,
-      438.0,
-      0.0,
-      0.004,
-      "wall"
-     ],
-     [
-      475.0,
-      292.5,
-      481.84,
-      438.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      544.16,
-      292.5,
-      551.0,
-      438.0,
-      0.004,
-      0.026,
-      "wall"
-     ],
-     [
-      481.84,
-      292.5,
-      544.16,
-      301.23,
-      0.004,
-      0.024,
-      "wall"
-     ],
-     [
-      481.84,
-      426.36,
-      544.16,
-      438.0,
-      0.004,
-      0.024,
-      "wall"
-     ]
-    ]
+    "transom": null,
+    "split": null,
+    "colour": "654333",
+    "varnish": true
    }
   }
  }
