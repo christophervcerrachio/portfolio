@@ -362,10 +362,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       const out = [nx, 0, nz], up = [0, 1, 0], down = [0, -1, 0], along = [tx, 0, tz], back = [-tx, 0, -tz];
       // a box proud of the wall: s0..s1 along, h0..h1 up, o out; its face cut from the picture's px rectangle
       // (o0: where its back stands, 0 the wall's face - a board out from the wall stands from o0 to o)
-      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0) => {
+      // (side: a casing's side and its head's paint - where the picture's strip for the side is much darker than the
+      // head's, it is the reveal's shadow painted beside the frame, not the casing, and the side takes the head's paint;
+      // read from the strip it had stood in the opening as a dark board - seen live, 13 Nov 2026)
+      const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      const box = (s0, s1, h0, h1, o, pr, faces = 'ftblr', o0 = 0, head = null) => {
         const [x0, y0p, x1, y1p] = pr;                               // (px: left, top, right, bottom)
         if (A === AW0) {                                              // (a moulding: its own stucco, in its paint)
-          const col = paintAt(fname, H, pr);
+          let col = paintAt(fname, H, pr);
+          if (col && head && lum(col) < 0.7 * lum(head)) col = head;
           if (col) {
             const T = MOULD_TILE, A1 = A, raw1 = raw; A = AMo; raw = true; colK = col;
             const a = V(s0, h0, o), b = V(s1, h0, o), c = V(s1, h1, o), d = V(s0, h1, o);
@@ -588,8 +593,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 // (a side of the casing under an open shutter is not built: its strip of the picture is the shutter's
                 // own edge, and raised with the casing it had cut every shutter along the casing's line - seen live,
                 // 12 Nov 2026)
-                if (!shL) box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl');                     // (left)
-                if (!shR) box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr');                     // (right)
+                if (!shL) box(u0 - um, u0, v0, v1, PROUD, [cx0 - mpx, ry0, cx0, ry1], 'fl', 0, colR);            // (left)
+                if (!shR) box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr', 0, colR);            // (right)
                 A = AC_;
               }
               // the sill: a stone ledge under the window, a little wider than its surround
@@ -687,8 +692,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               if (da > 0) arched(dx0, dx1, dy0, dy1, v0, da, mp, e, ew, DR);
               else {
                 box(u0 - um, u1 + um, v1, v1 + vm, PROUD, [dx0 - mp, dy0 - mp, dx1 + mp, dy0], 'ftlr');
-                box(u0 - um, u0, v0, v1, PROUD, [dx0 - mp, dy0, dx0, dy1], 'flt');
-                box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt');
+                const colDH = paintAt(fname, H, [dx0 - mp, dy0 - mp, dx1 + mp, dy0]);
+                box(u0 - um, u0, v0, v1, PROUD, [dx0 - mp, dy0, dx0, dy1], 'flt', 0, colDH);
+                box(u1, u1 + um, v0, v1, PROUD, [dx1, dy0, dx1 + mp, dy1], 'frt', 0, colDH);
                 // (the sides and head from the surround's front, as a window's: no crack along the door's edge)
                 const F0 = V(u0, v0, PROUD), F1 = V(u1, v0, PROUD), F2 = V(u1, v1, PROUD), F3 = V(u0, v1, PROUD);
                 const AW_ = A; A = AD;
