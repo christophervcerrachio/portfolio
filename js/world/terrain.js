@@ -596,6 +596,10 @@ void main() {
   float cobV = wy.g * nearW;
   if (wc > 0.5) cobV *= smoothstep(wc * 0.5 - 20.0 + 0.62, wc * 0.5 - 20.0 + 0.72, vW.y);   // (the streets' setts too)
   roadV *= 1.0 - smoothstep(0.0, 0.25, under);   // (no way drawn on the bed under the water: the bridges carry them over)
+  // (Moscow's streets beaten earth and sand, not setts - the period's pictures of its streets: setts only inside the
+  // Kremlin and on Red Square. Moscow lies south of z -1200, Petersburg north of +1600)
+  float earthT = (1.0 - smoothstep(-1400.0, -1000.0, p.y)) * (1.0 - paved(p));
+  roadV = max(roadV, cobV * earthT); cobV *= 1.0 - earthT;
   // (the ways' earth colour, near and far alike)
   vec3 roadCol = uGOk[5] > 0.5 ? uGMean[5] * 0.82 : uRoad;   // (the trail tile's own colour, near and far alike)
   c = mix(c, roadCol * (0.9 + 0.2 * vnoise(p * 0.8)), roadV * (1.0 - cobV));
@@ -624,7 +628,6 @@ void main() {
   // (Moscow's streets, squares and yards of beaten earth and sand, as the period's pictures show them - Nikolskaya
   // street, a monastery's square, Strastnaya square: setts only inside the Kremlin and on Red Square. Petersburg's
   // paved. Moscow lies south of z -1200, Petersburg north of +1600)
-  float earthT = (1.0 - smoothstep(-1400.0, -1000.0, p.y)) * (1.0 - paved(p));
   vec3 earthC = (uGOk[5] > 0.5 ? uGMean[5] * 0.88 : uRoad) * (0.86 + 0.2 * vnoise(p * 0.5) + 0.08 * vnoise(p * 2.3));
   c = mix(c, mix(setts, earthC, earthT), townW);
   roadV = max(roadV, townW * earthT);
