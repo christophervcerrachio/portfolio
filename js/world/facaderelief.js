@@ -153,6 +153,22 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     } catch { return (PIX[name] = false); }
   };
   const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  // (a painted window's own edges inside the rectangle measured for it: the dark of the reveal's shadow painted beside
+  // the frame trimmed off each side - columns of the middle rows much darker than the frame's paint, at most a quarter of
+  // the width a side - so the glass's picture starts at the frame, not at a dark board beside it)
+  const trimDark = (name, H, [x0, y0, x1, y1]) => {
+    const P = pixOf(name); if (!P) return [x0, x1];
+    const fx = P.w / 1024, fy = P.h / H, i0 = Math.round(x0 * fx), i1 = Math.round(x1 * fx) - 1;
+    const j0 = Math.round((y0 + (y1 - y0) * 0.3) * fy), j1 = Math.round((y0 + (y1 - y0) * 0.7) * fy);
+    if (i1 - i0 < 6 || j1 <= j0) return [x0, x1];
+    const col = [];
+    for (let i = i0; i <= i1; i++) { let l = 0; for (let j = j0; j <= j1; j++) { const k = (j * P.w + i) * 4; l += P.d[k] + P.d[k + 1] + P.d[k + 2]; } col.push(l / (j1 - j0 + 1)); }
+    const top = [...col].sort((a, b) => b - a)[Math.floor(col.length * 0.2)];
+    const dark = (v) => v < top * 0.55, lim = Math.floor(col.length * 0.25);
+    let a = 0; while (a < lim && dark(col[a])) a++;
+    let b = 0; while (b < lim && dark(col[col.length - 1 - b])) b++;
+    return [x0 + a / fx, x1 - b / fx];
+  };
   const paintAt = (name, H, [x0, y0, x1, y1]) => {
     const P = pixOf(name); if (!P) return null;
     const fx = P.w / 1024, fy = P.h / H;
@@ -623,10 +639,12 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               else { if (colR) MQ(B0, B1, R1, R0, up, colR); else { A = AD; quad(B0, B1, R1, R0, [cx0, ry1 + e + ew], [cx1, ry1 + e + ew], [cx1, ry1 + e], [cx0, ry1 + e], up); A = AW; } }
               // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
               // was measured to its hole
+              const fm0 = FM?.['c' + ci];          // (a window with its frame modelled keeps its measure: the model is the frame)
               if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -REC);   // (a balcony's door, its own model)
               else {
                 const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -REC);
-                quad(B0, B1, B2, B3, [gx0, gy1], [gx1, gy1], [gx1, gy0], [gx0, gy0], out); A = A0; winC = null;
+                const [tg0, tg1] = fm0 ? [gx0, gx1] : trimDark(fname, H, [gx0, gy0, gx1, gy1]);
+                quad(B0, B1, B2, B3, [tg0, gy1], [tg1, gy1], [tg1, gy0], [tg0, gy0], out); A = A0; winC = null;
               }
               // the window's frame, its own model (fronts/<front>.glb), standing on the glass: stretched to the hole as the
               // picture is, the model being the hole's own size in the picture's metres
