@@ -17,7 +17,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
+import { setupArrivals, openArrivals, bulkArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
@@ -181,7 +181,7 @@ export async function initWalk(container, opts = {}) {
       }
       if (steady || (doneAt !== null && now - doneAt > 20000)) {
         if (!steady) console.info('[load] lifted 20 s after the load was done; frames not yet steady');
-        veilUp = false; tl('veil lifted'); held.clear();
+        veilUp = false; tl('veil lifted'); held.clear(); bulkArrivals(false);
         loading?.done();
         rise();
       }
@@ -217,6 +217,7 @@ export async function initWalk(container, opts = {}) {
   function open() {
     const at = s.freeCam.on ? s.freeCam.pos : s.at;
     openArrivals(at);
+    bulkArrivals(true);
     s.loadRest();
     later();
   }

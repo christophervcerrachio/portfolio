@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
 import { tileStream } from './citytiles.js';
-import { arrive } from './arrive.js';
+import { arrive, inBulk } from './arrive.js';
 import { breathe } from './reveal.js';
 import { packProps } from './props-pack.js';
 import { DefaultLoadingManager as LM } from 'three';
@@ -337,7 +337,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       todo.sort((a, b) => a[0] - b[0]);
       const t0 = performance.now();
       for (const [d, t] of todo) {
-        if (performance.now() - t0 > 6) break;
+        if (performance.now() - t0 > (inBulk() ? 30 : 6)) break;   // (under the loading picture, more a frame)
         build(t);
         if (t.lesser) for (const m of t.g.children) {
           const r = m.userData.reach, l = m.userData.lod;

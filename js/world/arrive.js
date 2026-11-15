@@ -55,6 +55,17 @@ export function setupArrivals({ renderer, scene, camera, target, shadow = () => 
   if (budget) Object.assign(A.budget, budget);
 }
 
+/** Under the loading picture (v0.0.92: the whole world comes in there): a frame's share many times the walk's own,
+ *  and nothing rises - no one sees it - each thing shown in its place once it is on the card. Off as the picture lifts:
+ *  walk.js. */
+const BULK = { ms: 40, tex: 400e6, geo: 800e6, compiles: 60 };
+let walkBudget = null;
+export const inBulk = () => !!A.bulk;
+export function bulkArrivals(on) {
+  if (on && !walkBudget) { walkBudget = { ...A.budget }; Object.assign(A.budget, BULK); A.bulk = true; }
+  else if (!on && walkBudget) { Object.assign(A.budget, walkBudget); walkBudget = null; A.bulk = false; }
+}
+
 /** The walk is shown: what has waited comes in now, rising in a wave out from `pos` (the walker). */
 export function openArrivals(pos) {
   if (A.open) return;
@@ -265,7 +276,7 @@ export function pumpArrivals(pos, now = performance.now()) {
   // (nearest first; sorted again every few frames, or when the walker has moved on)
   // (what has come in and has since been taken out of the walk - a tile left behind - forgotten now and then)
   if (A.sorted % 600 === 599) A.shown = A.shown.filter((l) => l.some((o) => o.parent));
-  if (++A.sorted % 8 === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
+  if (++A.sorted % (A.bulk ? 60 : 8) === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
   let geo = 0, tex = 0, began = 0;
   const t0 = performance.now(), B = A.budget;
   A.texAllow = Math.min(B.tex * 2, A.texAllow + B.tex * k); A.geoAllow = Math.min(B.geo * 2, A.geoAllow + B.geo * k);
@@ -334,7 +345,7 @@ function show(a, pos, now) {
     else if (a.parent && o.parent !== a.parent) a.parent.add(o);
   }
   const rise = typeof a.rise === 'function' ? a.rise() : a.rise;
-  if (!rise || A.still) { a.res(); return; }
+  if (!rise || A.still || A.bulk) { a.res(); return; }
   // (a piece of a larger thing: later the farther it is from where the thing's first piece rose - a skyline rising
   // in a wave across the city, not all at once)
   if (a.batch) {
