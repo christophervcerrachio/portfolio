@@ -816,8 +816,8 @@ export class CountrysideScene {
     const dz = (-cp * cy) * f + sy * r;
     const m = Math.hypot(dx, dy, dz);
     if (m > 1e-6) { F.pos.x += (dx / m) * sp; F.pos.y += (dy / m) * sp; F.pos.z += (dz / m) * sp; }
-    // (a ceiling and a floor: 300 m over the land, or 8 km with ?dev in the address, to check layouts from above)
-    F.pos.y = Math.min(DEV ? 8000 : 300, Math.max((this.ground?.heightAt(F.pos.x, F.pos.z) ?? -1) + 0.4, F.pos.y));   // (never under the land: it lies 25 m below the hilltop in places)
+    // (a ceiling and a floor: 8 km, high enough to see both cities whole - it had been 300 m without ?dev in the address)
+    F.pos.y = Math.min(8000, Math.max((this.ground?.heightAt(F.pos.x, F.pos.z) ?? -1) + 0.4, F.pos.y));   // (never under the land: it lies 25 m below the hilltop in places)
   }
   // ---- end FREE-CAM ---------------------------------------------------------------------------------
 

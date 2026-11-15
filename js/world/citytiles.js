@@ -10,12 +10,12 @@ import { gltfLoader } from '../gltf.js';
 import { gate, allowed } from './reveal.js';
 
 const DIR = 'assets/world/cities/';
-const MAX = 6;                            // (files being read at once, all cities and kinds together)
+const MAX = 16;                           // (files being read at once, all cities and kinds together)
 const wanted = new Set();                 // tiles asked for, not yet being read
 let running = 0, eye = { x: 0, z: 0 };
 // (read, and not yet on the card: each tile's triangles are held in the page until the card has them - decoded, a
 // city's tiles are some gigabytes - so no more are read while AHEAD of them wait to go up)
-const AHEAD = 24, up = new Set();
+const AHEAD = 48, up = new Set();
 
 function next() {
   for (const t of up) if (!t.scene || t.scene.userData.risen) up.delete(t);
