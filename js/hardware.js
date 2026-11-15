@@ -36,7 +36,7 @@ export const TIERS = {
   // million triangles a frame at medium and 56 million at low with the full copies out to 120 and 70 m: a laptop's
   // ladder keeps them for the trees walked among;
   // shadowFarEvery: the sun's far picture drawn every so many frames; reliefNear: the house fronts' mouldings and open
-  // windows built within; tilesNear: the houses' own tiles read in within (boxes beyond, to blocksFar; a tile of houses is about 14,000 triangles and 0.4 MB); marksFar / bridgesFar: the
+  // windows built within; tilesNear: (no longer read: since v0.0.92 every tile of houses is read under the loading picture, and drawn to blocksFar; a tile of houses is about 14,000 triangles and 0.4 MB); marksFar / bridgesFar: the
   // landmarks (churches, the Kremlin, the palaces) and the country bridges drawn within; propsFull: the cities'
   // furniture in its full models in the tiles this near, its light copies beyond; texMax: the longest side a picture
   // is kept at (texcap.js: the walk's 189 pictures are 2.3 GB on the card at their full size, 0.8 GB at 1024, and a

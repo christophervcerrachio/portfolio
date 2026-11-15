@@ -3,7 +3,7 @@
 // plates, dev\world\city_blender.py builds them): house fronts from ComfyUI (through the detail pass), three storeys in
 // Petersburg's centre, two in Moscow's, a colour to each house, the painted iron roofs; and the granite embankments of
 // both cities' rivers and canals (dev\world\canals.py), their parapets in the walker's picture. The houses come a 400 m
-// tile at a time (citytiles.js): only the tiles near the walker are in memory, the rest of the city plain boxes.
+// tile at a time (citytiles.js), every tile of both cities read under the loading picture and kept.
 // userData.builtAt(x, z): whether a house stands there (assets/world/cities/<city>-built.png, 2 m a pixel), for the
 // walker, who goes along the streets and into the courtyards' gates no further than their walls.
 import * as THREE from 'three';
@@ -14,7 +14,7 @@ import { openings } from './openings.js';
 import { styleNow } from '../retro.js';
 import { buildFacadeRelief, CUT, reliefReach } from './facaderelief.js';
 import { gate, allowed, loadInTurn } from './reveal.js';
-import { tileStream, farBoxes } from './citytiles.js';
+import { tileStream } from './citytiles.js';
 import { gltfLoader } from '../gltf.js';
 import { DefaultLoadingManager as LM } from 'three';
 
@@ -46,18 +46,21 @@ export function readChannel(url, channel = 0) {
 
 export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'spb-embankments-joints.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null } = {}) {
   reliefReach(reliefNear);
+  // (the relief built farther out than it is drawn - RELIEF_AHEAD m: a street's mouldings and open windows are made
+  // before they come into the view, never made as it comes on them; facaderelief.js)
+  const RELIEF_AHEAD = 220;
   const pieces = [];                     // (each tile's object and its middle: drawn within `far` m, the machine's setting)
   const group = new THREE.Group(); group.name = 'cityblocks';
   const masks = [];
   // (the fronts' relief near the camera - window surrounds, sills, cornices, string courses - in the houses' own front
   // materials: facaderelief.js)
   const MATS = {};
-  const streams = [], fars = [];
+  const streams = [];
   // (a tile's relief comes in once its houses stand: come in before them, the arches, sills and window boxes of a street
   // whose houses were still rising stood on their own in the air - seen where the walk had put the walker back in a
   // street, 12 Nov 2026. A tile with no houses of its own keeps its relief as it was)
-  const housesIn = (city, key) => { const st = streams[cities.indexOf(city)]; return !st || (st.ready && (!st.tiles.has(key) || st.risen(key))); };
-  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear, heightAt, ground, housesIn });
+  const housesIn = (city, key) => { const st = streams[cities.indexOf(city)]; return !st || (st.ready && (!st.tiles.has(key) || st.tiles.get(key).state === 3 || st.risen(key))); };
+  const relief = buildFacadeRelief(U, { base, cities, materials: (name) => MATS[name], near: reliefNear > 0 ? reliefNear + RELIEF_AHEAD : 0, heightAt, ground, housesIn });
   group.add(relief);
   // (and a step clear of every wall near: the walls themselves, exact - facaderelief.js push)
   group.userData.wallPush = (x, z, r) => relief.userData.push(x, z, r);
@@ -68,9 +71,10 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
     }
     return false;
   };
-  // The houses a 400 m tile at a time (citytiles.js): each tile's file read when the walker comes within `tiles` m of
-  // it and let go behind him, its materials taken by name from the city's library (<city>-materials.glb: the pictures,
-  // once); beyond the tiles read in, every house a plain coloured box (<city>-tiles/far.glb).
+  // The houses a 400 m tile at a time (citytiles.js): every tile's file read under the loading picture and kept, its
+  // materials taken by name from the city's library (<city>-materials.glb: the pictures, once), each tile drawn
+  // within `far` m (the machine's setting: everywhere on the full tiers). The plain coloured boxes that stood beyond
+  // the tiles read in (<city>-tiles/far.glb) are no longer read: every house is in.
   const dress = (m) => {
     if (m.userData.dressed) return;
     m.userData.dressed = true;
@@ -100,13 +104,14 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
       group.add(g.scene);
       return lib;
     }).catch(() => new Map()).finally(() => LM.itemEnd(url));
-    // (a tile of houses that comes in where its plain boxes stand takes their place there; elsewhere it rises: arrive.js)
-    let fb = null;
-    const st = tileStream({ base, city, kind: 'h', near: tiles, group, library, changed, standIn: (key) => fb?.visible(key) ?? false });
-    streams.push(st);
-    fars.push(fb = farBoxes({ base, city, group, far, inTile: (key) => st.shown(key), dress: (m) => receiveSun(m, U) }));
+    // (each tile rises out of the ground in its place as it comes in, under the loading picture: arrive.js)
+    streams.push(tileStream({ base, city, kind: 'h', show: far, group, library, changed }));
   }
   group.userData.streams = streams;
+  // (what is still to come in: the tiles, the embankments, the relief round the camera - the loading picture waits for
+  // all of it: walk.js)
+  let extrasLeft = extras.length;
+  group.userData.pending = () => streams.reduce((n, st) => n + st.pending(), 0) + extrasLeft + (relief.userData.pending?.() ?? 0);
   for (const file of extras) loadOne(file);
   function loadOne(file) {
     loadInTurn(base + DIR + file).then((g) => {
@@ -123,7 +128,7 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
       });
       g.scene.name = 'cityblocks-' + file;
       group.add(g.scene);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => { extrasLeft--; });
   }
   // (where each house stands, read off the page's own thread: pixels-worker.js)
   for (const city of cities) {
@@ -134,10 +139,9 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
   group.userData.update = (pos) => {
     relief.userData.update(pos);
     for (const st of streams) st.update(pos);
-    for (const f of fars) f.update(pos);
     for (const p of pieces) {
       const want = far === Infinity || Math.hypot(p.x - pos.x, p.z - pos.z) - p.r < far;
-      p.o.visible = p.o.userData.gate ? allowed(p.o, want) : want;
+      p.o.visible = p.o.userData.gate ? allowed(p.o, true) && want : want;   // (asked for wherever it stands)
     }
   };
   return group;

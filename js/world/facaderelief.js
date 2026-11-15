@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { interiors } from './interiors.js';
 import { openingsOf } from './openings.js';
 import { arrive } from './arrive.js';
+import { letGo } from './citytiles.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { styleNow } from '../retro.js';
@@ -947,7 +948,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(a.u, 2));
       if (a.c.length) geo.setAttribute('aWinC', new THREE.Float32BufferAttribute(a.c, 3));
       if (a.k.length) geo.setAttribute('color', new THREE.Float32BufferAttribute(a.k, 3));
-      geo.computeBoundingSphere();
+      geo.computeBoundingSphere(); geo.computeBoundingBox();
+      // (its arrays let go once the card has them: nothing reads them again, and a tile of the centre's relief is some
+      // 130 MB of them - citytiles.js letGo)
+      letGo(geo);
       const m = new THREE.Mesh(geo, mat);
       m.name = 'relief.' + name; m.matrixAutoUpdate = false;
       m.userData.noCastFar = true;                     // (mouldings a hand deep: the sun's near picture alone can draw their shade)
@@ -986,6 +990,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     for (const T of tiles.values()) {
       const d = Math.max(Math.abs(T.c[0] - pos.x), Math.abs(T.c[1] - pos.z)) - T.I.tile / 2;
       const want = d < near;
+      T.want = want;
       // (not before the city's ground materials are read - the steps are made of them - or eight seconds have gone)
       if (want && T.state === 0 && ground && !ground[T.city] && performance.now() - (T.asked ??= performance.now()) < 8000) continue;
       if (want && T.state === 0) {
@@ -1020,6 +1025,16 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         }
       }
     }
+  };
+  // (the tiles round the camera not yet built and in: the loading picture waits for them - walk.js)
+  group.userData.pending = (pos) => {
+    if (!BAYS) return 1;
+    let n = 0;
+    for (const T of tiles.values()) {
+      if (!(T.want)) continue;
+      if (T.state === 0 || T.state === 1 || (T.state === 2 && (T.fresh || T.arriving))) n++;
+    }
+    return n;
   };
   group.userData.ready = ready;
   return group;

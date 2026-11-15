@@ -153,11 +153,16 @@ export async function initWalk(container, opts = {}) {
     // (the bulk load - the rest of the land, the cities and their pieces arriving - done under the picture too, and the
     // picture lifted only once the frames come at an even pace (13 Nov 2026). Steady: two windows of 45 frames running, each one's slowest tenth
     // within twice its middle and 6 ms, the two middles within 12 % of each other. A window behind others gets a frame a
-    // second from the browser and can never be steady: there, 3 s after the load is done. At most 90 s past the shaders,
-    // whatever the frames)
+    // second from the browser and can never be steady: there, 3 s after the load is done. Since v0.0.92 the whole world
+    // is in before the picture lifts - every tile of both cities, their yards, furniture and chimneys, the landmarks,
+    // the relief round the camera: nothing is read or made once the walk is shown - and there is no limit on the wait
+    // for it (it had lifted at 90 s past the shaders whatever was still coming); once all of it is in, 20 s at most for
+    // the frames to settle)
     if (warmed && !opened) { opened = true; openedAt = now; open(); }
     if (opened) {
-      const bulkDone = laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
+      const pos = s.freeCam.on ? s.freeCam.pos : s.at;
+      const cities = (s._later?.blocks?.userData.pending?.(pos) ?? 0) + (s._later?.props?.userData.pending?.() ?? 0);
+      const bulkDone = laterDone && cities === 0 && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
       if (bulkDone && doneAt === null) { doneAt = now; tl('settling'); }
       if (!bulkDone) { doneAt = null; paceLast = null; pace.length = 0; paceMid = null; }
       let steady = false;
@@ -174,9 +179,9 @@ export async function initWalk(container, opts = {}) {
           }
         } else { paceLast = null; steady = now - doneAt > 3000; }
       }
-      if (steady || now - openedAt > 90000) {
-        if (!steady) console.info('[load] lifted at the 90 s limit; frames not yet steady');
-        veilUp = false; tl('veil lifted');
+      if (steady || (doneAt !== null && now - doneAt > 20000)) {
+        if (!steady) console.info('[load] lifted 20 s after the load was done; frames not yet steady');
+        veilUp = false; tl('veil lifted'); held.clear();
         loading?.done();
         rise();
       }
@@ -328,7 +333,10 @@ export async function initWalk(container, opts = {}) {
   });
 
   // ---- looking: the mouse moves the view at once (no easing), slower the further it is zoomed in
+  // (not while the loading picture or the change of look's is up: the walk is shown looking where it was set to look -
+  // the first view, at the windmill, or where the walker stood before the change - however the mouse moved meanwhile)
   function lookBy(dx, dy) {
+    if (veilUp) return;
     const L = s.look, z = Math.max(1, L.zoom), M = L.limits;
     L.anchor = null;
     L.yaw += dx * LOOK / z;
@@ -517,7 +525,7 @@ export async function initWalk(container, opts = {}) {
   mouseState();
 
   // ---- zooming: the wheel (or a trackpad's pinch), toward the middle of the view
-  function zoomTo(z) { const L = s.look; L.anchor = null; L.zoomGoal = Math.min(s.zoomMax, Math.max(1, z)); }
+  function zoomTo(z) { if (veilUp) return; const L = s.look; L.anchor = null; L.zoomGoal = Math.min(s.zoomMax, Math.max(1, z)); }
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     startSound();
@@ -531,7 +539,7 @@ export async function initWalk(container, opts = {}) {
     // FREE-CAM (dev only; remove with it): Z toggles flying; the second Z sets the walker down where the camera is.
     if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
       e.preventDefault();
-      if (s.ready) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else s.enterFree(); }
+      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else s.enterFree(); }
       return;
     }
     // VIEW POSE (dev only; remove with the free-cam): P copies where the view is, to note a fault where it was seen.
@@ -540,6 +548,7 @@ export async function initWalk(container, opts = {}) {
     if (e.code === 'Escape' && !locked() && !e.repeat) { showMenu(!menuOpen); return; }
     if (menuOpen) return;                              // (the menu's own keys: Tab, the arrows, Enter)
     const k = KEYS[e.code];
+    if (veilUp) { if (k) e.preventDefault(); return; } // (nothing moves under the loading picture: lookBy)
     if (!k || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     if (!e.repeat && !s.freeCam?.on) {

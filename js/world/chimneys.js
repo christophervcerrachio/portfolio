@@ -4,8 +4,9 @@
 // and thins out over the roofs.
 // A thread is a few soft puffs, each a small card turned to the eye: born at the chimney's mouth, risen and drifted by
 // its age, grown and faded with it, lit by the low sun on the side it comes from and cool in the sky's light on the
-// other. Drawn only near the walker (hardware.js smokeNear), a tile at a time, read as the walker comes near and let
-// go behind him; an older machine's picture of 240 lines has none.
+// other. Drawn only near the walker (hardware.js smokeNear), a tile at a time; every tile's list read under the loading
+// picture and kept (v0.0.92: until then read as the walker came near and let go behind him); an older machine's
+// picture of 240 lines has none.
 import * as THREE from 'three';
 import { styleNow } from '../retro.js';
 
@@ -101,13 +102,10 @@ export function buildChimneySmoke(U, { base = '', cities = ['spb', 'moscow'], ne
   group.userData.update = (pos) => {
     for (const T of tiles.values()) {
       const d = Math.max(Math.abs(T.c[0] - pos.x), Math.abs(T.c[1] - pos.z)) - T.size / 2;
-      if (d < near && T.state === 0) {
+      if (T.state === 0) {
         T.state = 1;
-        fetch(base + DIR + T.city + '-chimneys/' + T.key + '.json').then((r) => r.json()).then((list) => { T.m = build(T, list); T.state = 2; if (T.m) group.add(T.m); }).catch(() => { T.state = 3; });
-      } else if (d > near + 300 && T.state === 2) {
-        if (T.m) { group.remove(T.m); T.m.geometry.dispose(); T.m = null; }
-        T.state = 0;
-      }
+        fetch(base + DIR + T.city + '-chimneys/' + T.key + '.json').then((r) => r.json()).then((list) => { T.m = build(T, list); T.state = 2; if (T.m) { T.m.visible = false; group.add(T.m); } }).catch(() => { T.state = 3; });
+      } else if (T.state === 2 && T.m) T.m.visible = d < near;
     }
   };
   return group;

@@ -39,10 +39,10 @@ const A = {
   // of it at most this long after the first (s)
   wave: { speed: 1400, most: 3.2 },
   far: 4500,                       // (m: past this a thing grows up from its foot rather than rising through the ground)
-  // (m: nothing comes in farther from the walker than this - a city, a bridge, a landmark waits, unmade and unshown,
-  // until he comes within it, and then rises: what was read under the loading picture had all come in at once, both
-  // cities risen behind the first treeline)
-  reach: 2000,
+  // (m: nothing came in farther from the walker than this - a city, a bridge, a landmark waited, unmade and unshown,
+  // until he came within it. Since v0.0.92 everything comes in under the loading picture, wherever it stands - the
+  // whole world in before the walk is shown, so that from high up every house is there: no reach)
+  reach: Infinity,
   pos: null,
   sorted: 0,
 };

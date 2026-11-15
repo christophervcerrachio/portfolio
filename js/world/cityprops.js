@@ -7,7 +7,8 @@
 // posts in the centres, boardwalks beyond, from 1817 on Petersburg's main streets), the shops on their ground floors,
 // sentry boxes at the bridges, the yards' firewood, barrels and (in Moscow) wells.
 // The furniture is drawn in tiles of TILE m, only those within NEAR m of the camera: tens of thousands of benches and
-// lamps, never all at once.
+// lamps, never all at once. Every tile is made under the loading picture (v0.0.92), and the yards' and pavements'
+// tiles all read then: nothing of the cities is made or read once the walk is shown.
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
 import { tileStream } from './citytiles.js';
@@ -214,13 +215,17 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       // (and handed to the houses' relief, whose door steps are of the pavement's stone and planks: facaderelief.js)
       if (ground) library.then((lib) => { ground[city] = lib; });
       // (the flat ground - gravel, lawn, beds, pavements - throws no shadow; the hedges and the gardens' walls do)
-      streams.push(tileStream({ base, city, kind: 'g', near: yardNear, group, library, changed,
+      streams.push(tileStream({ base, city, kind: 'g', show: yardNear, group, library, changed,
         each: (o) => { if (!/hedge|gwall|coping/.test((o.material.name || '').toLowerCase())) o.userData.noCast = true; } }));
     }
     // (the lists read and sorted into tiles in a worker - props-worker.js: Moscow's alone is 12 MB - and the porticos
     // from the city's houses (city_blender.py: Moscow's mansions only) with them)
     const lists = readProps(base + DIR + city + '-props.json', city === 'moscow' ? base + DIR + city + '-porticos.json' : null);
-    Promise.all([lists, ready, lateModels]).then(async ([R]) => {
+    Promise.all([lists, ready, lateModels]).then(([R]) => listCity(R, city)).catch(() => {}).finally(() => { listed++; });
+  }
+  let listed = 0;
+  async function listCity(R, city) {
+    {
       if (!R) return;
       // (the trees: drawn with the woods' own, their full copy near, their light copy and their card further off -
       // world/woods.js addTrees, a few thousand at a time between frames; without the woods, as before: in full, tile
@@ -260,7 +265,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
         }
         await breathe();
       }
-    }).catch(() => {});
+    }
   }
   /** A tile's furniture made: one instanced mesh for each part of each model that stands in it (and of its light copy). */
   function build(t) {
@@ -294,17 +299,19 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
   }
   // (the furniture's shaders are made from the samples before any tile is built - walk.js later)
   group.userData.allTiles = () => [samples];
-  // (only the tiles near the camera are drawn; at most BUILD of them made in a frame, the nearest first, so coming into
-  // a city is spread over a few frames)
-  const BUILD = 6, todo = [];
+  // (every tile made under the loading picture, once every city's lists are in - a tile made before then had missed
+  // the kinds listed after it - the nearest first, some milliseconds' worth a frame; kept, and only the tiles near the
+  // camera drawn)
+  const todo = [];
+  group.userData.pending = () => (listed < cities.length ? 1 : 0) + [...tiles.values()].filter((t) => !t.built || t.arriving).length + streams.reduce((n, st) => n + st.pending(), 0);
   group.userData.update = (pos) => {
     for (const st of streams) st.update(pos);
     todo.length = 0;
+    const all = listed >= cities.length;
     for (const t of tiles.values()) {
       const d = Math.hypot(t.c[0] - pos.x, t.c[1] - pos.z);
       const want = d < near;
-      if (want && !t.built) { todo.push([d, t]); continue; }
-      if (!want && t.built && d > near + TILE) unbuild(t);
+      if (!t.built) { if (all) todo.push([d, t]); continue; }
       if (t.arriving) { /* (its arrival adds it) */ }
       else if (want && !t.g.parent) group.add(t.g);
       else if (!want && t.g.parent) group.remove(t.g);
@@ -328,7 +335,9 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
     }
     if (todo.length) {
       todo.sort((a, b) => a[0] - b[0]);
-      for (const [d, t] of todo.slice(0, BUILD)) {
+      const t0 = performance.now();
+      for (const [d, t] of todo) {
+        if (performance.now() - t0 > 6) break;
         build(t);
         if (t.lesser) for (const m of t.g.children) {
           const r = m.userData.reach, l = m.userData.lod;
