@@ -25,28 +25,38 @@ export function openingsOf(name, base = '') {
 
 /** Give a house front's material its openings over its wall. Call after interiors(): its rooms and reveals read the
  *  openings' picture (OPENTEX), and its windows are drawn over the mix made here. */
-export function openings(mat, name, { base = '' } = {}) {
+export function openings(mat, name, { base = '', cut = 0 } = {}) {
   if (!mat || mat.userData.openings || !mat.isMeshStandardMaterial) return mat;
   mat.userData.openings = true;
   const O = openingsOf(name, base);
   mat.userData.openMap = O.map;
   (mat.userData.pictures ??= []).push(O.map, O.mask);
-  const U = { uOpen: { value: O.map }, uOpenMask: { value: O.mask } };
+  // (cut: within this many metres an opening is a hole in the material - its reveals, glass and what lies behind are
+  // built there (facaderelief.js: a shop's windows and door); 0: never)
+  const U = { uOpen: { value: O.map }, uOpenMask: { value: O.mask }, uOpenCut: { value: cut } };
   const prev = mat.onBeforeCompile, own = Object.prototype.hasOwnProperty.call(mat, 'customProgramCacheKey') ? mat.customProgramCacheKey.bind(mat) : null;
   const keyBase = own ? own() : String(prev ?? '');
   mat.onBeforeCompile = (sh, r) => {
     prev?.call(mat, sh, r);
     Object.assign(sh.uniforms, U);
     if (!sh.fragmentShader.includes('#include <map_fragment>')) return;
+    if (cut > 0) sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOpenW;')
+      .replace('#include <fog_vertex>', `#include <fog_vertex>
+  { vec4 ow = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+    ow = instanceMatrix * ow;
+#endif
+    vOpenW = (modelMatrix * ow).xyz; }`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uOpen; uniform sampler2D uOpenMask;\n#define OPENTEX uOpen')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uOpen; uniform sampler2D uOpenMask; uniform float uOpenCut;' + (cut > 0 ? ' varying vec3 vOpenW;' : '') + '\n#define OPENTEX uOpen')
       .replace('#include <map_fragment>', `#include <map_fragment>
 #ifdef USE_MAP
   { float om = texture2D(uOpenMask, vMapUv).r;
+    ${cut > 0 ? 'if (om > 0.5 && length(cameraPosition - vOpenW) < uOpenCut) discard;' : ''}
     if (om > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * texture2D(uOpen, vMapUv).rgb, om); }
 #endif`);
   };
-  mat.customProgramCacheKey = () => keyBase + '-openings';
+  mat.customProgramCacheKey = () => keyBase + '-openings' + (cut > 0 ? '-cut' : '');
   mat.needsUpdate = true;
   return mat;
 }

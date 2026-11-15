@@ -11,6 +11,7 @@ import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
 import { interiors } from './interiors.js';
 import { openings } from './openings.js';
+import { styleNow } from '../retro.js';
 import { buildFacadeRelief, CUT, reliefReach } from './facaderelief.js';
 import { gate, allowed, loadInTurn } from './reveal.js';
 import { tileStream, farBoxes } from './citytiles.js';
@@ -82,6 +83,9 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
     // (and its openings over its wall: the wall's picture is its wall alone, the windows and doors read from a picture of
     // their own - openings.js)
     { const nm = m.name || ''; if (m.map && /^front-/.test(nm)) { interiors(m, 'facade-' + nm.slice(6), { base, cut: CUT, sky: U }); openings(m, 'facade-' + nm.slice(6), { base }); MATS[nm] ??= m; } }
+    // (a shopfront: its windows and door openings of their own, holes near the walker where the relief builds them -
+    // none at 240 lines, whose relief builds no openings)
+    { const nm = m.name || ''; if (m.map && /^shop-/.test(nm)) openings(m, nm, { base, cut: styleNow() && styleNow().lines <= 240 ? 0 : CUT }); }
     receiveSun(m, U, { street: true });
   };
   for (const city of cities) {

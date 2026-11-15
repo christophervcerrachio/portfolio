@@ -92,6 +92,17 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   // (every face of an opening - its glass, its door, a carved casing - reads the front's picture of its openings, never
   // the wall's: the wall's picture is its wall alone - openings.js)
   const openMap = (name, w) => w.userData?.openMap ?? openingsOf('facade-' + name.slice(6), base).map;
+  // (the shops' openings: shops.json - each shop's windows and door as fractions of its picture, and its frame's paint)
+  let SHOPS = null;
+  const shopsIn = fetch(base + DIR + 'fronts/shops.json').then((r) => (r.ok ? r.json() : null)).then((j) => { SHOPS = j; }).catch(() => {});
+  const SGL = {}, SRV = {};
+  const shopRev = (hex) => { if (!SRV[hex]) { SRV[hex] = new THREE.MeshStandardMaterial({ color: new THREE.Color('#' + hex), roughness: 0.6, metalness: 0, name: 'shop-reveal-' + hex, side: THREE.DoubleSide }); receiveSun(SRV[hex], U, { street: true }); } return SRV[hex]; };
+  const shopGlass = (name) => {
+    if (SGL[name]) return SGL[name];
+    const m = new THREE.MeshStandardMaterial({ map: openingsOf(name, base).map, roughness: 0.3, metalness: 0, name: name + '-glass', side: THREE.DoubleSide });
+    receiveSun(m, U, { street: true });
+    return (SGL[name] = m);
+  };
   const GLASS = {};
   const glassMat = (name) => {
     if (GLASS[name]) return GLASS[name];
@@ -266,8 +277,9 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   const ready = Promise.all([
     fetch(base + DIR + 'windows/bays.json').then((r) => r.json()),
     fetch(base + DIR + 'windows/fronts.json').then((r) => r.json()),
+    shopsIn,
     ...cities.map((c) => fetch(base + DIR + c + '-relief/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)),
-  ]).then(([b, f, ...idx]) => Promise.all([...Object.keys(b).filter((k) => b[k]?.frameModels).map(loadFrames), ...Object.keys(b).filter((k) => b[k]?.models).map(loadFittings)]).then(() => {
+  ]).then(([b, f, , ...idx]) => Promise.all([...Object.keys(b).filter((k) => b[k]?.frameModels).map(loadFrames), ...Object.keys(b).filter((k) => b[k]?.models).map(loadFittings)]).then(() => {
     // (the frames first: the tiles are built once, from what is in hand when they are)
     BAYS = b; FRONTS = f;
     idx.forEach((I, ci) => {
@@ -337,7 +349,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // (lev: for each of the wall's doors, in their order along it, [the pavement's top before it, how far out the
       // pavement reaches (m)] - dev/world/door_levels.py; room: [from, to] along the wall (m), the room between a
       // portico's two middle columns' pedestals, which its door's steps keep to - dev/world/city_blender.py)
-      const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0, , lev = null, room = null] = w;
+      const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0, , lev = null, room = null, shopName = null] = w;
       let dix = 0;
       const fname = T.I.fronts[fi], key = 'facade-' + fname.slice(6), fb = BAYS[key], fr = FRONTS[key], FM = frOK ? FRAMES[key] : null;
       if (!fb || !fr) continue;
@@ -470,6 +482,34 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // the bays along the wall: their picture's px stretched to the wall
       const bl = bix.map((i) => fb.bays[Math.max(0, i)]);
       const tot = bl.reduce((s, b) => s + (b[1] - b[0]) * fb.mx, 0), sc = L / tot;
+      // (a shop's display windows and its door as openings (15 Nov 2026): the shopfront stands 0.08 m proud of the wall
+      // over its bays, its picture its joinery alone, and each opening in it - shops.json, fractions of its picture - is
+      // a hole near the walker (openings.js cut) with its reveals, head and sill 0.16 m deep in the frame's paint and,
+      // at the back, its glass: the goods behind it, from the shop's picture of its openings)
+      if (frOK && shopName && sh0 >= 0 && SHOPS?.[shopName]) {
+        let s_ = 0, sA = null, sB = null;
+        bl.forEach((b, bi) => { const wm = (b[1] - b[0]) * fb.mx * sc; if (bi === sh0) sA = s_; s_ += wm; if (bi === sh1 - 1) sB = s_; });
+        const hg = bandsFor(fb, st, T.I.storey)[0][2], SP = SHOPS[shopName];
+        if (sA !== null && sB !== null && hg > 1) {
+          const OF = 0.08, BK = -0.08, ckS = Math.floor((ax + tx * (sA + sB) / 2) / CELL) + ',' + Math.floor((az + tz * (sA + sB) / 2) / CELL);
+          const AGs = get('shopglass:' + shopName, ckS); AGs.mat ??= shopGlass(shopName);
+          const ARs = get('shoprev:' + SP.frame, ckS); ARs.mat ??= shopRev(SP.frame);
+          const P = (s, h, o) => [ax + tx * s + nx * o, h, az + tz * s + nz * o];
+          const tri = (Acc, a, b, c, n, ua, ub, uc) => { for (const [v, uv] of [[a, ua], [b, ub], [c, uc]]) { Acc.p.push(...v); Acc.n.push(...n); Acc.u.push(...uv); } };
+          const q4 = (Acc, a, b, c, d, n, ua = [0, 0], ub = [0, 0], uc = [0, 0], ud = [0, 0]) => { tri(Acc, a, b, c, n, ua, ub, uc); tri(Acc, a, c, d, n, ua, uc, ud); };
+          const out = [nx, 0, nz];
+          for (const [u0, u1, v0, v1] of SP.open) {
+            const s0 = sA + u0 * (sB - sA), s1 = sA + u1 * (sB - sA), h1 = y0 + hg * (1 - v0), h0 = y0 + hg * (1 - v1);
+            // (the glass at the back, facing out; its picture the openings' own at that place)
+            q4(AGs, P(s0, h0, BK), P(s1, h0, BK), P(s1, h1, BK), P(s0, h1, BK), out, [u0, v1], [u1, v1], [u1, v0], [u0, v0]);
+            // (the reveals: left facing along +t, right facing -t, the head facing down, the sill facing up)
+            q4(ARs, P(s0, h0, OF), P(s0, h0, BK), P(s0, h1, BK), P(s0, h1, OF), [tx, 0, tz]);
+            q4(ARs, P(s1, h0, BK), P(s1, h0, OF), P(s1, h1, OF), P(s1, h1, BK), [-tx, 0, -tz]);
+            q4(ARs, P(s0, h1, OF), P(s0, h1, BK), P(s1, h1, BK), P(s1, h1, OF), [0, -1, 0]);
+            q4(ARs, P(s0, h0, BK), P(s0, h0, OF), P(s1, h0, OF), P(s1, h0, BK), [0, 1, 0]);
+          }
+        }
+      }
       let s = 0;
       bl.forEach((b, bi) => {
         const wpx = b[1] - b[0], wm = wpx * fb.mx * sc, sa = s; s += wm;
