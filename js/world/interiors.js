@@ -71,6 +71,9 @@ export function interiors(mat, name, { base = '', far = 140, depth = 3.0, cut = 
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vIntW;' + (flat ? ' varying vec3 vWinC;' : '') + ' uniform sampler2D uWin; uniform sampler2D uRooms; uniform vec3 uIntHorizon; uniform vec3 uIntZenith; uniform float uIntFar; uniform float uIntDepth; uniform float uRev; uniform float uMx; uniform float uMy; uniform float uPH; uniform float uCut;')
       .replace('#include <map_fragment>', `#include <map_fragment>
+#ifndef OPENTEX
+#define OPENTEX map
+#endif
 #ifdef USE_MAP
   {
     vec4 wm = texture2D(uWin, vMapUv);
@@ -105,12 +108,12 @@ export function interiors(mat, name, { base = '', far = 140, depth = 3.0, cut = 
         vec2 uvS = vMapUv + vec2((side.x - p.x) * wpx / 1024.0, -(side.y - p.y) * hpx / uPH);
         // (the plaster just outside the window, beside where the side is met)
         vec2 out_ = vec2(side.x <= 0.0 ? -0.06 : side.x >= 1.0 ? 0.06 : 0.0, side.y <= 0.0 ? -0.06 : side.y >= 1.0 ? 0.06 : 0.0);
-        col = texture2D(map, uvS + vec2(out_.x * wpx / 1024.0, -out_.y * hpx / uPH)).rgb;
+        col = texture2D(OPENTEX, uvS + vec2(out_.x * wpx / 1024.0, -out_.y * hpx / uPH)).rgb;
         col *= (pg.y < 0.0 ? 0.92 : pg.y > 1.0 ? 0.55 : 0.68);     // (the sill lit from above, the head in shade)
       } else {
         vec2 uvG = vMapUv + vec2((pg.x - p.x) * wpx / 1024.0, -(pg.y - p.y) * hpx / uPH);
         vec4 w2 = texture2D(uWin, uvG);
-        col = texture2D(map, uvG).rgb;
+        col = texture2D(OPENTEX, uvG).rgb;
         float glass = mod(floor(w2.a * 255.0 + 0.5) - 128.0, 2.0);
         if (w2.a > 0.5 && glass > 0.5) {
           // (through the glass: the room, a box as wide and tall as the window, uIntDepth deep)

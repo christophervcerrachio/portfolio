@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { parallax } from './parallax.js';
 import { interiors } from './interiors.js';
+import { openings } from './openings.js';
 import { buildFacadeRelief, CUT, reliefReach } from './facaderelief.js';
 import { gate, allowed, loadInTurn } from './reveal.js';
 import { tileStream, farBoxes } from './citytiles.js';
@@ -78,7 +79,9 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
     if (m.map) m.map.anisotropy = 4;
     if (m.map && /granite/.test((m.name || '').toLowerCase())) parallax(m, { depth: 0.012, scale: 2.774 });
     // (a house front: rooms behind its windows - interiors.js)
-    { const nm = m.name || ''; if (m.map && /^front-/.test(nm)) { interiors(m, 'facade-' + nm.slice(6), { base, cut: CUT, sky: U }); MATS[nm] ??= m; } }
+    // (and its openings over its wall: the wall's picture is its wall alone, the windows and doors read from a picture of
+    // their own - openings.js)
+    { const nm = m.name || ''; if (m.map && /^front-/.test(nm)) { interiors(m, 'facade-' + nm.slice(6), { base, cut: CUT, sky: U }); openings(m, 'facade-' + nm.slice(6), { base }); MATS[nm] ??= m; } }
     receiveSun(m, U, { street: true });
   };
   for (const city of cities) {

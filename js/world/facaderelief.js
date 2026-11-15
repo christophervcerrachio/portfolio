@@ -11,6 +11,7 @@
 // its painted frame's place, and the hole's sides the picture's own reveal.
 import * as THREE from 'three';
 import { interiors } from './interiors.js';
+import { openingsOf } from './openings.js';
 import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
@@ -88,11 +89,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   // cityprops.js has read them into `ground` - { <city>: Map of materials by name })
   const stepMat = (city, timber) => { const L = ground?.[city]; return L ? (timber ? L.get('walk') : null) ?? L.get('kerb') ?? L.get('footway') ?? null : null; };
   // (the glass at the back of each hole: the front's picture of its window, the rooms behind it - interiors.js, flat)
+  // (every face of an opening - its glass, its door, a carved casing - reads the front's picture of its openings, never
+  // the wall's: the wall's picture is its wall alone - openings.js)
+  const openMap = (name, w) => w.userData?.openMap ?? openingsOf('facade-' + name.slice(6), base).map;
   const GLASS = {};
   const glassMat = (name) => {
     if (GLASS[name]) return GLASS[name];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.35, metalness: 0, name: name + '-glass' });
+    const m = new THREE.MeshStandardMaterial({ map: openMap(name, w), roughness: 0.35, metalness: 0, name: name + '-glass' });
     interiors(m, 'facade-' + name.slice(6), { base, flat: true, far: CUT + 20, sky: U });
     receiveSun(m, U, { street: true });
     return (GLASS[name] = m);
@@ -104,7 +108,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   const doorMat = (name) => {
     if (DOORS[name]) return DOORS[name];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, normalMap: w.normalMap || null, roughness: 0.8, metalness: 0, name: name + '-door' });
+    const m = new THREE.MeshStandardMaterial({ map: openMap(name, w), roughness: 0.8, metalness: 0, name: name + '-door' });
     receiveSun(m, U, { street: true });
     return (DOORS[name] = m);
   };
@@ -115,7 +119,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const key = name + suffix;
     if (PICS[key]) return PICS[key];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, roughness: 0.8, metalness: 0, name: key, side: THREE.DoubleSide });
+    const m = new THREE.MeshStandardMaterial({ map: openMap(name, w), roughness: 0.8, metalness: 0, name: key, side: THREE.DoubleSide });
     new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + suffix + '.jpg').then((t) => {
       t.colorSpace = w.map?.colorSpace ?? THREE.SRGBColorSpace; t.flipY = w.map?.flipY ?? false;
       t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
@@ -143,7 +147,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   const PIX = {}, FIXIMG = {};
   const pixOf = (name) => {
     if (PIX[name] !== undefined) return PIX[name];
-    const img = name.endsWith('#fix') ? FIXIMG[name] : materials(name)?.map?.image;
+    const w0 = name.endsWith('#fix') ? null : materials(name);
+    const img = name.endsWith('#fix') ? FIXIMG[name] : w0 && openMap(name, w0)?.image;
     if (!img || !img.width) return null;                                  // (not in yet: asked again next time)
     try {
       const w = 256, h = Math.max(1, Math.round(img.height * 256 / img.width));
@@ -188,7 +193,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   const cutMat = (name) => {
     if (CUTS[name]) return CUTS[name];
     const w = materials(name); if (!w) return null;
-    const m = new THREE.MeshStandardMaterial({ map: w.map, normalMap: w.normalMap || null, roughness: 0.8, metalness: 0, name: name + '-cut', alphaTest: 0.5, side: THREE.DoubleSide, transparent: false });
+    const m = new THREE.MeshStandardMaterial({ map: openMap(name, w), roughness: 0.8, metalness: 0, name: name + '-cut', alphaTest: 0.5, side: THREE.DoubleSide, transparent: false });
     m.visible = false;
     new THREE.TextureLoader().loadAsync(base + DIR + 'fronts/' + name.slice(6) + '-cut.png').then((t) => {
       t.flipY = w.map?.flipY ?? false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = w.map?.anisotropy ?? 4;
