@@ -13,9 +13,13 @@ const DIR = 'assets/world/cities/';
 const MAX = 6;                            // (files being read at once, all cities and kinds together)
 const wanted = new Set();                 // tiles asked for, not yet being read
 let running = 0, eye = { x: 0, z: 0 };
+// (read, and not yet on the card: each tile's triangles are held in the page until the card has them - decoded, a
+// city's tiles are some gigabytes - so no more are read while AHEAD of them wait to go up)
+const AHEAD = 24, up = new Set();
 
 function next() {
-  while (running < MAX && wanted.size) {
+  for (const t of up) if (!t.scene || t.scene.userData.risen) up.delete(t);
+  while (running < MAX && wanted.size && up.size + running < AHEAD) {
     let best = null, bd = Infinity;
     for (const t of wanted) { const d = Math.hypot(t.x - eye.x, t.z - eye.z); if (d < bd) { bd = d; best = t; } }
     wanted.delete(best);
@@ -85,7 +89,7 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
       const scene = g.scene;
       scene.visible = false;
       gate(scene, t.x, t.z, { rise: () => !standIn?.(t.key), cancel: () => !scene.parent, batch: city + '-' + kind, wave: 1800 });
-      t.scene = scene; t.meshes = meshes; t.state = 2; t.shown = false;
+      t.scene = scene; t.meshes = meshes; t.state = 2; t.shown = false; up.add(t);
       group.add(scene);
       st.loaded++; st.bytes += t.bytes;
       changed?.();
