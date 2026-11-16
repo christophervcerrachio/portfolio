@@ -31,10 +31,6 @@
     .walk-load.is-done { opacity: 0; }
     /* (a change of look: the walk's own last picture, everything gone into the ground, in place of the evening; the
        words and the bar over it as ever) */
-    .walk-load-held { position: absolute; inset: 0; z-index: 1; background: center / 100% 100% no-repeat; }
-    .walk-load-held.is-px { image-rendering: pixelated; }
-    .walk-load.is-held .walk-load-sky, .walk-load.is-held .walk-load-layer { display: none; }
-    .walk-load.is-held .walk-load-say { z-index: 2; text-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
     .walk-load-sky { position: absolute; left: -3%; right: -3%; top: 0; height: calc(62 * var(--vh));
       background: url("assets/load/sky-full.webp") center bottom / cover no-repeat, linear-gradient(#bbc7c9, #d5c7bc 70%, #c4a395);
       transform-origin: 50% 100%; animation: walk-load-drift 80s ease-in-out infinite alternate; }
@@ -98,12 +94,6 @@
     @keyframes walk-load-gleam { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(290%, 0, 0); } }
     .walk-load[data-style="ps1"] .walk-load-bar::after, .walk-load[data-style="n64"] .walk-load-bar::after, .walk-load[data-style="dreamcast"] .walk-load-bar::after,
     .walk-load[data-style="gba"] .walk-load-bar::after { animation-timing-function: steps(14, end); }
-    /* (a change of look: the walk's last picture held, breathing in a slow light, the mist's band moving over its land) */
-    .walk-load.is-held .walk-load-held::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 60%;
-      background: linear-gradient(100deg, transparent, rgba(255, 246, 228, .13) 50%, transparent);
-      animation: walk-load-sweep 3.4s cubic-bezier(.45, 0, .55, 1) infinite; }
-    .walk-load-held { overflow: hidden; }
-    @keyframes walk-load-sweep { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(267%, 0, 0); } }
     .walk-load-bar i { display: block; height: 100%; background: rgba(230, 224, 212, .8); transform-origin: 0 50%; transform: scaleX(0); transition: transform 1.2s cubic-bezier(.3, .7, .3, 1); }
     /* (the browser cannot draw the walk: the picture stays, all of it risen; with less motion asked for, nothing drifts or rises) */
     .walk-load.is-idle .walk-load-land, .walk-load.is-idle .walk-load-piece, .walk-load.is-calm .walk-load-land, .walk-load.is-calm .walk-load-piece { transition: none; }
@@ -169,23 +159,14 @@
     <script>
       // (the loading picture in the look chosen before anything is drawn: the address's ?gfx=, or the look this browser
       // keeps - hardware.js; on a first visit the machine's own look follows once it is known, below)
+      // (the picture as the page has it, before anything dresses it: walk.js fades a copy of it in over the walk when the
+      // look is changed in the menu)
+      window.__walkLoadHTML = document.querySelector('.walk-load').outerHTML;
       try {
         const t = new URLSearchParams(location.search).get('gfx') || (JSON.parse(localStorage.getItem('career-gfx-v3') || 'null') || {}).tier;
         const st = { xbox360: 'xbox360', gamecube: 'gamecube', dreamcast: 'dreamcast', n64: 'n64', ps1: 'ps1', gba: 'gba', gameboy: 'gba' }[t];
         if (st) document.querySelector('.walk-load').dataset.style = st;
       } catch { /* (no storage) */ }
-      // (the look changed in the walk's menu: the walk went back into the ground and its last picture was kept - walk.js
-      // leave - and that picture is what shows while the walk comes in again in the new look, then lifts as it rises)
-      try {
-        const h = JSON.parse(sessionStorage.getItem('career-held') || 'null');
-        sessionStorage.removeItem('career-held');
-        if (h && h.src && Date.now() - h.t < 60000 && !new URLSearchParams(location.search).has('still')) {
-          const el = document.querySelector('.walk-load'), d = document.createElement('div');
-          d.className = 'walk-load-held' + (h.px ? ' is-px' : ''); d.style.backgroundImage = 'url("' + h.src + '")';
-          el.prepend(d); el.classList.add('is-held');
-          el.querySelector('.walk-load-words').textContent = 'Changing the look';
-        }
-      } catch { /* (the loading picture, as on any visit) */ }
     </script>
   </main>
   <script type="module">

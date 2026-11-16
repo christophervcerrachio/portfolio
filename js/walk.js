@@ -17,7 +17,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, bulkArrivals, quietArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
+import { setupArrivals, openArrivals, bulkArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 import * as report from './loadreport.js';
 
@@ -450,41 +450,25 @@ export async function initWalk(container, opts = {}) {
     const u = new URL(location.href); u.searchParams.delete('gfx');
     const go = () => { if (u.href === location.href) location.reload(); else location.replace(u.href); };
     if (still || noRise || !s.ready || veilUp) { setTimeout(go, 60); return; }
-    leave().then(go, go);
+    leave(id).then(go, go);
   });
-  // (a change of look: everything that has come in goes back into the ground in a wave from the walker - the woods by
-  // their shader, the rest by world/arrive.js departAll - the land left bare; that picture kept for the page that loads
-  // next, which shows it while the walk comes in again under it (index.html, the held picture), then lifts it as
-  // everything rises in the new look. The load's own stalls are under that picture, not in the walk)
-  async function leave() {
+  // (a change of look: the page's own loading picture - a fresh copy of the one it opened with, index.html, in the look
+  // chosen - fades in over the walk, and the page loads again under the same picture, which goes on exactly as on a
+  // first visit: the land and the things rising as their files come in, the bar moving)
+  async function leave(look) {
     showMenu(false);
-    const at = s.freeCam.on ? s.freeCam.pos : s.at;
-    // (the woods' wave by the page's own clock, not the walk's: the walk's holds a slow frame to a tenth of a second)
-    const SPEED = 5000, t0 = performance.now();
-    s.U.uRise.value.set(at.x, at.z, clock, -SPEED);
-    const woodsDown = new Promise((r) => {
-      const step = () => {
-        const e = (performance.now() - t0) / 1000;
-        s.U.uRise.value.z = clock - e;
-        if (e > 5200 / SPEED + 0.7) r(); else requestAnimationFrame(step);   // (the far woods' edge, and a tree's own 0.6 s)
-      };
-      step();
-    });
-    await Promise.race([Promise.all([departAll(at), woodsDown]), new Promise((r) => setTimeout(r, 4000))]);
-    await new Promise((r) => requestAnimationFrame(() => {
-      try {
-        renderAt(clock);
-        // (taken in the same turn as the frame is drawn: the card's picture is still there then)
-        const k = Math.min(1, 1600 / canvas.width), c = document.createElement('canvas');
-        c.width = Math.max(1, Math.round(canvas.width * k)); c.height = Math.max(1, Math.round(canvas.height * k));
-        const g = c.getContext('2d');
-        g.imageSmoothingEnabled = !retro;
-        g.drawImage(canvas, 0, 0, c.width, c.height);
-        sessionStorage.setItem('career-held', JSON.stringify({ src: c.toDataURL('image/jpeg', 0.86), px: !!retro, t: Date.now() }));
-      } catch { /* (no picture kept: the loading picture, as before) */ }
-      r();
-    }));
+    const html = window.__walkLoadHTML;
+    if (!html) return;
+    const box = document.createElement('div'); box.innerHTML = html;
+    const el = box.firstElementChild;
+    if (look && look !== 'full') el.dataset.style = look; else delete el.dataset.style;
+    el.style.opacity = '0'; el.style.transition = 'opacity 0.5s ease';
+    container.appendChild(el);
+    el.getBoundingClientRect();
+    el.style.opacity = '1';
+    await new Promise((r) => setTimeout(r, 550));
   }
+
   function takeMouse() {
     if (locked() || still) return;
     try {
@@ -787,7 +771,7 @@ export async function initWalk(container, opts = {}) {
     play() { live = true; }, pause() { live = false; }, lookBy, zoomTo,
     // (the leaving as a change of look does it, without the change: the choice kept in this browser is not touched -
     // a test then loads the page with ?gfx=)
-    leave: () => leave().then(() => !!sessionStorage.getItem('career-held')),
+    leave: (look) => leave(look),
     walkTo: (x, z, jump = true) => s.walkTo(x, z, jump), look: (yaw, pitch) => { s.look.anchor = null; s.look.yaw = yaw; s.look.pitch = pitch; s.look.goal = [yaw, pitch]; },
     free: () => (s.freeCam.on ? (s.exitFree(), false) : (s.enterFree(), true)), get freeCam() { return s.freeCam.on; },   // (dev free-cam)
     sound: startSound, get quality() { return quality.scale; }, gfx: { ...gfxInfo, settings: GFX },
