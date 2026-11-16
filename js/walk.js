@@ -185,9 +185,9 @@ export async function initWalk(container, opts = {}) {
         } else { paceLast = null; steady = now - doneAt > 3000; }
       }
       // (v0.0.103: with only the walker's surroundings to wait for, the frames are as even as the walk's own; 20 s more
-      // for them to settle held the walk up for nothing - measured: in at 5.8 s, shown at 25.8 s. 1.5 s at most now)
-      if (steady || (doneAt !== null && now - doneAt > 1500)) {
-        if (!steady) console.info('[load] lifted 1.5 s after the load was done; frames not yet steady');
+      // for them to settle held the walk up for nothing - measured: in at 5.8 s, shown at 25.8 s. 0.6 s at most now)
+      if (steady || (doneAt !== null && now - doneAt > 600)) {
+        if (!steady) console.info('[load] lifted 0.6 s after the load was done; frames not yet steady');
         veilUp = false; tl('veil lifted'); held.clear(); bulkArrivals(false);
         // (the rest behind the walk, within the walk's own share of each frame, put in place without rising: arrive.js)
         quietArrivals(true); s.loadRestFar(); later();
@@ -298,6 +298,9 @@ export async function initWalk(container, opts = {}) {
   const loaded = s.load(base, tl).then(() => {
     tl('scene load: built'); s.setFree(true);
     if (!still) prime();
+    // (the country places' and the estate's models asked for now, read while the first view's programs are made: they
+    // wait for the walk to open before they come in - arrive.js)
+    if (!still) s.loadRest();
     // (a change of graphics in the menu loads the walk again: the walker put back where he stood, looking the way he looked)
     // (else the walk begins where it begins: SPAWN)
     let kept = null;
