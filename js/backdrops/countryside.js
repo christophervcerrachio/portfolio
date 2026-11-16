@@ -1140,7 +1140,7 @@ export class CountrysideScene {
         const W = this.U.uWindDir.value, v = (1.2 + 2.6 * w.gust) * (0.4 + 0.6 * (w.level ?? 1));
         const lc = (this._dropLight ??= new THREE.Color()).copy(this.U.uSkyColor.value).multiplyScalar(1.6), sc = (this._dropSun ??= new THREE.Color()).copy(this.U.uSunColor.value).multiplyScalar(0.12 * this.light.sun);
         lc.add(sc);
-        this.drizzle.update(t, dt, { cam: this.cam, rain: sp.rain, storm: sp.overcast, wind: [W.x * v, W.y * v], light: lc, onRumble: () => this.sound?.rumble?.() });
+        this.drizzle.update(t, dt, { cam: this.cam, rain: sp.rain, storm: sp.spell, wind: [W.x * v, W.y * v], light: lc, onRumble: () => this.sound?.rumble?.() });
       }
     }
     this.sound?.update(w, t, this.light.rain, { yaw: wrapAngle(L.yaw) });

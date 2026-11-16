@@ -1,4 +1,4 @@
-// A light drizzle now and then, and far off in it a storm: a low grey cover comes over, fine rain falls round the
+// A light shower now and then, and far off in it a storm: a little more cloud comes over, fine rain falls round the
 // walker for a few minutes - short, faint streaks slanting with the wind, only a few metres off - and goes; while it
 // lasts, low thunder rolls from far away and once in a while a bolt comes down on the horizon, kilometres off, with
 // the sky flashing pale round it (15 Nov 2026).
@@ -15,19 +15,24 @@ import * as THREE from 'three';
 const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const HOLD = (() => { try { const v = new URLSearchParams(location.search).get('rain'); return v === null ? null : +v; } catch { return null; } })();
 const LIGHT = 0.7;                                // (a drizzle at its heaviest: seven drops in ten of the box's)
+// (the cover at its fullest: a quarter of the way to a closed grey deck - a day's shower, the sky only a little more
+// overcast than it is without it, the sun and the sunset still through it; closed all the way, an evening sky went
+// flat and dark rust - seen 15 Nov 2026)
+const COVER = 0.25;
 export const SPELL = { start: 60, cycle: 600, cover: 300, rain: 210 };    // s: the first, how often, how long the cover and the rain last
 
-/** The weather's spell at the walk's clock t (s): how overcast (0..1) and how hard it drizzles (0..1). */
+/** The weather's spell at the walk's clock t (s): how overcast (0..1), how hard it drizzles (0..1), and how far into
+ *  its spell the weather is (spell: 0..1, the storm far off only near its height). */
 export function drizzleAt(t) {
-  if (HOLD !== null) return HOLD > 0 ? { overcast: 1, rain: LIGHT * Math.min(1, HOLD) } : { overcast: 0, rain: 0 };
+  if (HOLD !== null) return HOLD > 0 ? { overcast: COVER, rain: LIGHT * Math.min(1, HOLD), spell: 1 } : { overcast: 0, rain: 0, spell: 0 };
   const S = SPELL, u = t - S.start;
-  if (u < -60) return { overcast: 0, rain: 0 };
+  if (u < -60) return { overcast: 0, rain: 0, spell: 0 };
   // (where in its spell the weather is: the cover comes over in the minute before the rain, and clears a minute and a
   // half after it)
   const q = ((u + 60) % S.cycle) - 60;
-  const overcast = ss(-60, 0, q) * (1 - ss(S.cover - 90, S.cover, q));
+  const spell = ss(-60, 0, q) * (1 - ss(S.cover - 90, S.cover, q)), overcast = COVER * spell;
   const rain = LIGHT * ss(5, 50, q) * (1 - ss(S.rain - 50, S.rain, q));
-  return { overcast, rain };
+  return { overcast, rain, spell };
 }
 
 const N = 5200, BOX = 34, HIGH = 22;              // drops; the box round the camera (m across, m high)
@@ -161,7 +166,7 @@ export function makeDrizzle(U, { heightAt = () => 0, onStrike = null } = {}) {
         BU.uOn.value = on; flash = on;
         const endT = strike.pulses[strike.pulses.length - 1][0] + 0.2;
         if (strike.t > endT) { strike = null; BU.uOn.value = 0; bg.setDrawRange(0, 0); }
-      } else if (cam && storm > 0.6 && rain > 0.2) {
+      } else if (cam && storm > 0.5 && rain > 0.2) {
         next -= dt;
         if (next <= 0) { strikeAt(cam, sky); next = 45 + Math.random() * 75; }
         // (and between the strikes, thunder from further off still, a storm beyond the horizon: heard, not seen)
