@@ -151,9 +151,10 @@ export async function initWalk(container, opts = {}) {
         }
       }
     }
-    // (in for a second and a couple of frames drawn, then the shaders (a window behind others gets a frame a second)
+    // (in and a couple of frames drawn, then the shaders (a window behind others gets a frame a second). A whole second
+    // was waited here for nothing: 0.15 s since v0.0.108)
     settledAt = settled ? (settledAt ?? now) : null;
-    if (((framesSince > 2 && now - settledAt > 1000) || framesSince > 60 || now - veilStart > 30000) && !warmed && !warming) { prewarm(); return; }
+    if (((framesSince > 2 && now - settledAt > 150) || framesSince > 60 || now - veilStart > 30000) && !warmed && !warming) { prewarm(); return; }
     // (the bulk load - the rest of the land, the cities and their pieces arriving - done under the picture too, and the
     // picture lifted only once the frames come at an even pace (13 Nov 2026). Steady: two windows of 45 frames running, each one's slowest tenth
     // within twice its middle and 6 ms, the two middles within 12 % of each other. A window behind others gets a frame a
