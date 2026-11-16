@@ -555,8 +555,9 @@ export class CountrysideScene {
   loadRest() {
     if (this._rest || !this.ready) return;
     this._rest = true;
-    this.pois?.userData.loadModels?.(this.assets);
-    this.estateMarks?.userData.load?.();
+    // (a promise: the country places' and the estate's models in and handed to their arrivals - the walk is shown only
+    // after it, so the mill by the walker is never seen turning from its stand-in to its model)
+    this.restNear = Promise.all([this.pois?.userData.loadModels?.(this.assets), this.estateMarks?.userData.load?.()]).catch(() => {});
   }
   /** The cities' landmarks - the Kremlin, Petersburg's, the spa towns', Moscow's - and the rivers' bridges (the nearest
    *  1.7 km from where the walk begins; 17.6 MB of models a first visit no longer waits for): asked for once the walk is

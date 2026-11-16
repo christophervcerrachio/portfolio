@@ -167,7 +167,7 @@ export async function initWalk(container, opts = {}) {
       const pos = s.freeCam.on ? s.freeCam.pos : s.at;
       // (v0.0.103: the walker's own surroundings - the land, the woods, the country places with the windmill's model,
       // the estate, the country bridges - fetched and in; the cities and their landmarks are asked for as it lifts)
-      const bulkDone = pending === 0 && !managerBusy && arrivalsWaiting() === 0;
+      const bulkDone = restNearIn && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
       if (bulkDone && doneAt === null) { doneAt = now; tl('settling'); }
       if (!bulkDone) { doneAt = null; paceLast = null; pace.length = 0; paceMid = null; }
       let steady = false;
@@ -239,7 +239,11 @@ export async function initWalk(container, opts = {}) {
     openArrivals(at);
     bulkArrivals(true);
     s.loadRest();
+    // (asked for in this frame, not yet being read: the lift waits for the country places' models themselves, not for a
+    // quiet moment before their reading has begun - v0.0.105 lifted 0.7 s before they were even asked for)
+    (s.restNear ?? Promise.resolve()).then(() => { restNearIn = true; });
   }
+  let restNearIn = false;
   // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
   // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
   let laterDone = false;

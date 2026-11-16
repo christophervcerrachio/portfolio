@@ -66,16 +66,17 @@ export function buildCityMarks(world, U, { base = '', file, light = false, list 
   const solid = []; group.userData.solid = solid;
   // (the models asked for once the walk is shown - group.userData.load, countryside.js loadRest: the first view's
   // files have the line to themselves)
-  let asked = false;
-  group.userData.load = () => { if (asked) return; asked = true; read(); };
+  // (a promise: every model of the list read and handed to its arrival - countryside.js restNear waits for the estate's)
+  let asked = null;
+  group.userData.load = () => (asked ??= read());
   const read = () => Promise.all([list ? { buildings: list } : fetch(base + DIR + file).then((r) => r.json()), light ? lightCopies(base) : {}]).then(([K, LIGHT]) => {
     // (a model many buildings share - Moscow's forty churches in two designs, the spa towns' 239 houses in five - is
     // loaded once and its materials made ready once)
-    const byGlb = new Map();
+    const byGlb = new Map(), all = [];
     for (const b of K.buildings ?? []) { let l = byGlb.get(b.glb); if (!l) byGlb.set(b.glb, (l = [])); l.push(b); }
     for (const [glb, list] of byGlb) {
       const lite = LIGHT[glb.replace(/\.glb$/, '')] !== undefined;
-      gltfLoader().loadAsync(base + DIR + (lite ? glb.replace(/\.glb$/, '.lod.glb') : glb)).then((g) => {
+      all.push(gltfLoader().loadAsync(base + DIR + (lite ? glb.replace(/\.glb$/, '.lod.glb') : glb)).then((g) => {
         g.scene.traverse((o) => {
           if (!o.isMesh || o.material.userData.citymark) return;
           o.material.userData.citymark = true;
@@ -128,8 +129,9 @@ export function buildCityMarks(world, U, { base = '', file, light = false, list 
           m.name = 'citymark-' + b.name;
           arrive(m, { parent: group });
         });
-      }).catch(() => {});
+      }).catch(() => {}));
     }
+    return Promise.all(all);
   }).catch(() => {});
   return group;
 }
