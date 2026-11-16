@@ -864,7 +864,9 @@ export class CountrysideScene {
   letGo() { if (this.look.anchor) this.look.anchor.held = false; }
 
   /** Draw the landscape (before the hero draws the hands): the sky, the painted valley over it, the near world. */
-  prerender(renderer) {
+  /** draw: false - under the loading picture, a turn of the loading alone: everything that comes in let in and placed,
+   *  none of the scene's own pictures drawn (no one sees them; walk.js renderAt) */
+  prerender(renderer, draw = true) {
     this._targets(renderer);
     if (!this.ready || !this.rt || !this.group.visible) return;
     const prev = renderer.getRenderTarget(), auto = renderer.autoClear, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
@@ -891,6 +893,7 @@ export class CountrysideScene {
     // (what has come in since the last frame let in by turns, and what is rising raised: world/arrive.js)
     pumpArrivals(this.cam.position);
     this.pois?.userData.update(this.cam.position, this.t ?? 0);
+    if (!draw) return;
     this.sky.aim(this.cam);
     // (nothing to follow the camera now: the drizzle planes were the only thing that needed re-placing every frame)
     // the sky's panorama, a band at a time (all of it at first, or after a jump in time: stills, tests)

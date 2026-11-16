@@ -634,9 +634,15 @@ export async function initWalk(container, opts = {}) {
   // (the frames that took long, for a look at what they carried - __walk.heavy: when (ms since the page began), the
   // whole frame, the scene's update, its own pictures (sky, sun, the land), the show pass, and what came in: arrive.js)
   const HEAVY = [];
+  // (under the loading picture, once the first view's programs are made: three frames in four the loading's turn alone -
+  // the arrivals let in, the tiles and places updated - and no picture drawn that no one sees. The fourth draws it all,
+  // so what has come in goes up to the card a part at a time, not at once as the picture lifts. The scene's own
+  // pictures took 30 ms a frame of the bulk's time: measured, v0.0.108)
+  let loadTurn = 0;
   function renderAt(t) {
     const a = performance.now();
     s.update(t);
+    if (veilUp && opened && (++loadTurn & 3)) { s.prerender(renderer, false); const z = performance.now(); report.frame(z - a, 0, 0, lastPump); return; }
     const b = performance.now();
     s.prerender(renderer);
     const c = performance.now();
