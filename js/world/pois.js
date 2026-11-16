@@ -759,11 +759,17 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     }
   }
   const sailGeo = windmillSails();
+  // (the sails never come in before the body they turn on: where the mill's model stands in for the stand-in, they
+  // wait for it and come in with it, one piece rising together - loadModels; seen as blades rising alone, 16 Nov 2026)
+  const millModeled = (MODELED.mill ?? []).some((f) => shapes[stem(f.file)]);
+  const sailsAt = new Map();                       // place -> its mill's sails, waiting for the mill's body
   for (const a of animate.filter((o) => o.kind === 'sails')) {
     const m = new THREE.Mesh(sailGeo, MAT);
     m.position.set(a.x + Math.sin(a.ry) * MILL.out, a.y + MILL.hub, a.z + Math.cos(a.ry) * MILL.out); m.rotation.y = a.ry;
-    m.name = 'poi-sails';
-    toPlace(a.place ?? '-', m); sails.push(m);
+    m.name = 'poi-sails'; m.userData.place = a.place ?? '-';
+    if (millModeled) (sailsAt.get(m.userData.place) ?? sailsAt.set(m.userData.place, []).get(m.userData.place)).push(m);
+    else toPlace(m.userData.place, m);
+    sails.push(m);
   }
   for (const list of atPlace.values()) arrive(list, { parent: group });
   // (the stand-ins of every place, before they are in: what the models that come take over - loadModels, below)
@@ -772,18 +778,38 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   group.userData.left = left;
   group.userData.skipped = skipped;
   group.userData.MODELED = MODELED;
+  // (the sails' model as meshes for one mill: the hub at its origin, the sails across x and y, turning about z)
+  const sailParts = (g) => {
+    g.scene.updateMatrixWorld(true);
+    const parts = [];
+    g.scene.traverse((c) => {
+      if (!c.isMesh) return;
+      const mat = c.material;
+      if (!(mat.metalness > 0.3 || mat.roughness < 0.3)) { mat.metalness = 0; mat.roughness = Math.max(0.8, mat.roughness ?? 0.8); }
+      receiveSun(mat, U);
+      parts.push({ geo: c.geometry.clone().applyMatrix4(c.matrixWorld), mat });
+    });
+    return parts;
+  };
+  const none = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([], 3));
   group.userData.loadModels = async (base) => {
     const turn = new THREE.Matrix4();
     // (a model's copies of each place come in together, and rise in their place: arrive.js)
     const byModelPlace = new Map();
+    // (the sails' model asked for with the mill's, so the mill comes in already wearing it)
+    const sailsModel = sailsAt.size ? gltfLoader().loadAsync(base + 'assets/world/models/' + SAILS).catch(() => null) : null;
     await Promise.all(Object.entries(MODELED).map(async ([kitName, files]) => {
       const list = lists[kitName];
       if (!list?.length) return;
       const got = await Promise.all(files.map((f) => gltfLoader().loadAsync(base + 'assets/world/models/' + f.file).then((g) => ({ ...f, g })).catch(() => null)));
       const ok = got.filter(Boolean);
       const stands = standIns(kitName);
-      // (not made, or it did not come: the stand-in is shown)
-      if (!ok.length) { for (const st of stands) { st.visible = true; st.userData.replaced = false; st.userData.drawTo = undefined; } return; }
+      // (not made, or it did not come: the stand-in is shown - and a mill's sails come in on it)
+      if (!ok.length) {
+        for (const st of stands) { st.visible = true; st.userData.replaced = false; st.userData.drawTo = undefined; }
+        if (kitName === 'mill') for (const ms of sailsAt.values()) arrive(ms, { parent: group, rise: false });
+        return;
+      }
       // (which of the kit's files each copy takes: by its place, among the files whose outline it was set down by -
       // or, where none has an outline, among those that came)
       const planned = files.filter((f) => shapes[stem(f.file)]);
@@ -810,24 +836,23 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       });
       // (the stand-ins of the kit away for good: replaced says so to the audits, drawTo keeps farcull.js from showing them)
       for (const st of stands) { st.visible = false; st.userData.replaced = true; st.userData.drawTo = -Infinity; }
+      // (each mill's sails join its body's piece, wearing the sails' model if it came: one thing, rising together)
+      if (kitName === 'mill' && sailsAt.size) {
+        const g = await sailsModel, parts = g ? sailParts(g) : null;
+        for (const [place, ms] of sailsAt) {
+          for (const m of ms) if (parts) { for (const { geo, mat } of parts) m.add(Object.assign(new THREE.Mesh(geo, mat), { name: 'model-sails' })); m.geometry = none; }
+          (byModelPlace.get(place) ?? byModelPlace.set(place, []).get(place)).push(...ms);
+        }
+      }
     }));
     for (const list of byModelPlace.values()) arrive(list, { parent: group });
-    // (the mill's sails: once its body is the model's, each stand-in's sails give way to the model's, which come in
-    // as children of them - so they turn as the stand-in's did, and show and hide with their place. The stand-in's own
-    // triangles go only once the model's stand there: an empty geometry, which neither draws nor casts a shadow)
-    if (sails.length && standIns('mill').some((st) => st.userData.replaced)) {
+    // (a mill whose model had no outline, so its stand-in came in with its place, sails and all: once the model has
+    // taken the stand-in's place, the stand-in's sails give way to the model's, which come in as children of them - so
+    // they turn as the stand-in's did. The stand-in's own triangles go only once the model's stand there)
+    if (!millModeled && sails.length && standIns('mill').some((st) => st.userData.replaced)) {
       const g = await gltfLoader().loadAsync(base + 'assets/world/models/' + SAILS).catch(() => null);
       if (g) {
-        g.scene.updateMatrixWorld(true);
-        const parts = [];
-        g.scene.traverse((c) => {
-          if (!c.isMesh) return;
-          const mat = c.material;
-          if (!(mat.metalness > 0.3 || mat.roughness < 0.3)) { mat.metalness = 0; mat.roughness = Math.max(0.8, mat.roughness ?? 0.8); }
-          receiveSun(mat, U);
-          parts.push({ geo: c.geometry.clone().applyMatrix4(c.matrixWorld), mat });
-        });
-        const none = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        const parts = sailParts(g);
         for (const m of sails) {
           const its = parts.map(({ geo, mat }) => Object.assign(new THREE.Mesh(geo, mat), { name: 'model-sails' }));
           arrive(its, { parent: m, rise: false, x: m.position.x, z: m.position.z }).then(() => { m.geometry = none; });
