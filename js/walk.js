@@ -17,7 +17,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, bulkArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
+import { setupArrivals, openArrivals, bulkArrivals, quietArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 import * as report from './loadreport.js';
 
@@ -165,8 +165,9 @@ export async function initWalk(container, opts = {}) {
     if (warmed && !opened) { opened = true; openedAt = now; open(); }
     if (opened) {
       const pos = s.freeCam.on ? s.freeCam.pos : s.at;
-      const cities = (s._later?.blocks?.userData.pending?.(pos) ?? 0) + (s._later?.props?.userData.pending?.() ?? 0);
-      const bulkDone = laterDone && cities === 0 && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
+      // (v0.0.103: the walker's own surroundings - the land, the woods, the country places with the windmill's model,
+      // the estate, the country bridges - fetched and in; the cities and their landmarks are asked for as it lifts)
+      const bulkDone = pending === 0 && !managerBusy && arrivalsWaiting() === 0;
       if (bulkDone && doneAt === null) { doneAt = now; tl('settling'); }
       if (!bulkDone) { doneAt = null; paceLast = null; pace.length = 0; paceMid = null; }
       let steady = false;
@@ -186,6 +187,8 @@ export async function initWalk(container, opts = {}) {
       if (steady || (doneAt !== null && now - doneAt > 20000)) {
         if (!steady) console.info('[load] lifted 20 s after the load was done; frames not yet steady');
         veilUp = false; tl('veil lifted'); held.clear(); bulkArrivals(false);
+        // (the rest behind the walk, within the walk's own share of each frame, put in place without rising: arrive.js)
+        quietArrivals(true); s.loadRestFar(); later();
         // (the walk shown looking where it was meant to - the windmill, or where the walker looked before a change of
         // graphics - whatever reached the view meanwhile; and still nothing turns it until the picture has faded away
         // (loading.js: 1.3 s): the mouse moved while the picture was still going had turned the view before it was seen)
@@ -199,7 +202,6 @@ export async function initWalk(container, opts = {}) {
         const I = renderer.info;
         report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles } });
         loading?.done();
-        rise();
       }
     }
   }
@@ -235,17 +237,6 @@ export async function initWalk(container, opts = {}) {
     openArrivals(at);
     bulkArrivals(true);
     s.loadRest();
-    later();
-  }
-  // (as the picture lifts: the woods rise out of the ground in a wave from the walker - wind-glsl.js riseAt; off again
-  // once it has passed the farthest tree - so the wave is seen, not spent under the picture)
-  function rise() {
-    const at = s.freeCam.on ? s.freeCam.pos : s.at;
-    if (!still && !noRise) {
-      s.U.uRise.value.set(at.x, at.z, clock, 450);
-      const off = () => { if (s.U.uRise.value.w <= 0) return; if (clock - s.U.uRise.value.z > 7.5) s.U.uRise.value.w = 0; else setTimeout(off, 500); };
-      setTimeout(off, 7000);
-    }
   }
   // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
   // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
@@ -687,7 +678,7 @@ export async function initWalk(container, opts = {}) {
   await loaded;
   container.classList.add('is-live');
   // (a still: no picture to lift - the rest comes in at once, in its place)
-  if (still) { openArrivals(s.at); s.loadRest(); laterDone = true; }
+  if (still) { openArrivals(s.at); s.loadRest(); s.loadRestFar(); laterDone = true; }
 
   // ---- VIEW POSE (dev only; remove with the free-cam). pose() says where the view is: degrees right of ahead (yaw) and
   // up (pitch), the zoom, the clock, and where the eye stands (x, z on the hill) or flies (fly, x, y, z). goTo(pose)

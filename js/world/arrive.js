@@ -78,6 +78,33 @@ export function openArrivals(pos) {
 }
 export const arrivalsOpen = () => A.open;
 
+/** Once the walk is shown (v0.0.103: the picture lifts as soon as the walker's own surroundings are in; the cities, their
+ *  landmarks and the far land come in behind): nothing rises - a piece is put in its place, whole, as it comes. One
+ *  that would be seen coming - in view and nearer than QUIET.near - waits until the view has turned from it, QUIET.most
+ *  at the longest; one farther off is put in at once, small in the haze. The frame's share is the walk's own: no
+ *  frame held up. */
+const QUIET = { near: 2000, most: 6000, half: 0.95 };   // (m; ms; radians either side of the view's middle - its corners and some)
+export function quietArrivals(on) { A.quiet = !!on; }
+const camAt = new THREE.Vector3(), fwd = new THREE.Vector3(), toward = new THREE.Vector3();
+function seenComing(a, now) {
+  const cam = A.cam?.();
+  if (!cam) return false;
+  if (!a.sph) {
+    const b = new THREE.Box3();
+    for (const o of a.list) { o.updateMatrixWorld(true); b.expandByObject(o); }
+    a.sph = b.isEmpty() ? null : b.getBoundingSphere(new THREE.Sphere());
+  }
+  if (!a.sph) return false;
+  if (now - (a.quietSince ??= now) > QUIET.most) return false;
+  cam.getWorldPosition(camAt); cam.getWorldDirection(fwd);
+  toward.copy(a.sph.center).sub(camAt);
+  const d = toward.length(), r = a.sph.radius;
+  if (d - r > QUIET.near) return false;
+  if (d <= r) return true;
+  const off = Math.acos(Math.min(1, Math.max(-1, toward.dot(fwd) / d))) - Math.asin(Math.min(1, r / d));
+  return off < QUIET.half;
+}
+
 /** The view's programs for `obj` made in the background, as the scene will draw it: a promise, resolved when the
  *  card has them. o: { camera, scene } to make them as another scene draws them (the sky's, the far land's);
  *  target: the picture they are drawn into, where it is not the scene's own (the sky's panorama). */
@@ -324,6 +351,7 @@ export function pumpArrivals(pos, now = performance.now()) {
       a.stage = 3;
     }
     if (a.stage === 3) {
+      if (A.quiet && !A.bulk && !A.still && seenComing(a, now)) continue;
       if (a.bytes < 0) a.bytes = bytesOf(a.list);
       if (A.geoAllow <= 0 || (geo > 0 && performance.now() - t0 > B.ms * 2)) continue;
       geo += a.bytes; A.geoAllow -= a.bytes;
@@ -345,7 +373,7 @@ function show(a, pos, now) {
     else if (a.parent && o.parent !== a.parent) a.parent.add(o);
   }
   const rise = typeof a.rise === 'function' ? a.rise() : a.rise;
-  if (!rise || A.still || A.bulk) { a.res(); return; }
+  if (!rise || A.still || A.bulk || A.quiet) { a.res(); return; }
   // (a piece of a larger thing: later the farther it is from where the thing's first piece rose - a skyline rising
   // in a wave across the city, not all at once)
   if (a.batch) {
