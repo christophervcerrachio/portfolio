@@ -894,11 +894,11 @@ export class CountrysideScene {
     if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight), this.land.fog); }
     this.woods?.userData.update(this.cam.position, this.cam);
     if (this._culls) for (const c of this._culls) c(this.cam.position);
-    this.cityProps?.userData.update(this.cam.position);
-    this.cityBlocks?.userData.update?.(this.cam.position);
+    timed('frame: furniture placed', () => this.cityProps?.userData.update(this.cam.position));
+    timed('frame: blocks placed', () => this.cityBlocks?.userData.update?.(this.cam.position));
     this.chimneySmoke?.userData.update(this.cam.position);
     // (what has come in since the last frame let in by turns, and what is rising raised: world/arrive.js)
-    pumpArrivals(this.cam.position);
+    timed('frame: arrivals', () => pumpArrivals(this.cam.position));
     this.pois?.userData.update(this.cam.position, this.t ?? 0);
     if (!draw) return;
     this.sky.aim(this.cam);
@@ -907,7 +907,7 @@ export class CountrysideScene {
     const { y0, y1 } = this.tans1 ?? this.tans, R = this.sky.range, span = R.w - R.z;
     const view = [(L.pitch + Math.atan(y1) - R.z) / span, (L.pitch + Math.atan(y0) - R.z) / span];
     const jump = this.skyT === undefined || Math.abs(this.t - this.skyT) > 1.5;
-    this.sky.update(renderer, this.t ?? 0, { full: jump, view });
+    timed('frame: the sky', () => this.sky.update(renderer, this.t ?? 0, { full: jump, view }));
     this.sky.updateInset(renderer, this.t ?? 0, this._insetWanted(jump), this.dt);
     this.skyT = this.t;
     renderer.setRenderTarget(this.rt);
@@ -938,7 +938,7 @@ export class CountrysideScene {
       renderer.setRenderTarget(null);
       // (the machine's settings: both shadow pictures, the near one only, or none - hardware.js)
       const sh = this.gfx.shadows ?? 'both', sunUp = this.light.sun > 0.03;
-      this.shadow.render(renderer, this.land, sunUp && sh !== 'none');
+      timed('frame: the sun\'s near picture', () => this.shadow.render(renderer, this.land, sunUp && sh !== 'none'));
       // (the far picture every frame too: drawn every other frame, it lagged the frame its fit moved on, and while the
       // camera moved the houses' shadows came and went frame by frame. Half a millisecond since the scene's places are
       // worked out once a frame.)
@@ -947,12 +947,12 @@ export class CountrysideScene {
         this._farN = ((this._farN ?? -1) + 1) % every;
         if (this._farN === 0 || !this._farDrawn) {
           if (this._farFit) { this.shadowFar.fit(this._farFit); this._farFit = null; }
-          this.shadowFar.render(renderer, this.land, sunUp && sh === 'both'); this._farDrawn = true;
+          timed('frame: the sun\'s far picture', () => this.shadowFar.render(renderer, this.land, sunUp && sh === 'both')); this._farDrawn = true;
         }
       }
       renderer.setRenderTarget(this.rt);
     }
-    renderer.render(this.land, this.cam);
+    timed('frame: the land drawn', () => renderer.render(this.land, this.cam));
     // (the picture brought up to the screen's size, where it was drawn smaller: upscale.js)
     if (this.up && this.upRT) this.upscaler.upscale(renderer, this.rt.texture, this.size, this.upRT);
     // (where the sun stands on the screen, for the shafts; faded as it leaves the view and when a cloud is over it)

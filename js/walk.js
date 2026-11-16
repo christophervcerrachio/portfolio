@@ -269,7 +269,7 @@ export async function initWalk(container, opts = {}) {
       for (const t of spare) tmp.remove(t);
       for (const o of groups) tmp.remove(o);
     } catch (e) { console.warn('cities', e); }
-    s.addLater();
+    report.timed('later: put in', () => s.addLater());
     laterDone = true;
     tl('cities: shown');
   }
