@@ -170,6 +170,8 @@ export async function initWalk(container, opts = {}) {
       // the estate, the country bridges - fetched and in; the cities and their landmarks are asked for as it lifts)
       const bulkDone = restNearIn && pending === 0 && !managerBusy && arrivalsWaiting() === 0;
       if (bulkDone && doneAt === null) { doneAt = now; tl('settling'); }
+      // (what the walk waits for once its arrivals are all in, for the load's report)
+      if (!bulkDone && arrivalsWaiting() === 0 && !waitNoted) { waitNoted = true; tl(`waiting: ${!restNearIn ? 'near models ' : ''}${pending ? pending + ' files ' : ''}${managerBusy ? 'manager' : ''}`); }
       if (!bulkDone) { doneAt = null; paceLast = null; pace.length = 0; paceMid = null; }
       let steady = false;
       if (doneAt !== null) {
@@ -242,9 +244,9 @@ export async function initWalk(container, opts = {}) {
     s.loadRest();
     // (asked for in this frame, not yet being read: the lift waits for the country places' models themselves, not for a
     // quiet moment before their reading has begun - v0.0.105 lifted 0.7 s before they were even asked for)
-    (s.restNear ?? Promise.resolve()).then(() => { restNearIn = true; });
+    (s.restNear ?? Promise.resolve()).then(() => { restNearIn = true; tl('near models in'); });
   }
-  let restNearIn = false;
+  let restNearIn = false, waitNoted = false;
   // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
   // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
   let laterDone = false;

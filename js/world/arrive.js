@@ -58,7 +58,9 @@ export function setupArrivals({ renderer, scene, camera, target, shadow = () => 
 /** Under the loading picture (v0.0.92: the whole world comes in there): a frame's share many times the walk's own,
  *  and nothing rises - no one sees it - each thing shown in its place once it is on the card. Off as the picture lifts:
  *  walk.js. */
-const BULK = { ms: 40, tex: 400e6, geo: 800e6, compiles: 60 };
+// (v0.0.110: no one sees these frames - a picture goes up whole, not in strips over frames, and a frame may spend a
+// quarter of a second sending: the walk's surroundings' 63 pieces had taken 3 s at 40 ms a frame)
+const BULK = { ms: 250, tex: 2e9, geo: 2e9, compiles: 200 };
 let walkBudget = null;
 export const inBulk = () => !!A.bulk;
 export function bulkArrivals(on) {
@@ -198,7 +200,7 @@ const sBox = new THREE.Box2(), sAt = new THREE.Vector2(), sTo = new THREE.Vector
 const upping = new Set();           // (pictures part of the way up: another thing that uses one waits for the rest of it)
 function inStrips(t) {
   const im = t.image;
-  return typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap && t.version > 0 && !t.flipY && !t.premultiplyAlpha
+  return !A.bulk && typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap && t.version > 0 && !t.flipY && !t.premultiplyAlpha
     && !t.isCompressedTexture && !t.isDataTexture && !t.isCubeTexture && !(t.mipmaps?.length > 0)
     && im.width * im.height * 4 > STRIP * 1.5 && typeof A.renderer.copyTextureToTexture === 'function';
 }
