@@ -184,8 +184,10 @@ export async function initWalk(container, opts = {}) {
           }
         } else { paceLast = null; steady = now - doneAt > 3000; }
       }
-      if (steady || (doneAt !== null && now - doneAt > 20000)) {
-        if (!steady) console.info('[load] lifted 20 s after the load was done; frames not yet steady');
+      // (v0.0.103: with only the walker's surroundings to wait for, the frames are as even as the walk's own; 20 s more
+      // for them to settle held the walk up for nothing - measured: in at 5.8 s, shown at 25.8 s. 1.5 s at most now)
+      if (steady || (doneAt !== null && now - doneAt > 1500)) {
+        if (!steady) console.info('[load] lifted 1.5 s after the load was done; frames not yet steady');
         veilUp = false; tl('veil lifted'); held.clear(); bulkArrivals(false);
         // (the rest behind the walk, within the walk's own share of each frame, put in place without rising: arrive.js)
         quietArrivals(true); s.loadRestFar(); later();
