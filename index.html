@@ -169,7 +169,23 @@
       } catch { /* (no storage) */ }
     </script>
   </main>
-  <script type="module">
+  <script>
+    // A script the host failed to send (Pages answers 503 for a moment just after a deploy) stays out of the page for
+    // good: the browser keeps a module's failure as long as the page lives, and again.js asks again only for what is
+    // fetched. The page loads itself again instead - after 3, 10 and 25 s, three times at most in five minutes.
+    window.__loadAgain = (why) => {
+      try {
+        const k = 'career-load-again', now = Date.now();
+        const seen = JSON.parse(sessionStorage.getItem(k) || '[]').filter((t) => now - t < 300000);
+        if (seen.length >= 3) return false;
+        sessionStorage.setItem(k, JSON.stringify([...seen, now]));
+        console.warn('A script did not come (' + why + '): the page loads again.');
+        setTimeout(() => location.reload(), [3000, 10000, 25000][seen.length] * (0.8 + 0.4 * Math.random()));
+        return true;
+      } catch { return false; }
+    };
+  </script>
+  <script type="module" onerror="window.__loadAgain?.('its first scripts')">
     // The scene needs the graphics card. Where WebGL would only be drawn in software (graphics acceleration turned off,
     // or the browser has given up on the card after a driver crash), it would crawl at a frame or two a second: the
     // page stays as it is - the loading picture, all of it risen, with no words. (Automated test browsers draw in
@@ -196,7 +212,11 @@
     if (gl === 'gpu') {
       import('./js/walk.js')
         .then(({ initWalk }) => initWalk(document.getElementById('walk')))
-        .catch((e) => console.warn('The scene could not start:', e));
+        .catch((e) => {
+          // (a script the host did not send - walk.js or one it imports: the page loads again, above)
+          if (e instanceof TypeError && /dynamically imported module|module script failed/i.test(String(e.message))) window.__loadAgain?.(e.message);
+          console.warn('The scene could not start:', e);
+        });
     }
   </script>
 </body>

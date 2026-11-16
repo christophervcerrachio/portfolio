@@ -14,6 +14,8 @@
 //   at lift  the page's memory, and the card's: its programs, textures, geometries, and one frame's draws
 //   again    each file the host failed to send at first, which the page then tried for again (again.js): its path,
 //            the first failure, the last answer, the tries, when - under the picture, and in the minute after it
+//   reloads  how many times in the last five minutes the page loaded itself again because a script did not come
+//            (index.html, __loadAgain)
 
 const T0 = performance.now();
 try { performance.setResourceTimingBufferSize(50000); } catch { /* (the browser's own size) */ }
@@ -145,6 +147,7 @@ export function finish(extra = {}) {
     frames: R.frames, stages: R.stages,
     heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
     again: [...(globalThis.__askedAgain ?? [])],
+    reloads: (() => { try { return JSON.parse(sessionStorage.getItem('career-load-again') || '[]').filter((t) => Date.now() - t < 300000).length; } catch { return 0; } })(),
     ...extra,
   };
   window.__loadReport = rep;
