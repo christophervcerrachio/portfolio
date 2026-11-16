@@ -97,6 +97,9 @@ export async function initWalk(container, opts = {}) {
   LM.onLoad = (...a) => { managerBusy = false; quietSince = performance.now(); prevLoad?.(...a); };
   const loading = startLoading(document.querySelector('.walk-load'), { style: GFX.style ?? 'full', still, base });
   let framesSince = 0, veilUp = !still, gfxChecked = still, bench = null, benchLast = null;
+  // (the look the walk was meant to open on, and the moment the loading picture is gone: nothing turns the view before it)
+  let firstLook = null, stillUntil = 0;
+  const frozen = () => veilUp || performance.now() < stillUntil;
   const veilStart = performance.now();
   // (the load's timeline in the console - "[load] <stage> <ms since the page began>" - so its slow parts can be found)
   // (and how much of it the page's own work held the browser up: its long tasks, summed)
@@ -182,6 +185,15 @@ export async function initWalk(container, opts = {}) {
       if (steady || (doneAt !== null && now - doneAt > 20000)) {
         if (!steady) console.info('[load] lifted 20 s after the load was done; frames not yet steady');
         veilUp = false; tl('veil lifted'); held.clear(); bulkArrivals(false);
+        // (the walk shown looking where it was meant to - the windmill, or where the walker looked before a change of
+        // graphics - whatever reached the view meanwhile; and still nothing turns it until the picture has faded away
+        // (loading.js: 1.3 s): the mouse moved while the picture was still going had turned the view before it was seen)
+        if (firstLook) {
+          const L = s.look;
+          L.anchor = null; L.yaw = (+firstLook.yaw || 0) / DEG; L.pitch = (+firstLook.pitch || 0) / DEG; L.goal = [L.yaw, L.pitch];
+          L.zoom = L.zoomGoal = Math.min(s.zoomMax, Math.max(1, +firstLook.zoom || 1)); s._lens();
+        }
+        stillUntil = performance.now() + 1400;
         loading?.done();
         rise();
       }
@@ -291,7 +303,7 @@ export async function initWalk(container, opts = {}) {
     try { kept = sessionStorage.getItem('career-pose'); if (kept) sessionStorage.removeItem('career-pose'); } catch { /* (none) */ }
     try {
       const p = kept ? JSON.parse(kept) : (still ? null : { ...SPAWN });
-      if (p) { delete p.t; setTimeout(() => goTo(p), 0); }
+      if (p) { delete p.t; firstLook = p; setTimeout(() => goTo(p), 0); }
     } catch { /* (none) */ }
   });
 
@@ -337,7 +349,7 @@ export async function initWalk(container, opts = {}) {
   // (not while the loading picture or the change of look's is up: the walk is shown looking where it was set to look -
   // the first view, at the windmill, or where the walker stood before the change - however the mouse moved meanwhile)
   function lookBy(dx, dy) {
-    if (veilUp) return;
+    if (frozen()) return;
     const L = s.look, z = Math.max(1, L.zoom), M = L.limits;
     L.anchor = null;
     L.yaw += dx * LOOK / z;
@@ -526,7 +538,7 @@ export async function initWalk(container, opts = {}) {
   mouseState();
 
   // ---- zooming: the wheel (or a trackpad's pinch), toward the middle of the view
-  function zoomTo(z) { if (veilUp) return; const L = s.look; L.anchor = null; L.zoomGoal = Math.min(s.zoomMax, Math.max(1, z)); }
+  function zoomTo(z) { if (frozen()) return; const L = s.look; L.anchor = null; L.zoomGoal = Math.min(s.zoomMax, Math.max(1, z)); }
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     startSound();
@@ -549,7 +561,7 @@ export async function initWalk(container, opts = {}) {
     if (e.code === 'Escape' && !locked() && !e.repeat) { showMenu(!menuOpen); return; }
     if (menuOpen) return;                              // (the menu's own keys: Tab, the arrows, Enter)
     const k = KEYS[e.code];
-    if (veilUp) { if (k) e.preventDefault(); return; } // (nothing moves under the loading picture: lookBy)
+    if (frozen()) { if (k) e.preventDefault(); return; } // (nothing moves under the loading picture, nor as it fades: lookBy)
     if (!k || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     if (!e.repeat && !s.freeCam?.on) {
