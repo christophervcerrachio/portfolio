@@ -4,7 +4,8 @@
 // and a gzip file (1f 8b 08) is unpacked on the way in by the browser's own DecompressionStream - the very bytes it held
 // before it was packed. A file that is not packed (the working copy, served as it is) passes through untouched; none of
 // the site's own begins so (post.py stops if one does).
-// Imported first, by the page and by each of its workers that fetches such a file.
+// Imported right after again.js (which asks the host again when it fails to send a file), by the page and by each of
+// its workers that fetches such a file: what comes here is the answer that came.
 const PACKED = /\/assets\/.+\.(glb|json|bin)$/i;
 
 if (!globalThis.__unpacking && typeof DecompressionStream === 'function' && typeof ReadableStream === 'function') {

@@ -4,6 +4,7 @@
 // is handed, for each kind of thing, one block of numbers sorted by tile and where each tile's part of it begins
 // (cityprops.js).
 // In: { url, porticos (or null), tile (m) }. Out: packProps's, or { error }.
+import '../again.js';                              // (a list the host fails to send is asked for again: again.js)
 import '../unpack.js';                             // (the lists are kept packed where the site is published: unpack.js)
 import { packProps } from './props-pack.js';
 

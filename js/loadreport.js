@@ -12,6 +12,8 @@
 //   watched  how much of the wait the page was in front and focused (a window behind others runs a frame a second,
 //            and the load goes at the frames' pace)
 //   at lift  the page's memory, and the card's: its programs, textures, geometries, and one frame's draws
+//   again    each file the host failed to send at first, which the page then tried for again (again.js): its path,
+//            the first failure, the last answer, the tries, when - under the picture, and in the minute after it
 
 const T0 = performance.now();
 try { performance.setResourceTimingBufferSize(50000); } catch { /* (the browser's own size) */ }
@@ -70,7 +72,8 @@ function closeAfter() {
   const a = AFTER; AFTER = null;
   const rep = window.__loadReport;
   if (!rep) return;
-  rep.after = { frames: a.n, long: a.frames, tasks: a.tasks, spans: a.spans, stages: a.stages, heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+  rep.after = { frames: a.n, long: a.frames, tasks: a.tasks, spans: a.spans, stages: a.stages, heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
+    again: (globalThis.__askedAgain ?? []).slice(rep.again?.length ?? 0) };
   try {
     const all = JSON.parse(localStorage.getItem('career-load-reports') || '[]');
     if (all.length && all[all.length - 1].at === rep.at) all[all.length - 1] = rep;
@@ -141,6 +144,7 @@ export function finish(extra = {}) {
       .map(([k, w]) => [k, { s: +(w.ms / 1000).toFixed(2), n: w.n, maxMs: +w.max.toFixed(1) }])),
     frames: R.frames, stages: R.stages,
     heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
+    again: [...(globalThis.__askedAgain ?? [])],
     ...extra,
   };
   window.__loadReport = rep;

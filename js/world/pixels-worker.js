@@ -2,6 +2,8 @@
 // numbers. The cities' maps of where a house stands (cities/<city>-built.png, 2 m a pixel: 3,000 by 3,500 pixels and
 // more) had each held the walk still for a tenth of a second as the cities came in (cityblocks.js).
 // In: { url, channel (0 red .. 3 alpha) }. Out: { w, h, px: Uint8Array } or { error }.
+// (a picture the host fails to send is asked for again: again.js; where that cannot be had, asked once, as before)
+try { importScripts('../again.js'); } catch { /* (asked once) */ }
 self.onmessage = async (e) => {
   const { url, channel = 0 } = e.data;
   try {
