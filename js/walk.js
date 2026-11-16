@@ -19,6 +19,7 @@ import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
 import { setupArrivals, openArrivals, bulkArrivals, departAll, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
+import * as report from './loadreport.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
 const PITCH = [-1.1, 1.2];                          // how far the view can tip down and up, zoomed out (radians)
@@ -104,7 +105,7 @@ export async function initWalk(container, opts = {}) {
   // (the load's timeline in the console - "[load] <stage> <ms since the page began>" - so its slow parts can be found)
   // (and how much of it the page's own work held the browser up: its long tasks, summed)
   let busy = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) busy += e.duration; }).observe({ type: 'longtask', buffered: true }); } catch { /* (none) */ }
-  const tl = (label) => { console.info('[load]', label, Math.round(performance.now()), 'busy', Math.round(busy)); loading?.stage(label); };
+  const tl = (label) => { console.info('[load]', label, Math.round(performance.now()), 'busy', Math.round(busy)); loading?.stage(label); report.stage(label, busy); };
   let settledAt = null;
   function veilCheck(now) {
     if (!veilUp) return;
@@ -194,6 +195,9 @@ export async function initWalk(container, opts = {}) {
           L.zoom = L.zoomGoal = Math.min(s.zoomMax, Math.max(1, +firstLook.zoom || 1)); s._lens();
         }
         stillUntil = performance.now() + 1400;
+        // (the load's report kept: loadreport.js)
+        const I = renderer.info;
+        report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles } });
         loading?.done();
         rise();
       }
@@ -637,6 +641,7 @@ export async function initWalk(container, opts = {}) {
     const c = performance.now();
     renderer.render(stage, camera);
     const d = performance.now();
+    if (veilUp) report.frame(b - a, c - b, d - c, lastPump);
     if (d - a > 24 && s.ready && HEAVY.length < 80) HEAVY.push({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1), pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1), came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
   }
   function tick(now) {

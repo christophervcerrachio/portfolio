@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LoaderUtils } from 'three';
 import { MeshoptDecoder } from '../vendor/meshopt/meshopt_decoder.mjs';
 import { capBitmap } from './texcap.js';
+import { span, timed } from './loadreport.js';
 
 const SHARED = new Map();                 // the picture's full address -> the first model's promise of its texture
 
@@ -36,4 +37,14 @@ class SharedPictures {
 // had been decoded in the frame it came in)
 try { MeshoptDecoder.useWorkers?.(Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 2))); } catch { /* (decoded here, then) */ }
 
-export const gltfLoader = () => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register((parser) => new SharedPictures(parser));
+// (each model's reading timed for the load's report, loadreport.js: the page's own thread while the parse runs, and the
+// wait from the file to the model ready - its meshes decoded in the workers, its pictures in - which overlaps model to model)
+export const gltfLoader = () => {
+  const L = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register((parser) => new SharedPictures(parser));
+  const parse = L.parse.bind(L);
+  L.parse = (data, path, onLoad, onError) => {
+    const waited = span('models: file to ready (waiting, overlapped)');
+    return timed('models: parse (thread)', () => parse(data, path, (g) => { waited(); onLoad(g); }, (e) => { waited(); onError?.(e); }));
+  };
+  return L;
+};

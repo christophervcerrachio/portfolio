@@ -11,6 +11,7 @@
 // tiles all read then: nothing of the cities is made or read once the walk is shown.
 import * as THREE from 'three';
 import { gltfLoader } from '../gltf.js';
+import { timed } from '../loadreport.js';
 import { tileStream } from './citytiles.js';
 import { arrive, inBulk } from './arrive.js';
 import { breathe } from './reveal.js';
@@ -338,7 +339,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       const t0 = performance.now();
       for (const [d, t] of todo) {
         if (performance.now() - t0 > (inBulk() ? 30 : 6)) break;   // (under the loading picture, more a frame)
-        build(t);
+        timed('furniture: built', () => build(t));
         if (t.lesser) for (const m of t.g.children) {
           const r = m.userData.reach, l = m.userData.lod;
           if (r !== undefined) m.visible = (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full));

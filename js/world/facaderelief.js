@@ -15,6 +15,7 @@ import { openingsOf } from './openings.js';
 import { arrive } from './arrive.js';
 import { letGo } from './citytiles.js';
 import { gltfLoader } from '../gltf.js';
+import { timed } from '../loadreport.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { styleNow } from '../retro.js';
 
@@ -996,7 +997,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       if (want && T.state === 0) {
         T.state = 1;
         fetch(base + DIR + T.city + '-relief/' + T.key + '.json').then((r) => r.json()).then((walls) => {
-          T.g = build(T, walls); hashWalls(T, walls); T.state = 2; T.fresh = true;
+          T.g = timed('fronts relief: built', () => build(T, walls)); hashWalls(T, walls); T.state = 2; T.fresh = true;
         }).catch(() => { T.state = 3; });
       }
       if (T.state === 2) {
