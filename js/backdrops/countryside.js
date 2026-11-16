@@ -91,7 +91,7 @@ const QUAD_VERT = /* glsl */`varying vec2 vUv; void main() { vUv = position.xy *
 // The landscape, drawn in linear light with its highlights kept, gets the hands' own tone mapping and exposure here,
 // then the weather's grade: a little less colour, cool shadows and warm lights, lifted blacks, a soft vignette.
 const SHOW_FRAG = /* glsl */`
-uniform sampler2D uPic; uniform float uAlpha; uniform float uFlash; uniform vec4 uGrade; uniform vec3 uShadowTint; uniform vec3 uLightTint;
+uniform sampler2D uPic; uniform float uAlpha; uniform vec4 uGrade; uniform vec3 uShadowTint; uniform vec3 uLightTint;
 uniform vec2 uTexel; uniform float uSharp;
 uniform vec2 uSunUV; uniform float uSunVis; uniform float uRays; uniform vec3 uRayTint; uniform float uAspect;
 uniform sampler2D uDepth; uniform float uRevZ; uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform float uAir; uniform float uSunLit; uniform float uAirSteps;
@@ -216,8 +216,6 @@ void main() {
     float lb = dot(bl, vec3(0.2126, 0.7152, 0.0722));
     sharp += bl * (max(lb - uRetroFx.y, 0.0) / max(lb, 1e-4)) * uRetroFx.x;
   }
-  // (a far bolt's flash: the whole picture a little brighter for the moment, as under a lit sky - drizzle.js)
-  sharp = sharp * (1.0 + 0.3 * uFlash) + vec3(0.004, 0.0045, 0.006) * uFlash;
   gl_FragColor = vec4(sharp, uAlpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -399,7 +397,7 @@ export class CountrysideScene {
     }
     // (the sun's shadow pictures, shared with every material: the air's shafts read them too)
     for (const k of Object.keys(shadowUniforms())) this.showU[k] = this.U[k];
-    this.showU.uSunDir = this.U.uSunDir; this.showU.uTime = this.U.uTime; this.showU.uFlash = this.U.uFlash;
+    this.showU.uSunDir = this.U.uSunDir; this.showU.uTime = this.U.uTime;
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: this.showU, vertexShader: QUAD_VERT, fragmentShader: SHOW_FRAG, transparent: true, depthWrite: false, depthTest: true }));
     this.quad.frustumCulled = false; this.quad.renderOrder = -30; this.quad.visible = false;
     this.group = new THREE.Group();
@@ -548,8 +546,8 @@ export class CountrysideScene {
     this._fitShadow(0);
     // (no drizzle planes in front of the camera: their streaks filled the frame with dashes whatever the weather over
     // the valley actually was. dev\retired\rain.js.) The drizzle now falls in the world, round the walker, only in its
-    // spells under a grey cover, with a far storm's thunder and now and then a bolt on the horizon: drizzle.js
-    this.drizzle = makeDrizzle(this.U, { heightAt: (x, z) => world.heightAt(x, z), onStrike: (st) => this.sound?.thunder?.(st) });
+    // spells under a little more cloud, with a far storm's thunder: drizzle.js
+    this.drizzle = makeDrizzle(this.U, { onThunder: (st) => this.sound?.thunder?.(st) });
     this.land.add(this.drizzle.group);
     this.quad.visible = true;
     this.ready = true;

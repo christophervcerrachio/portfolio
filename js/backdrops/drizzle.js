@@ -1,15 +1,16 @@
 // A light shower now and then, and far off in it a storm: a little more cloud comes over, fine rain falls round the
 // walker for a few minutes - short, faint streaks slanting with the wind, only a few metres off - and goes; while it
-// lasts, low thunder rolls from far away and once in a while a bolt comes down on the horizon, kilometres off, with
-// the sky flashing pale round it (15 Nov 2026).
+// lasts, low thunder rolls now and then from a storm kilometres off, heard and never seen (15 Nov 2026: the bolt on the
+// horizon and the sky's flash round it taken out, the thunder kept).
 //
 //   drizzleAt(t)   the weather's spell at the walk's clock t (s): { overcast, rain } each 0..1 - the cover comes first
 //                  and goes last, the rain within it. The first spell a minute into the walk, then one in every ten.
 //                  ?rain=1 holds a drizzle, ?rain=0 none.
 //   makeDrizzle    the streaks round the camera (one draw: a few thousand short lines, each drop's place wrapped into
 //                  a box that moves with the camera, so the rain is anchored in the world and the walker moves through
-//                  it), and the lightning: makeDrizzle(U).update(t, dt, { cam, rain, wind, sky }) each frame.
-//                  Its strikes are told to `onStrike({ km, yaw })` (the thunder: sound.js) and its flash is U.uFlash.
+//                  it): makeDrizzle(U).update(t, dt, { cam, rain, storm, wind, light }) each frame. The far storm's
+//                  peals are told to `onThunder({ km, yaw })` and its rumbles beyond the horizon to `onRumble()`
+//                  (sound.js).
 import * as THREE from 'three';
 
 const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -55,46 +56,14 @@ void main() {
   if (on < 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }`;
 const DROP_FRAG = /* glsl */`
-uniform vec3 uLight; uniform float uFlash;
+uniform vec3 uLight;
 varying float vA;
 void main() {
-  gl_FragColor = vec4(uLight * (1.0 + 3.0 * uFlash), vA * 0.27);
+  gl_FragColor = vec4(uLight, vA * 0.27);
   #include <colorspace_fragment>
 }`;
 
-const BOLT_VERT = /* glsl */`
-attribute float aGlow;
-varying float vGlow;
-void main() { vGlow = aGlow; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const BOLT_FRAG = /* glsl */`
-uniform float uOn;
-varying float vGlow;
-void main() {
-  gl_FragColor = vec4(vec3(0.82, 0.86, 1.0) * (2.4 * uOn * vGlow), uOn * vGlow);
-  #include <colorspace_fragment>
-}`;
-
-/** A bolt's path from the cloud base down to the ground: midpoint displacement, with a few branches. */
-function boltLines(top, bottom, rnd) {
-  const out = [];                                  // [x0, y0, z0, x1, y1, z1, glow]
-  const seg = (a, b, rough, depth, glow) => {
-    const L = a.distanceTo(b);
-    if (L < 12 || depth > 9) { out.push([a.x, a.y, a.z, b.x, b.y, b.z, glow]); return; }
-    const m = a.clone().lerp(b, 0.4 + 0.2 * rnd());
-    m.x += (rnd() - 0.5) * L * rough; m.z += (rnd() - 0.5) * L * rough; m.y += (rnd() - 0.5) * L * rough * 0.3;
-    seg(a, m, rough, depth + 1, glow); seg(m, b, rough, depth + 1, glow);
-    // (a branch now and then, off to the side and down, fainter, ending in the air)
-    if (glow > 0.6 && depth > 1 && depth < 6 && rnd() < 0.28) {
-      const dir = b.clone().sub(a).normalize();
-      const e = m.clone().add(new THREE.Vector3(dir.x + (rnd() - 0.5) * 1.6, dir.y * (0.5 + 0.4 * rnd()), dir.z + (rnd() - 0.5) * 1.6).multiplyScalar(L * (0.3 + 0.4 * rnd())));
-      seg(m, e, rough * 1.1, depth + 2, glow * 0.45);
-    }
-  };
-  seg(top, bottom, 0.55, 0, 1);
-  return out;
-}
-
-export function makeDrizzle(U, { heightAt = () => 0, onStrike = null } = {}) {
+export function makeDrizzle(U, { onThunder = null } = {}) {
   const group = new THREE.Group(); group.name = 'drizzle';
   // ---- the drops
   const seeds = new Float32Array(N * 2 * 4), ends = new Float32Array(N * 2);
@@ -107,73 +76,33 @@ export function makeDrizzle(U, { heightAt = () => 0, onStrike = null } = {}) {
   g.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4));
   g.setAttribute('aEnd', new THREE.BufferAttribute(ends, 1));
   const DU = { uCam: { value: new THREE.Vector3() }, uT: { value: 0 }, uRain: { value: 0 }, uVel: { value: new THREE.Vector3(1, -3, 0) }, uLen: { value: 0.24 },
-    uLight: { value: new THREE.Color(0.5, 0.52, 0.55) }, uFlash: U.uFlash };
+    uLight: { value: new THREE.Color(0.5, 0.52, 0.55) } };
   const drops = new THREE.LineSegments(g, new THREE.ShaderMaterial({ uniforms: DU, vertexShader: DROP_VERT, fragmentShader: DROP_FRAG, transparent: true, depthWrite: false, depthTest: true }));
   drops.frustumCulled = false; drops.renderOrder = 5; drops.name = 'drizzle.drops'; drops.userData.noCast = true;
   g.setDrawRange(0, 0);
   group.add(drops);
 
-  // ---- the lightning: one bolt drawn at a time, far off
-  const MAXV = 2400;
-  const bg = new THREE.BufferGeometry();
-  bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXV * 3), 3));
-  bg.setAttribute('aGlow', new THREE.BufferAttribute(new Float32Array(MAXV), 1));
-  bg.setDrawRange(0, 0);
-  const BU = { uOn: { value: 0 } };
-  const bolt = new THREE.LineSegments(bg, new THREE.ShaderMaterial({ uniforms: BU, vertexShader: BOLT_VERT, fragmentShader: BOLT_FRAG, transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending }));
-  bolt.frustumCulled = false; bolt.renderOrder = 4; bolt.name = 'drizzle.bolt'; bolt.userData.noCast = true;
-  group.add(bolt);
-
-  let next = 25 + Math.random() * 40, strike = null, rumbleNext = 8 + Math.random() * 12;
-  const pulses = () => {                           // (a strike's flicker: two to four return strokes over half a second)
-    const n = 2 + Math.floor(Math.random() * 3), out = [];
-    let at = 0;
-    for (let i = 0; i < n; i++) { out.push([at, 0.05 + Math.random() * 0.05, i === 0 ? 1 : 0.5 + Math.random() * 0.5]); at += 0.06 + Math.random() * 0.14; }
-    return out;
-  };
-  const strikeAt = (cam, sky) => {
-    // (somewhere ahead or to the side of the view, 7 to 16 km off: never overhead)
-    const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
-    const yaw0 = Math.atan2(fwd.x, -fwd.z), yaw = yaw0 + (Math.random() - 0.5) * 2.2, km = 7 + Math.random() * 9;
-    const x = cam.position.x + Math.sin(yaw) * km * 1000, z = cam.position.z - Math.cos(yaw) * km * 1000, y0 = heightAt(x, z);
-    const top = new THREE.Vector3(x + (Math.random() - 0.5) * 400, y0 + (sky?.base ?? 800) + 300 + Math.random() * 500, z + (Math.random() - 0.5) * 400);
-    const lines = boltLines(top, new THREE.Vector3(x, y0, z), Math.random).slice(0, MAXV / 2);
-    const P = bg.attributes.position.array, A = bg.attributes.aGlow.array;
-    lines.forEach((l, i) => { P.set(l.slice(0, 3), i * 6); P.set(l.slice(3, 6), i * 6 + 3); A[i * 2] = A[i * 2 + 1] = l[6]; });
-    bg.attributes.position.needsUpdate = true; bg.attributes.aGlow.needsUpdate = true;
-    bg.setDrawRange(0, lines.length * 2);
-    U.uFlashDir?.value.set(Math.sin(yaw), 0.18, -Math.cos(yaw)).normalize();
-    strike = { t: 0, pulses: pulses() };
-    onStrike?.({ km, yaw: yaw - yaw0 });
-  };
+  // ---- the far storm: a peal now and then, from 7 to 16 km off, ahead of the walker or to either side; and between
+  // them, rumbles from beyond the horizon
+  let next = 25 + Math.random() * 40, rumbleNext = 8 + Math.random() * 12;
 
   return {
-    group, drops, bolt,
-    /** Each frame: the walk's clock t, the frame's dt (s), the camera, the drizzle now (0..1), the storm's chance (0..1:
-     *  the cover), the wind across the ground (m/s, x and z) and the light the drops catch. */
-    update(t, dt, { cam, rain = 0, storm = 0, wind = [1.5, 0.2], light = null, sky = null, onRumble = null }) {
+    group, drops,
+    /** Each frame: the walk's clock t, the frame's dt (s), the camera, the drizzle now (0..1), how far into its spell
+     *  the weather is (0..1), the wind across the ground (m/s, x and z) and the light the drops catch. */
+    update(t, dt, { cam, rain = 0, storm = 0, wind = [1.5, 0.2], light = null, onRumble = null }) {
       DU.uT.value = t % 3600; DU.uRain.value = rain;
       if (cam) DU.uCam.value.copy(cam.position);
       DU.uVel.value.set(wind[0], -3.2, wind[1]);
       if (light) DU.uLight.value.copy(light);
       g.setDrawRange(0, rain > 0.002 ? N * 2 : 0);
       // (the storm: far off, only while the cover is over and the drizzle falls)
-      let flash = 0;
-      if (strike) {
-        strike.t += dt;
-        let on = 0;
-        for (const [at, len, k] of strike.pulses) if (strike.t >= at && strike.t < at + len) on = Math.max(on, k * (1 - (strike.t - at) / len * 0.5));
-        BU.uOn.value = on; flash = on;
-        const endT = strike.pulses[strike.pulses.length - 1][0] + 0.2;
-        if (strike.t > endT) { strike = null; BU.uOn.value = 0; bg.setDrawRange(0, 0); }
-      } else if (cam && storm > 0.5 && rain > 0.2) {
+      if (storm > 0.5 && rain > 0.2) {
         next -= dt;
-        if (next <= 0) { strikeAt(cam, sky); next = 45 + Math.random() * 75; }
-        // (and between the strikes, thunder from further off still, a storm beyond the horizon: heard, not seen)
+        if (next <= 0) { onThunder?.({ km: 7 + Math.random() * 9, yaw: (Math.random() - 0.5) * 2.2 }); next = 45 + Math.random() * 75; }
         rumbleNext -= dt;
         if (rumbleNext <= 0) { onRumble?.(); rumbleNext = 20 + Math.random() * 35; }
       }
-      U.uFlash.value = flash;
     },
   };
 }

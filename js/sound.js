@@ -105,8 +105,8 @@ export function windSound(ctx, out) {
   });
 
   // the thunder: far off, so only its low part reaches the walker (the air takes the rest) - a long roll of deep noise
-  // swelling two or three times and dying away, from the side the bolt came down (drizzle.js); km away: it comes that
-  // many times 2.9 s after the flash. Without a flash (rumble): a storm beyond the horizon, lower and fainter still.
+  // swelling two or three times and dying away, from the side the storm is on (drizzle.js), duller the farther it is;
+  // and (rumble) a storm beyond the horizon, lower and fainter still. Heard only: nothing of the storm is drawn.
   const roll = buffer(ctx, Math.round(rate * 12), (d, n) => {
     let x = 0;
     for (let i = 0; i < n; i++) { x = (x + 0.04 * (Math.random() * 2 - 1)) / 1.04; d[i] = x; }
@@ -119,7 +119,7 @@ export function windSound(ctx, out) {
     const lp = filter('lowpass', Math.max(70, 260 - km * 11), 0.6), lp2 = filter('lowpass', Math.max(90, 320 - km * 12), 0.5);
     const g = gain(0), p = pan(Math.max(-0.7, Math.min(0.7, side)));
     chain(s, lp, lp2, g, p, master);
-    // (its swells: the near part of the bolt's path heard first, the far parts after)
+    // (its swells: the nearer of the storm's strokes heard first, the farther after)
     const dur = 4 + Math.random() * 5, K = 64, curve = new Float32Array(K), sw = 2 + Math.floor(Math.random() * 2);
     const at = Array.from({ length: sw }, (_, i) => (i === 0 ? 0.06 : 0.15 + Math.random() * 0.55)), hi = at.map((_, i) => (i === 0 ? 1 : 0.4 + 0.6 * Math.random()));
     for (let i = 0; i < K; i++) {
@@ -148,9 +148,9 @@ export function windSound(ctx, out) {
       master.gain.cancelScheduledValues(ctx.currentTime);
       set(master.gain, 0, 0.3);
     },
-    /** Thunder from a bolt km off, toward yaw (radians from straight ahead, right positive): drizzle.js onStrike. */
-    thunder({ km, yaw = 0 }) { peal(km / 0.343, km, Math.sin(yaw), 0.55 * Math.min(1, 9 / km)); },
-    /** Thunder from a storm beyond the horizon: no flash. */
+    /** Thunder from a storm km off, toward yaw (radians from straight ahead, right positive): drizzle.js onThunder. */
+    thunder({ km, yaw = 0 }) { peal(0, km, Math.sin(yaw), 0.55 * Math.min(1, 9 / km)); },
+    /** Thunder from a storm beyond the horizon. */
     rumble() { peal(0, 22 + Math.random() * 10, (Math.random() - 0.5) * 1.2, 0.22 + 0.12 * Math.random()); },
     /** The wind now ({ gust: 0..1, front: where across the view it is, 0..1 }), the rain (0..1) and, if given, which
      *  way the view faces ({ yaw }: radians, 0 straight ahead, to the right positive; 0 if not given); a few times a
