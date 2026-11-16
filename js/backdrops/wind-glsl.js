@@ -25,6 +25,8 @@ export function landscapeUniforms() {
     // the weather's map (weather.js) is added by the scene once it is made
     uWeather: { value: null }, uWeatherOff: { value: new THREE.Vector2() }, uTile: { value: 48000 },
     uDeckBase: { value: 720 }, uDeckDepth: { value: 1050 }, uStorm: { value: new THREE.Vector4(0, 0, 1, 0) },
+    // the drizzle's spell (drizzle.js): its grey cover and its rain, and a far bolt's flash (how bright, which way)
+    uOvercast: { value: 0 }, uRain: { value: 0 }, uFlash: { value: 0 }, uFlashDir: { value: new THREE.Vector3(0, 0.2, -1).normalize() },
     // the birches' shadows on the hilltop (sunshadow.js)
     ...shadowUniforms(),
   };

@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import { placeCopies } from '../backdrops/models.js';
 import { unforced } from '../retro.js';
+import { span, timed } from '../loadreport.js';
+import { compileView, compileShadow } from './arrive.js';
 
 // (the full copies out to 220 m, the light ones out to 900 m)
 // (the impostors out to 1800 m, and the land's raised crowns only past that: the crowns had sunk between 1000 and 820 m
@@ -220,8 +222,9 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     let n = 0, near = false;
     for (const it of items) {
       const kind = models[it.kind] ? it.kind : null;
-      if (kind && !kinds.includes(kind)) addKind(kind);
-      if (!kind || !kinds.includes(kind)) continue;
+      // (a kind not yet in: its trees wait for it - addKind)
+      if (kind && !kinds.includes(kind)) { addKind(kind, it); continue; }
+      if (!kind) continue;
       const scale = it.scale ?? 1, tree = { x: it.x, z: it.z, y: it.y, yaw: it.yaw ?? 0, scale, h: models[kind].height * scale, kind };
       tree.m = new Float32Array(16);
       M4.compose(P3.set(tree.x, tree.y, tree.z), Q4.setFromAxisAngle(UP, tree.yaw), S3.set(scale, scale, scale)).toArray(tree.m);
@@ -240,7 +243,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   const blanks = (n) => Array.from({ length: n }, () => ({ x: 0, y: -1e5, z: 0 }));
   // (a kind's copies for every band: made for the woods' own kinds now, and for a city's park trees when their models
   // come in - addKind)
-  const makeSet = (kk) => {
+  const makeSet = (kk, into = group) => {
     const [k, tone = ''] = kk.split('|'), m = models[k], look = { leafGain: TONES[tone] };
     // (a pine's or spruce's light copies: the trunk stopped inside the crown and the crown's cards grown, so far off it
     // reads as a crown on a trunk, not a bare orange pole through the canopy; seen 8 Nov 2026 past the spawn)
@@ -279,7 +282,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
         // (too far off to shade the ground round the walker: the far picture alone - sunshadow.js noCastNear)
         if (b.from >= SUN_NEAR) for (const mesh of cast.children) { mesh.layers.set(2); mesh.userData.noCastNear = true; }
       }
-      group.add(draw); if (cast) group.add(cast);
+      into.add(draw); if (cast) into.add(cast);
       return { draw, cast };
     });
   };
@@ -304,17 +307,52 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   for (const k of allKinds) { lists[k] = BANDS.map(() => []); behind[k] = BANDS.map(() => []); }
   // (a kind the woods have not got - the cities' limes, maples, poplars and lilacs, loaded once the cities come in: the
   // park trees' own models, countryside.js PARK_MODELS - taken in when its first trees are added)
-  const addKind = (k) => {
+  // (its copies made out of sight and their programs - the scene's, the sun's, the far pictures' - made in the background
+  // first: made as they were first drawn, the frame waited while the card made each, five to ten seconds of the walk
+  // held still just after it opened - 15 Nov 2026. Its trees wait for it, then come in.)
+  const coming = new Map();                            // kind -> the trees waiting for it
+  const addKind = (k, item) => {
     if (kinds.includes(k) || !models[k]) return;
-    kinds.push(k); allKinds.push(k);
-    lists[k] = BANDS.map(() => []); behind[k] = BANDS.map(() => []);
-    makeSet(k);
-    if (baked) bakeKinds(...baked, [k]);
+    const wait = coming.get(k);
+    if (wait) { wait.push(item); return; }
+    coming.set(k, [item]);
+    const hold = new THREE.Group(); hold.name = 'woods-coming-' + k;
+    timed('woods: a kind made', () => makeSet(k, hold));
+    hold.updateMatrixWorld(true);
+    Promise.all([compileView(hold), compileShadow(hold), compileBake(k)]).catch(() => {}).then(() => {
+      for (const o of [...hold.children]) group.add(o);
+      kinds.push(k); allKinds.push(k);
+      lists[k] = BANDS.map(() => []); behind[k] = BANDS.map(() => []);
+      if (baked) bakeKinds(...baked, [k]);
+      const items = coming.get(k); coming.delete(k);
+      group.userData.addTrees(items);
+      last = null;
+    });
+  };
+  // (the far pictures' programs for a kind, as bakeKinds draws it: made in the background)
+  const compileBake = (k) => {
+    if (!baked) return Promise.resolve();
+    const [renderer, lights, fog] = baked;
+    if (!renderer.compileAsync) return Promise.resolve();
+    const scene = new THREE.Scene(); scene.fog = fog;
+    for (const l of lights) { const c = l.clone(); scene.add(c); if (c.isDirectionalLight) scene.add(c.target); }
+    const m = models[k], conifer = /^(pine|spruce)/.test(k), farParts = m.far ?? m.near;
+    const src = { ...m, far: conifer ? crownedFar(farParts, 1.6) : farParts };
+    const g = placeCopies(src, 'far', [{ x: 0, y: -2600, z: 0, yaw: 0, scale: 1 }], U, { bough: 0, sway: 0, look: { leafGain: TONES[''] }, texOf: (t) => t });
+    scene.add(g); scene.updateMatrixWorld(true);
+    const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true });
+    const prev = renderer.getRenderTarget();
+    let p;
+    renderer.setRenderTarget(rt);
+    try { p = renderer.compileAsync(scene, cam, scene); } catch { p = Promise.resolve(); } finally { renderer.setRenderTarget(prev); }
+    return p.catch(() => {}).then(() => { g.traverse((o) => { if (o.isInstancedMesh) o.dispose?.(); }); rt.dispose(); });
   };
   const fwd = new THREE.Vector3();
   let last = null, nearList = [];
   const SLACK = 0.6, CLOSE = 30;                       // (radians beyond the view's sides; trees this near always drawn)
-  group.userData.update = (pos, cam) => {
+  group.userData.update = (pos, cam) => { const end = span('woods: lists made'); try { upd(pos, cam); } finally { end(); } };
+  const upd = (pos, cam) => {
     let yaw = 0, half = Math.PI;
     if (cam) {
       cam.getWorldDirection(fwd); yaw = Math.atan2(fwd.x, -fwd.z);
@@ -361,7 +399,8 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // most of the woods' cost (measured 8 Nov 2026 at the spawn: the woods 8-12 ms of a frame, vertex bound).
   let baked = null;                                 // (what bake was given: a kind taken in later is drawn into a picture too)
   group.userData.bake = (renderer, lights, fog = null) => { baked = [renderer, lights, fog]; bakeKinds(renderer, lights, fog, allKinds); };
-  const bakeKinds = (renderer, lights, fog, which) => {
+  const bakeKinds = (renderer, lights, fog, which) => { const end = span('woods: kinds drawn ' + which.length); try { bakeK(renderer, lights, fog, which); } finally { end(); } };
+  const bakeK = (renderer, lights, fog, which) => {
     const COLS = 4, CW = 256, CH = 384, GUT = 32;   // (GUT px empty either side of each view: up to mip 4 none bleeds)
     const scene = new THREE.Scene();
     // (the land's own haze set here too - at these few metres it changes no pixel: with it the trees are drawn by the

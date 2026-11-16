@@ -6,7 +6,8 @@
 //   - the whoosh: with each strong gust the air swells, muffled (heard across the hilltop, not at the ear), and runs
 //     across from left to right with it; the lighter gusts only stir the leaves;
 //   - the birches: their leaves rustle on either side only as a gust reaches them, fluttering several times a second;
-//   - the drizzle: a soft hiss, and the patter of drops on the leaves and the grass all round, as the shower comes.
+//   - the drizzle: a soft hiss, and the patter of drops on the leaves and the grass all round, as the shower comes;
+//   - the thunder: far off, low, rolling, now and then while it drizzles (drizzle.js).
 // Nothing in it is bright: every noise is rounded off well below where hiss turns to static. It starts silent and
 // fades in, from the visitor's first click (browsers allow sound only after one).
 
@@ -103,6 +104,35 @@ export function windSound(ctx, out) {
     return g;
   });
 
+  // the thunder: far off, so only its low part reaches the walker (the air takes the rest) - a long roll of deep noise
+  // swelling two or three times and dying away, from the side the bolt came down (drizzle.js); km away: it comes that
+  // many times 2.9 s after the flash. Without a flash (rumble): a storm beyond the horizon, lower and fainter still.
+  const roll = buffer(ctx, Math.round(rate * 12), (d, n) => {
+    let x = 0;
+    for (let i = 0; i < n; i++) { x = (x + 0.04 * (Math.random() * 2 - 1)) / 1.04; d[i] = x; }
+    let peak = 1e-6; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i]));
+    for (let i = 0; i < n; i++) d[i] /= peak;
+  });
+  const peal = (when, km, side, level) => {
+    if (!on) return;
+    const s = ctx.createBufferSource(); s.buffer = roll; s.playbackRate.value = 0.8 + 0.3 * Math.random();
+    const lp = filter('lowpass', Math.max(70, 260 - km * 11), 0.6), lp2 = filter('lowpass', Math.max(90, 320 - km * 12), 0.5);
+    const g = gain(0), p = pan(Math.max(-0.7, Math.min(0.7, side)));
+    chain(s, lp, lp2, g, p, master);
+    // (its swells: the near part of the bolt's path heard first, the far parts after)
+    const dur = 4 + Math.random() * 5, K = 64, curve = new Float32Array(K), sw = 2 + Math.floor(Math.random() * 2);
+    const at = Array.from({ length: sw }, (_, i) => (i === 0 ? 0.06 : 0.15 + Math.random() * 0.55)), hi = at.map((_, i) => (i === 0 ? 1 : 0.4 + 0.6 * Math.random()));
+    for (let i = 0; i < K; i++) {
+      const u = i / (K - 1);
+      let v = 0;
+      for (let j = 0; j < sw; j++) { const x = (u - at[j]) / (0.08 + 0.12 * j); v = Math.max(v, hi[j] * (x < 0 ? Math.exp(-x * x * 8) : Math.exp(-x * 1.6))); }
+      curve[i] = level * v * (1 - u) ** 0.7;
+    }
+    const t0 = ctx.currentTime + when;
+    g.gain.setValueCurveAtTime(curve, t0, dur);
+    s.start(t0, Math.random() * 3); s.stop(t0 + dur + 0.1);
+  };
+
   let started = false, on = false, last = -1;
   const set = (param, v, tc) => param.setTargetAtTime(v, ctx.currentTime, tc);
 
@@ -118,6 +148,10 @@ export function windSound(ctx, out) {
       master.gain.cancelScheduledValues(ctx.currentTime);
       set(master.gain, 0, 0.3);
     },
+    /** Thunder from a bolt km off, toward yaw (radians from straight ahead, right positive): drizzle.js onStrike. */
+    thunder({ km, yaw = 0 }) { peal(km / 0.343, km, Math.sin(yaw), 0.55 * Math.min(1, 9 / km)); },
+    /** Thunder from a storm beyond the horizon: no flash. */
+    rumble() { peal(0, 22 + Math.random() * 10, (Math.random() - 0.5) * 1.2, 0.22 + 0.12 * Math.random()); },
     /** The wind now ({ gust: 0..1, front: where across the view it is, 0..1 }), the rain (0..1) and, if given, which
      *  way the view faces ({ yaw }: radians, 0 straight ahead, to the right positive; 0 if not given); a few times a
      *  second is enough. */

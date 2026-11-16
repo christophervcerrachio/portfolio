@@ -18,8 +18,11 @@ export const DRIFT = new THREE.Vector2(10.5, 1.6);   // m/s: the clouds' drift, 
 export const WEATHER_GLSL = /* glsl */`
 uniform sampler2D uWeather; uniform vec2 uWeatherOff; uniform float uTile; uniform float uDeckBase; uniform float uDeckDepth;
 uniform vec4 uStorm;        // a storm that never leaves one place: its middle (x, z, m), its reach (m), how strong
+uniform float uOvercast; uniform float uRain;   // the drizzle's spell (drizzle.js): a grey cover over all of it, and its rain
 vec4 weatherAt(vec2 xz) {
   vec4 w = texture2D(uWeather, (xz + uWeatherOff) / uTile);
+  // (the cover closing over the gaps, a little thicker and lower: a grey day's, not a storm's)
+  w = mix(w, vec4(0.9 + 0.1 * w.r, 0.3 + 0.45 * w.g, 0.55 * w.b, max(w.a, uRain)), uOvercast);
   if (uStorm.w > 0.0) {
     // (a heavy, low, dark deck over that place, raining in places, whatever the wind does elsewhere)
     float s = uStorm.w * (1.0 - smoothstep(0.5, 1.0, length(xz - uStorm.xy) / uStorm.z));
@@ -114,6 +117,7 @@ export function makeWeather(renderer, { size = 1024, seed = 17.3 } = {}) {
     uWeather: { value: rt.texture }, uWeatherOff: { value: new THREE.Vector2() }, uTile: { value: TILE },
     uDeckBase: { value: DECK.base }, uDeckDepth: { value: DECK.depth }, uStorm: { value: new THREE.Vector4(0, 0, 1, 0) },
   };
+  const spell = { overcast: 0, rain: 0 };        // (set by the scene each frame from drizzle.js drizzleAt)
   // the map on the CPU, bilinear, wrapped: [cover, thick, base, rain] at world (x, z)
   const at = (x, z) => {
     const off = uniforms.uWeatherOff.value;
@@ -123,6 +127,9 @@ export function makeWeather(renderer, { size = 1024, seed = 17.3 } = {}) {
       const i = ((((iy + dy) % size) + size) % size * size + (((ix + dx) % size) + size) % size) * 4;
       for (let k = 0; k < 4; k++) out[k] += (px[i + k] / 255) * wgt;
     }
+    // (and the drizzle's cover, as WEATHER_GLSL's weatherAt has it)
+    const o = spell.overcast;
+    if (o > 0) { out[0] += (0.9 + 0.1 * out[0] - out[0]) * o; out[1] += (0.3 + 0.45 * out[1] - out[1]) * o; out[2] += (0.55 * out[2] - out[2]) * o; out[3] += (Math.max(out[3], spell.rain) - out[3]) * o; }
     return out;
   };
   // the same as sunThrough() in WEATHER_GLSL
@@ -140,5 +147,5 @@ export function makeWeather(renderer, { size = 1024, seed = 17.3 } = {}) {
   // (29680.6, 1697.9) gave 0.022 with 36%. All three keep the deck over the camera (0.159, 0.113 and 0.072 of the sun
   // where the camera stands), so the day is the same day - only the distance changes. Still a brightening rather than a
   // beam: see clouds.js on uShaft for why.
-  return { texture: rt.texture, uniforms, at, sunAt, start: new THREE.Vector2(33842.5, 35976.0), update(t) { uniforms.uWeatherOff.value.copy(DRIFT).multiplyScalar(t).add(this.start); } };
+  return { texture: rt.texture, uniforms, at, sunAt, spell, start: new THREE.Vector2(33842.5, 35976.0), update(t) { uniforms.uWeatherOff.value.copy(DRIFT).multiplyScalar(t).add(this.start); } };
 }

@@ -15,6 +15,7 @@ import { placeStones } from './stones.js';
 import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
 import { makeEvening } from './evening.js';
 import { makeWeather } from './weather.js';
+import { makeDrizzle, drizzleAt } from './drizzle.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
 import { makeUpscale } from './upscale.js';
 import { loadBark, loadSpecies, loadLateSpecies } from './birchlook.js';
@@ -37,6 +38,7 @@ import { buildChimneySmoke } from '../world/chimneys.js';
 import { buildRiverBits } from '../world/riverbits.js';
 import { buildPOIs } from '../world/pois.js';
 import { DEPTH } from '../depthmode.js';
+import { timed } from '../loadreport.js';
 
 // The whole world is a walkable solid land like the hilltop (region.js), no longer a painted panorama: the painted
 // valley and ring (valley.js and its pictures) were retired on 8 Nov 2026. FRAME and the painting's lines below still
@@ -89,7 +91,7 @@ const QUAD_VERT = /* glsl */`varying vec2 vUv; void main() { vUv = position.xy *
 // The landscape, drawn in linear light with its highlights kept, gets the hands' own tone mapping and exposure here,
 // then the weather's grade: a little less colour, cool shadows and warm lights, lifted blacks, a soft vignette.
 const SHOW_FRAG = /* glsl */`
-uniform sampler2D uPic; uniform float uAlpha; uniform vec4 uGrade; uniform vec3 uShadowTint; uniform vec3 uLightTint;
+uniform sampler2D uPic; uniform float uAlpha; uniform float uFlash; uniform vec4 uGrade; uniform vec3 uShadowTint; uniform vec3 uLightTint;
 uniform vec2 uTexel; uniform float uSharp;
 uniform vec2 uSunUV; uniform float uSunVis; uniform float uRays; uniform vec3 uRayTint; uniform float uAspect;
 uniform sampler2D uDepth; uniform float uRevZ; uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform float uAir; uniform float uSunLit; uniform float uAirSteps;
@@ -214,6 +216,8 @@ void main() {
     float lb = dot(bl, vec3(0.2126, 0.7152, 0.0722));
     sharp += bl * (max(lb - uRetroFx.y, 0.0) / max(lb, 1e-4)) * uRetroFx.x;
   }
+  // (a far bolt's flash: the whole picture a little brighter for the moment, as under a lit sky - drizzle.js)
+  sharp = sharp * (1.0 + 0.3 * uFlash) + vec3(0.004, 0.0045, 0.006) * uFlash;
   gl_FragColor = vec4(sharp, uAlpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -395,7 +399,7 @@ export class CountrysideScene {
     }
     // (the sun's shadow pictures, shared with every material: the air's shafts read them too)
     for (const k of Object.keys(shadowUniforms())) this.showU[k] = this.U[k];
-    this.showU.uSunDir = this.U.uSunDir; this.showU.uTime = this.U.uTime;
+    this.showU.uSunDir = this.U.uSunDir; this.showU.uTime = this.U.uTime; this.showU.uFlash = this.U.uFlash;
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: this.showU, vertexShader: QUAD_VERT, fragmentShader: SHOW_FRAG, transparent: true, depthWrite: false, depthTest: true }));
     this.quad.frustumCulled = false; this.quad.renderOrder = -30; this.quad.visible = false;
     this.group = new THREE.Group();
@@ -543,7 +547,10 @@ export class CountrysideScene {
     this.walkCircle = { x: world.circle.x, z: world.circle.z, r: world.circle.r - 300 };
     this._fitShadow(0);
     // (no drizzle planes in front of the camera: their streaks filled the frame with dashes whatever the weather over
-    // the valley actually was. dev\retired\rain.js.)
+    // the valley actually was. dev\retired\rain.js.) The drizzle now falls in the world, round the walker, only in its
+    // spells under a grey cover, with a far storm's thunder and now and then a bolt on the horizon: drizzle.js
+    this.drizzle = makeDrizzle(this.U, { heightAt: (x, z) => world.heightAt(x, z), onStrike: (st) => this.sound?.thunder?.(st) });
+    this.land.add(this.drizzle.group);
     this.quad.visible = true;
     this.ready = true;
     this._window();
@@ -565,7 +572,7 @@ export class CountrysideScene {
   loadRestFar() {
     if (this._restFar || !this.ready) return;
     this._restFar = true;
-    for (const g of [this.bridges, this.kremlin, this.spbMarks, this.kmvMarks, this.mskMarks]) g?.userData.load?.();
+    for (const g of [this.bridges, this.kremlin, this.spbMarks, this.kmvMarks, this.mskMarks]) timed('later: ' + (g?.name || 'landmarks') + ' asked', () => g?.userData.load?.());
   }
 
   /** The cities' houses, bridges and furniture (see load): made now, out of the scene; addLater() puts them in. */
@@ -578,9 +585,9 @@ export class CountrysideScene {
     const changed = () => { if (this.shadow) this.shadow.casters = null; if (this.shadowFar) this.shadowFar.casters = null; };
     // (the cities' ground materials by city, once the furniture has read them: the houses' door steps are made of them)
     const ground = {};
-    const blocks = buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground });
+    const blocks = timed('later: blocks made', () => buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground }));
     // and their bridges (world/citybridges.js): the walker crosses them as the country ones (one deckAt for both)
-    const bridges = buildCityBridges(this.U, { base });
+    const bridges = timed('later: bridges made', () => buildCityBridges(this.U, { base }));
     // the yards made gardens, and the yards' and streets' furniture: fountains, benches, lamps, gates, trees
     // (world/cityprops.js, dev\world\cityhouses.py), drawn near the camera only
     // (the park trees' own models first, so none of their trees is left out: the woods take each kind in as it comes)
@@ -593,10 +600,10 @@ export class CountrysideScene {
       if (this.ground && this.ground.heightAt === h0) this.ground.heightAt = world.heightAt;
     });
     const lateModels = Promise.all([loadLateSpecies(base), ...PARK_MODELS.map(async (n) => { const m = await loadModel(dir, n).catch(() => null); if (m) models[n] = m; })]).catch(() => {});
-    const props = buildCityProps(this.U, models, { base, lateModels, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
-      addTrees: this.woods?.userData.addTrees ? (items) => this.woods.userData.addTrees(items) : null, changed, ground });
+    const props = timed('later: furniture made', () => buildCityProps(this.U, models, { base, lateModels, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
+      addTrees: this.woods?.userData.addTrees ? (items) => timed('later: trees added', () => this.woods.userData.addTrees(items)) : null, changed, ground }));
     // (and smoke over two in five of the houses' chimneys, near the walker: world/chimneys.js)
-    const smoke = buildChimneySmoke(this.U, { base, near: G.smokeNear ?? 320 });
+    const smoke = timed('later: smoke made', () => buildChimneySmoke(this.U, { base, near: G.smokeNear ?? 320 }));
     this._later = { groups: [blocks, bridges, props], blocks, bridges, props, smoke };
     return this._later.groups;
   }
@@ -1123,8 +1130,18 @@ export class CountrysideScene {
       const FC = this.freeCam;
       const here = FC.on ? FC.pos.clone() : new THREE.Vector3(this.at.x, (this.ground?.heightAt(this.at.x, this.at.z) ?? 0) + EYE, this.at.z);
       this.light.sun = (this.weather.sunAt(here, this.U.uSunDir.value) - 0.07) / 0.93;
-      this.light.rain = 0;                  // (no rain in the picture, so none to hear either: sound.js's hiss and
-                                            // patter both ride on this number, and fade out with it)
+      // (the drizzle's spell: its grey cover in every shader under the weather, its rain falling round the walker and
+      // heard - sound.js's hiss and patter ride on light.rain; drizzle.js)
+      const sp = drizzleAt(t);
+      this.U.uOvercast.value = sp.overcast; this.U.uRain.value = sp.rain;
+      this.weather.spell.overcast = sp.overcast; this.weather.spell.rain = sp.rain;
+      this.light.rain = sp.rain;
+      if (this.drizzle && this.cam) {
+        const W = this.U.uWindDir.value, v = (1.2 + 2.6 * w.gust) * (0.4 + 0.6 * (w.level ?? 1));
+        const lc = (this._dropLight ??= new THREE.Color()).copy(this.U.uSkyColor.value).multiplyScalar(1.6), sc = (this._dropSun ??= new THREE.Color()).copy(this.U.uSunColor.value).multiplyScalar(0.12 * this.light.sun);
+        lc.add(sc);
+        this.drizzle.update(t, dt, { cam: this.cam, rain: sp.rain, storm: sp.overcast, wind: [W.x * v, W.y * v], light: lc, onRumble: () => this.sound?.rumble?.() });
+      }
     }
     this.sound?.update(w, t, this.light.rain, { yaw: wrapAngle(L.yaw) });
   }

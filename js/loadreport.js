@@ -37,7 +37,8 @@ export function timed(kind, fn) {
   try { return fn(); } finally { end(); }
 }
 function add(kind, ms) {
-  if (!open) return;
+  // (after the lift: each job longer than 30 ms, by the time since the lift - what a long task of the minute after was)
+  if (!open) { if (AFTER && ms > 30 && !/waiting/.test(kind) && AFTER.spans.length < 300) AFTER.spans.push([Math.round(performance.now() - ms - AFTER.t0), kind, Math.round(ms)]); return; }
   const w = (R.work[kind] ??= { n: 0, ms: 0, max: 0 });
   w.n++; w.ms += ms; if (ms > w.max) w.max = ms;
 }
@@ -69,7 +70,7 @@ function closeAfter() {
   const a = AFTER; AFTER = null;
   const rep = window.__loadReport;
   if (!rep) return;
-  rep.after = { frames: a.n, long: a.frames, tasks: a.tasks, stages: a.stages, heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+  rep.after = { frames: a.n, long: a.frames, tasks: a.tasks, spans: a.spans, stages: a.stages, heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   try {
     const all = JSON.parse(localStorage.getItem('career-load-reports') || '[]');
     if (all.length && all[all.length - 1].at === rep.at) all[all.length - 1] = rep;
@@ -143,7 +144,7 @@ export function finish(extra = {}) {
     ...extra,
   };
   window.__loadReport = rep;
-  AFTER = { t0: now, last: 0, n: 0, frames: [], tasks: [], stages: [] };
+  AFTER = { t0: now, last: 0, n: 0, frames: [], tasks: [], spans: [], stages: [] };
   try {
     const all = JSON.parse(localStorage.getItem('career-load-reports') || '[]');
     all.push(rep);

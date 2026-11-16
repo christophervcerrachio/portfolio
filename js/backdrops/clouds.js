@@ -176,6 +176,7 @@ uniform mat4 uProjInv; uniform mat3 uCamRot; uniform float uNow; uniform vec2 uD
 uniform sampler2D uPano; uniform vec4 uRange; uniform vec2 uBands; uniform float uBandT[16]; uniform float uRound;
 uniform sampler2D uInset; uniform vec4 uInsetRange; uniform vec2 uInsetBands; uniform float uInsetT[16]; uniform float uInsetMix;
 uniform vec2 uInsetTexel; uniform vec2 uPanoTexel;
+uniform float uFlash; uniform vec3 uFlashDir;
 varying vec2 vNdc;
 vec2 panoUv(vec3 d, vec4 R) {
   float phi = atan(d.x, -d.z), th = asin(clamp(d.y, -1.0, 1.0));
@@ -220,6 +221,11 @@ void main() {
   // (below the horizon the sky only shows in the sliver where the land runs out, hundreds of kilometres off: there it
   // is the haze over that land, not sky blue, or a blue line runs along the horizon)
   c = mix(c, uHaze, smoothstep(0.0, -0.004, d.y));
+  // (a far bolt's flash in the cloud round it, and a little over the whole sky: drizzle.js)
+  if (uFlash > 0.0) {
+    float fa = max(dot(d, uFlashDir), 0.0);
+    c += uFlash * vec3(0.62, 0.66, 0.8) * (0.05 + 0.35 * pow(fa, 2.0) + 0.9 * pow(fa, 12.0)) * smoothstep(-0.01, 0.05, d.y);
+  }
   gl_FragColor = vec4(c, 1.0);
 }`;
 
