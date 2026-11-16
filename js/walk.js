@@ -650,7 +650,7 @@ export async function initWalk(container, opts = {}) {
     const c = performance.now();
     renderer.render(stage, camera);
     const d = performance.now();
-    if (veilUp) report.frame(b - a, c - b, d - c, lastPump);
+    if (veilUp) report.frame(b - a, c - b, d - c, lastPump); else report.frameAfter(b - a, c - b, d - c, lastPump);
     if (d - a > 24 && s.ready && HEAVY.length < 80) HEAVY.push({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1), pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1), came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
   }
   function tick(now) {

@@ -42,8 +42,41 @@ function add(kind, ms) {
   w.n++; w.ms += ms; if (ms > w.max) w.max = ms;
 }
 
-/** A stage of the walk's timeline (walk.js tl). */
-export function stage(label, busy) { if (open) R.stages.push([label, Math.round(performance.now() - T0), Math.round(busy)]); }
+/** A stage of the walk's timeline (walk.js tl): under the picture, and for a minute after it lifts. */
+export function stage(label, busy) {
+  if (open) R.stages.push([label, Math.round(performance.now() - T0), Math.round(busy)]);
+  else if (AFTER) AFTER.stages.push([label, Math.round(performance.now() - AFTER.t0), Math.round(busy)]);
+}
+
+// ---- the minute after the picture lifts: what comes in behind the walk must not hold a frame up. Every task of the
+// page's thread longer than 50 ms, and every frame longer than 50 ms with its parts (the scene's update, its own
+// pictures, the draw, what it sent to the card), by the time since the lift; kept with the load's report.
+let AFTER = null;
+const longObs = (() => { try {
+  const o = new PerformanceObserver((l) => { if (!AFTER) return; for (const e of l.getEntries()) if (e.startTime >= AFTER.t0 && AFTER.tasks.length < 200) AFTER.tasks.push([Math.round(e.startTime - AFTER.t0), Math.round(e.duration)]); });
+  o.observe({ type: 'longtask' }); return o;
+} catch { return null; } })();
+/** A frame after the lift (walk.js renderAt): kept if it was long. */
+export function frameAfter(update, pictures, draw, pump) {
+  if (!AFTER) return;
+  const now = performance.now(), ms = update + pictures + draw, gap = AFTER.last ? now - AFTER.last : 0;
+  AFTER.last = now; AFTER.n++;
+  if ((ms > 50 || gap > 80) && AFTER.frames.length < 200) AFTER.frames.push([Math.round(now - AFTER.t0), Math.round(gap), +ms.toFixed(1), +update.toFixed(1), +pictures.toFixed(1), +draw.toFixed(1), pump ? { ms: +pump.ms.toFixed(1), tex: pump.tex, texMs: +pump.texMs.toFixed(1), shown: pump.shown, geoMb: +(pump.geo / 1e6).toFixed(1), big: pump.big } : null]);
+  if (now - AFTER.t0 > 60000) closeAfter();
+}
+function closeAfter() {
+  if (!AFTER) return;
+  const a = AFTER; AFTER = null;
+  const rep = window.__loadReport;
+  if (!rep) return;
+  rep.after = { frames: a.n, long: a.frames, tasks: a.tasks, stages: a.stages, heapMb: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+  try {
+    const all = JSON.parse(localStorage.getItem('career-load-reports') || '[]');
+    if (all.length && all[all.length - 1].at === rep.at) all[all.length - 1] = rep;
+    localStorage.setItem('career-load-reports', JSON.stringify(all.slice(-5)));
+  } catch { /* (window.__loadReport has it) */ }
+  console.info('[load] the minute after', rep.after);
+}
 
 /** A frame under the picture: its scene update, its own pictures, its draw, and what it sent to the card (arrive.js). */
 export function frame(update, pictures, draw, pump) {
@@ -110,6 +143,7 @@ export function finish(extra = {}) {
     ...extra,
   };
   window.__loadReport = rep;
+  AFTER = { t0: now, last: 0, n: 0, frames: [], tasks: [], stages: [] };
   try {
     const all = JSON.parse(localStorage.getItem('career-load-reports') || '[]');
     all.push(rep);
