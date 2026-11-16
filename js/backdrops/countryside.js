@@ -556,14 +556,15 @@ export class CountrysideScene {
     if (this._rest || !this.ready) return;
     this._rest = true;
     this.pois?.userData.loadModels?.(this.assets);
-    for (const g of [this.bridges, this.estateMarks]) g?.userData.load?.();
+    this.estateMarks?.userData.load?.();
   }
-  /** The cities' landmarks - the Kremlin, Petersburg's, the spa towns', Moscow's: asked for once the walk is shown,
-   *  coming in behind it with the cities (walk.js; v0.0.103: the walk is shown once the walker's own surroundings are in). */
+  /** The cities' landmarks - the Kremlin, Petersburg's, the spa towns', Moscow's - and the rivers' bridges (the nearest
+   *  1.7 km from where the walk begins; 17.6 MB of models a first visit no longer waits for): asked for once the walk is
+   *  shown, coming in behind it with the cities (walk.js; v0.0.103: the walk is shown once its own surroundings are in). */
   loadRestFar() {
     if (this._restFar || !this.ready) return;
     this._restFar = true;
-    for (const g of [this.kremlin, this.spbMarks, this.kmvMarks, this.mskMarks]) g?.userData.load?.();
+    for (const g of [this.bridges, this.kremlin, this.spbMarks, this.kmvMarks, this.mskMarks]) g?.userData.load?.();
   }
 
   /** The cities' houses, bridges and furniture (see load): made now, out of the scene; addLater() puts them in. */
