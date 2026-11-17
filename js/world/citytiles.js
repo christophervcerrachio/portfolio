@@ -112,6 +112,9 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
     const scene = S.dropped ? null : superBuild(S, `${city}-${kind}-S${S.key}`);
     S.scene = scene ?? false;
     if (!scene) return;
+    // (its joined arrays let go once the card has them, as the tiles' own: both cities' houses held twice in the
+    // page's memory, 1.1 GB, otherwise)
+    scene.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry) letGo(o.geometry); });
     scene.visible = false;
     gate(scene, S.cx, S.cz, { rise: () => false, cancel: () => !scene.parent, batch: city + '-' + kind + '-far', wave: 1800 });
     group.add(scene);

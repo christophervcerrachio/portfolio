@@ -117,65 +117,130 @@ export function buildPaths(world, extra = []) {
       }
     return best;
   };
+  // (each way's box, once, with room for its verge and the blur: a way whose box misses a picture draws nothing in it)
+  for (const w of ways) {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const [x, z] of w.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+    const m = w.w / 2 + 6;
+    w.box = [x0 - m, z0 - m, x1 + m, z1 + m];
+  }
   // two pictures round the camera: the near one sharp (4 px a metre, 512 m), the far one (1 px a metre, 2 km) so the
-  // ways stay smooth and whole out to a kilometre and more, not the land's coarse road cover's 8 m steps
+  // ways stay smooth and whole out to a kilometre and more, not the land's coarse road cover's 8 m steps.
+  // Each follows the camera in steps (96 m, 384 m). Drawn whole the moment the camera crossed into the next step, a
+  // picture held the frame up while the card drew it - a few hundred to a few thousand strokes, each blurred: over a
+  // city the near one 0.1 s every 96 m and the far one 0.4 s every 384 m, at the run's speed a stall every second and
+  // a half and a freeze every five (measured 16 Nov 2026 on an RTX 5090, flying over Moscow). Now the next picture is
+  // drawn before it is wanted: the step the camera heads into, its strokes a few a frame on the picture's own canvas
+  // (the card's copy of the last one shows meanwhile), each few sent to the card by themselves so it draws them
+  // between frames; the moment the camera crosses, the canvas is sent up whole. The same strokes, in the same order,
+  // on the same canvas: the same picture (but for a few hundred of its 16 million values, a few levels, where the card
+  // blurs a stroke's edge in a smaller batch). A step not foreseen - a jump, a turn at the last moment - is drawn at
+  // once, as it always was.
   const pic = (span, px, step, ruts) => {
     const cv = document.createElement('canvas'); cv.width = cv.height = px;
     const g = cv.getContext('2d');
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = 8; tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
-    const P = { tex, c: new THREE.Vector2(1e9, 1e9), cx: NaN, cz: NaN };
-    P.draw = () => {
-      const { cx, cz } = P, s = px / span, ox = cx - span / 2, oz = cz - span / 2, b = (m) => `blur(${(m * s).toFixed(2)}px)`;
-      g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.filter = 'none';
-      g.fillStyle = '#000'; g.fillRect(0, 0, px, px);
+    const s = px / span, fw = `blur(${(0.75 * s).toFixed(2)}px)`, fr = `blur(${(0.25 * s).toFixed(2)}px)`;
+    // cx, cz: the picture the card has (or is about to take: sent false till it has); nx, nz, L, cost, i: the one on
+    // the canvas, its strokes and how many of them are drawn; lx, lz: where the camera was the frame before
+    const P = { tex, c: new THREE.Vector2(1e9, 1e9), cx: NaN, cz: NaN, sent: true, L: null, cost: null, i: 0, nx: NaN, nz: NaN, lx: NaN, lz: NaN };
+    tex.onUpdate = () => { P.sent = true; };
+    /** The strokes of the picture round (cx, cz), in the order they were always drawn: the verges, the ways, the ruts;
+     *  each [width, colour, way, sideways offset, filter], and what each costs the card, summed (cost). */
+    const begin = (cx, cz) => {
+      const h = span / 2, V = [];
+      for (const w of ways) {
+        const b = w.box;
+        if (b[2] < cx - h || b[0] > cx + h || b[3] < cz - h || b[1] > cz + h) continue;
+        if (!w.pts.some(([x, z]) => Math.abs(x - cx) < span && Math.abs(z - cz) < span)) continue;   // (the ways it always took)
+        V.push(w);
+      }
+      const L = [];
+      // (the verge: a faint band a metre beyond either edge, where the grass is trodden short)
+      for (const w of V) L.push([w.w + 2.2, 'rgb(28,0,0)', w, 0, fw]);
+      // (a soft edge: the land frays it a little, so ways run into each other and into the turf)
+      for (const w of V) {
+        if (w.earth) L.push([w.w, `rgb(${Math.round(255 * w.earth)},0,0)`, w, 0, fw]);
+        if (w.cobble) L.push([w.w, 'rgb(0,255,0)', w, 0, fw]);
+      }
+      // (the wheels' tracks: two ruts 1.5 m apart; a street wide enough for two carts, a pair in each half, the carts
+      // keeping to their side)
+      if (ruts) for (const w of V) {
+        if (!w.ruts) continue;
+        const col = `rgb(0,0,${Math.round(255 * w.ruts)})`;
+        if (w.w > 9) for (const c of [w.w / 4, -w.w / 4]) { L.push([0.4, col, w, c + 0.75, fr]); L.push([0.4, col, w, c - 0.75, fr]); }
+        else { L.push([0.4, col, w, 0.75, fr]); L.push([0.4, col, w, -0.75, fr]); }
+      }
+      // (a stroke's cost to the card: the blurred layer it is drawn in, its box within the picture, and a little more)
+      const cost = new Float64Array(L.length + 1);
+      for (let k = 0; k < L.length; k++) {
+        const b = L[k][2].box, ax = Math.max(0, Math.min(b[2], cx + h) - Math.max(b[0], cx - h)), az = Math.max(0, Math.min(b[3], cz + h) - Math.max(b[1], cz - h));
+        cost[k + 1] = cost[k] + ax * az * s * s + 4096;
+      }
+      Object.assign(P, { nx: cx, nz: cz, L, cost, i: 0 });
+    };
+    /** Strokes i0..i1 of the picture begun drawn on the canvas (from the first: the canvas cleared). */
+    const paint = (i0, i1) => {
+      const L = P.L, ox = P.nx - span / 2, oz = P.nz - span / 2;
+      if (i0 === 0) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.filter = 'none'; g.fillStyle = '#000'; g.fillRect(0, 0, px, px); }
       g.globalCompositeOperation = 'lighter'; g.lineCap = 'round'; g.lineJoin = 'round';
       // (picture: x to the right, z down the rows, as the shader reads it)
       g.setTransform(s, 0, 0, s, -ox * s, -oz * s);
-      const vis = (pts) => pts.some(([x, z]) => Math.abs(x - cx) < span && Math.abs(z - cz) < span);
-      const path = (pts, off) => {
+      let f = null;
+      for (let k = i0; k < i1; k++) {
+        const [lw, col, w, off, filt] = L[k], pts = w.pts;
+        if (filt !== f) g.filter = f = filt;
+        g.lineWidth = lw; g.strokeStyle = col;
         g.beginPath();
         for (let i = 0; i < pts.length; i++) {
           let [x, z] = pts[i];
           if (off) {   // (a rut: the line moved sideways along its normal)
             const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)];
-            const tx = c[0] - a[0], tz = c[1] - a[1], L = Math.hypot(tx, tz) || 1;
-            x += (-tz / L) * off; z += (tx / L) * off;
+            const tx = c[0] - a[0], tz = c[1] - a[1], Ln = Math.hypot(tx, tz) || 1;
+            x += (-tz / Ln) * off; z += (tx / Ln) * off;
           }
           if (i) g.lineTo(x, z); else g.moveTo(x, z);
         }
         g.stroke();
-      };
-      // (the verge: a faint band a metre beyond either edge, where the grass is trodden short)
-      g.filter = b(0.75);
-      for (const w of ways) { if (!vis(w.pts)) continue; g.lineWidth = w.w + 2.2; g.strokeStyle = 'rgb(28,0,0)'; path(w.pts, 0); }
-      // (a soft edge: the land frays it a little, so ways run into each other and into the turf)
-      for (const w of ways) {
-        if (!vis(w.pts)) continue;
-        g.lineWidth = w.w;
-        if (w.earth) { g.strokeStyle = `rgb(${Math.round(255 * w.earth)},0,0)`; path(w.pts, 0); }
-        if (w.cobble) { g.strokeStyle = 'rgb(0,255,0)'; path(w.pts, 0); }
-      }
-      if (ruts) {
-        g.filter = b(0.25);
-        for (const w of ways) {
-          if (!w.ruts || !vis(w.pts)) continue;
-          // (the wheels' tracks: two ruts 1.5 m apart)
-          g.lineWidth = 0.4; g.strokeStyle = `rgb(0,0,${Math.round(255 * w.ruts)})`;
-          // (a street wide enough for two carts: a pair in each half, the carts keeping to their side)
-          if (w.w > 9) for (const c of [w.w / 4, -w.w / 4]) { path(w.pts, c + 0.75); path(w.pts, c - 0.75); }
-          else { path(w.pts, 0.75); path(w.pts, -0.75); }
-        }
       }
       g.filter = 'none';
-      tex.needsUpdate = true;
-      P.c.set(cx, cz);
+      P.i = i1;
     };
+    // (what was drawn sent to the card now, as its own piece of work, not left to pile up for the frame that sends the
+    // picture up: asking for a pixel of the canvas does it)
+    const flush = () => { createImageBitmap(cv, 0, 0, 1, 1).then((b) => b.close(), () => {}); };
     P.update = (pos) => {
-      const nx = Math.round(pos.x / step) * step, nz = Math.round(pos.z / step) * step;
-      if (nx === P.cx && nz === P.cz) return;
-      P.cx = nx; P.cz = nz; P.draw();
+      const x = pos.x, z = pos.z, vx = x - P.lx, vz = z - P.lz;
+      P.lx = x; P.lz = z;
+      const nx = Math.round(x / step) * step, nz = Math.round(z / step) * step;
+      if (nx !== P.cx || nz !== P.cz) {
+        // (into the next step: its picture - drawn ahead where it was foreseen - finished, and sent up)
+        if (P.nx !== nx || P.nz !== nz || !P.L) begin(nx, nz);
+        paint(P.i, P.L.length);
+        P.cx = nx; P.cz = nz; P.c.set(nx, nz); P.L = null;
+        P.sent = false; tex.needsUpdate = true;
+        return;
+      }
+      if (!P.sent) return;                 // (the card has yet to take the picture the canvas holds)
+      // ahead: the step the camera will cross into next at its pace (both at once where it crosses them within a frame
+      // of each other), and the frames left till then
+      const h = step / 2;
+      const fx = vx > 1e-3 ? (nx + h - x) / vx : vx < -1e-3 ? (x - nx + h) / -vx : Infinity;
+      const fz = vz > 1e-3 ? (nz + h - z) / vz : vz < -1e-3 ? (z - nz + h) / -vz : Infinity;
+      const f = Math.min(fx, fz);
+      if (!(f < 1e6)) return;              // (standing still: nothing ahead)
+      const tx = fx <= f + 1 ? nx + Math.sign(vx) * step : nx, tz = fz <= f + 1 ? nz + Math.sign(vz) * step : nz;
+      if (P.nx !== tx || P.nz !== tz || !P.L) begin(tx, tz);
+      const L = P.L, C = P.cost, n = L.length;
+      if (P.i >= n) return;                // (drawn: it waits for the camera)
+      // (the rest spread over half the frames left, a six-hundredth of the whole at the least)
+      const goal = C[P.i] + Math.max(C[n] / 600, (C[n] - C[P.i]) / Math.max(1, (f - 2) * 0.5));
+      let j = P.i + 1;
+      while (j < n && C[j + 1] <= goal) j++;
+      paint(P.i, j);
+      flush();
     };
     return P;
   };

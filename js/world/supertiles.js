@@ -86,7 +86,7 @@ export function superBuild(S, name) {
     let at = 0, base = 0;
     for (const it of L.items) { const s = it.idx; for (let i = 0; i < s.length; i++) idx[at + i] = s[i] + base; at += s.length; base += it.n; }
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    geo.computeBoundingSphere();
+    geo.computeBoundingSphere(); geo.computeBoundingBox();
     const mesh = new THREE.Mesh(geo, L.mat);
     mesh.name = name + '.' + (L.mat.name || 'mesh');
     mesh.renderOrder = L.from.renderOrder;

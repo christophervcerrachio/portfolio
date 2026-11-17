@@ -238,6 +238,75 @@ function bytesOf(list) {
   return b;
 }
 
+// ---- the triangles sent up ahead (16 Nov 2026). A piece larger than a frame's share went to the card whole the first
+// frame it was drawn: a tile of the fronts' relief is 100 to 150 MB of triangles, and its frame took 40 ms of the
+// page's time and 50 of the card's - every 200 m of a flight over a city, and again as each of its cells came within
+// reach (measured on an RTX 5090 over Moscow). Now such a piece's triangles go up before it is shown, a frame's share
+// at a time, each mesh's by a stand-in: a mesh of the same kind, with the same material and the very same arrays but a
+// geometry of its own whose draw range is empty, put for a frame in a group of the scene's own - drawn with the
+// program the mesh itself will be drawn with (made already: the piece's first step), it sends the arrays up and draws
+// nothing. Once all of it is on the card the piece is shown, whole, as before: a few frames later.
+const UP = { group: null, now: [], done: new WeakSet() };
+/** Whether `a` will be drawn in the scene's own picture - where its stand-ins are drawn. */
+function inScene(a) {
+  for (let p = a.gate ? a.list[0]?.parent : a.parent; p; p = p.parent) if (p === A.scene) return true;
+  return false;
+}
+/** The meshes of `a` whose arrays are not on the card yet, each with its bytes. */
+function toSend(a) {
+  const out = [], seen = new Set();
+  for (const root of a.list) root.traverse((m) => {
+    if (!m.isMesh || !m.geometry || m.isSkinnedMesh) return;
+    // (a mesh whose material is not drawn draws no stand-in either: its arrays go up when it is first drawn, as before)
+    if (Array.isArray(m.material) ? !m.material.some((x) => x?.visible) : !m.material?.visible) return;
+    const g = m.geometry;
+    let b = 0;
+    if (!UP.done.has(g) && !seen.has(g)) {
+      seen.add(g);
+      for (const at of Object.values(g.attributes)) b += at.array?.byteLength ?? at.data?.array?.byteLength ?? 0;
+      if (g.index) b += g.index.array?.byteLength ?? 0;
+    }
+    if (m.isInstancedMesh && !UP.done.has(m.instanceMatrix)) b += m.instanceMatrix.array?.byteLength ?? 0;
+    if (b > 0) out.push([m, b]);
+  });
+  return out;
+}
+/** Mesh `m`'s stand-in, for a frame, for piece `a`. */
+function upStandIn(a, m) {
+  if (!UP.group) { UP.group = new THREE.Group(); UP.group.name = 'arrivals: sent up'; A.scene.add(UP.group); }
+  const g = m.geometry, pg = new THREE.BufferGeometry();
+  pg.index = g.index; pg.attributes = g.attributes; pg.morphAttributes = g.morphAttributes; pg.morphTargetsRelative = g.morphTargetsRelative;
+  pg.groups = g.groups;
+  pg.setDrawRange(0, 0);
+  // (its bounds the mesh's own, or any: three.js sorts by them, and the arrays it would measure are let go as they go up)
+  pg.boundingSphere = g.boundingSphere ?? new THREE.Sphere(); pg.boundingBox = g.boundingBox;
+  const s = m.isInstancedMesh ? new THREE.InstancedMesh(pg, m.material, 0) : new THREE.Mesh(pg, m.material);
+  if (m.isInstancedMesh) { s.instanceMatrix = m.instanceMatrix; s.instanceColor = m.instanceColor; s.count = m.count; s.boundingSphere = m.boundingSphere ?? new THREE.Sphere(); }
+  s.frustumCulled = false; s.matrixAutoUpdate = false; s.receiveShadow = m.receiveShadow; s.renderOrder = m.renderOrder;
+  s.layers.set(0); s.userData.noCast = true;
+  s.onAfterRender = () => { s.userData.drawn = true; };
+  UP.group.add(s);
+  UP.now.push({ a, m, s, n: 0 });
+}
+/** The stand-ins of the frame before taken out: those drawn - their arrays on the card - done; those not (no picture was
+ *  drawn), drawn the next frame; `a`'s all taken out (it is no longer wanted). Its geometry is let go without its arrays:
+ *  they are the mesh's own. Never the stand-in itself: an instanced one would take its mesh's instances with it. */
+function standDown(a = null) {
+  if (!UP.now.length) return;
+  const keep = [];
+  for (const u of UP.now) {
+    if (u.s.userData.drawn) { UP.done.add(u.m.geometry); if (u.m.isInstancedMesh) UP.done.add(u.m.instanceMatrix); }
+    // (not drawn yet, and still wanted: drawn the next frame - for a second at most, then left to go up when its mesh is
+    // first drawn, as before)
+    else if (u.a !== a && ++u.n < 60) { keep.push(u); continue; }
+    u.s.removeFromParent();
+    const pg = u.s.geometry;
+    pg.index = null; pg.attributes = {}; pg.morphAttributes = {}; pg.groups = [];
+    pg.dispose();
+  }
+  UP.now = keep;
+}
+
 /**
  * Bring `objs` (an object, or several that come in together: a bridge's deck and piers, a tile's meshes) into the walk.
  * opts:
@@ -296,6 +365,7 @@ export const lastPump = { ms: 0, began: 0, tex: 0, texBytes: 0, texMs: 0, shown:
 /** Once a frame, before the scene's places are worked out: the waiting let in by turns, the rising raised. */
 export function pumpArrivals(pos, now = performance.now()) {
   raise(now);
+  standDown();
   lastPump.ms = lastPump.began = lastPump.tex = lastPump.texBytes = lastPump.texMs = lastPump.shown = lastPump.geo = 0; lastPump.big = '';
   // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's, one of 30 a second 2)
   const k = Math.min(2.5, Math.max(0.3, (A.last ? now - A.last : 16.7) / 16.7));
@@ -313,6 +383,7 @@ export function pumpArrivals(pos, now = performance.now()) {
     if (a.cancel?.()) {
       // (no longer wanted, with a picture part of the way up: that picture sent again, whole, when it is next used)
       if (a.upY !== undefined && a.tex?.[0]) { upping.delete(keyOf(a.tex[0])); a.tex[0].needsUpdate = true; a.upY = undefined; }
+      if (a.sendUp) standDown(a);
       a.stage = 9; a.res(); continue;
     }
     if (a.stage === 0) {
@@ -355,6 +426,20 @@ export function pumpArrivals(pos, now = performance.now()) {
     if (a.stage === 3) {
       if (A.quiet && !A.bulk && !A.still && seenComing(a, now)) continue;
       if (a.bytes < 0) a.bytes = bytesOf(a.list);
+      // (larger than a frame's share and drawn in the scene's picture: its triangles sent up first, a share a frame, and
+      // the piece shown once the last of them is on the card)
+      if (a.sendUp === undefined) a.sendUp = !A.bulk && a.bytes > B.geo * 1.5 && inScene(a) ? toSend(a) : null;
+      if (a.sendUp) {
+        if (a.sendUp.length) {
+          if (A.geoAllow <= 0 || (geo > 0 && performance.now() - t0 > B.ms * 2)) continue;
+          let sent = 0;
+          while (a.sendUp.length && (sent === 0 || sent + a.sendUp[0][1] <= A.geoAllow)) { const [m, b] = a.sendUp.shift(); upStandIn(a, m); sent += b; }
+          geo += sent; A.geoAllow -= sent;
+          continue;
+        }
+        if (UP.now.some((u) => u.a === a)) continue;
+        a.bytes = 0;
+      }
       if (A.geoAllow <= 0 || (geo > 0 && performance.now() - t0 > B.ms * 2)) continue;
       geo += a.bytes; A.geoAllow -= a.bytes;
       show(a, pos, now);
