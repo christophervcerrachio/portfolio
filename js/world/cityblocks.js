@@ -44,7 +44,7 @@ export function readChannel(url, channel = 0) {
   });
 }
 
-export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'spb-embankments-joints.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null } = {}) {
+export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extras = ['spb-embankments.glb', 'spb-embankments-joints.glb', 'moscow-embankments.glb'], far = Infinity, relief: reliefNear = 380, tiles = 1200, changed = null, heightAt = null, ground = null, merge = 0 } = {}) {
   reliefReach(reliefNear);
   // (the relief built farther out than it is drawn - RELIEF_AHEAD m: a street's mouldings and open windows are made
   // before they come into the view, never made as it comes on them; facaderelief.js)
@@ -105,7 +105,8 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
       return lib;
     }).catch(() => new Map()).finally(() => LM.itemEnd(url));
     // (each tile rises out of the ground in its place as it comes in, under the loading picture: arrive.js)
-    streams.push(tileStream({ base, city, kind: 'h', show: far, group, library, changed }));
+    // (and from afar each 1.6 km of them drawn together, where the machine's setting says: supertiles.js)
+    streams.push(tileStream({ base, city, kind: 'h', show: far, group, library, changed, merge }));
   }
   group.userData.streams = streams;
   // (what is still to come in: the tiles, the embankments, the relief round the camera - the loading picture waits for

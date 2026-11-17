@@ -39,6 +39,7 @@ import { buildRiverBits } from '../world/riverbits.js';
 import { buildPOIs } from '../world/pois.js';
 import { DEPTH } from '../depthmode.js';
 import { timed } from '../loadreport.js';
+import { LandParts } from '../world/landparts.js';
 
 // The whole world is a walkable solid land like the hilltop (region.js), no longer a painted panorama: the painted
 // valley and ring (valley.js and its pictures) were retired on 8 Nov 2026. FRAME and the painting's lines below still
@@ -368,6 +369,9 @@ export class CountrysideScene {
     // (its objects' places worked out once a frame, in prerender, not again for each of the frame's pictures - the
     // two sun shadows and the view each did it, a third of the frame's time; nothing in it moves between them)
     this.land.matrixWorldAutoUpdate = false;
+    // (and in parts, so that each picture goes through only what it can see; the places worked out there too, only
+    // where something moved: world/landparts.js)
+    this.parts = new LandParts(this.land);
     this.rt = null; this.distRT = null;
     // what the hero shows: the landscape's picture, behind the hands
     this.showU = { uPic: { value: null }, uAlpha: { value: 1 }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) }, uSharp: { value: 0.2 },
@@ -467,6 +471,8 @@ export class CountrysideScene {
     // the rapids, on the land and on each other
     this.shadowFar = new SunShadow(this.U, { size: G.shadowSize ? G.shadowSize * 2 : (tier === 'high' ? 4096 : 2048), slot: '2', bias: 0.35 });
     this.shadowFar.add(this.groves);
+    // (each picture turned to depth, and drawn, only in the parts of the land within its reach: world/landparts.js)
+    this.shadow.useParts(this.parts); this.shadowFar.useParts(this.parts);
     // the stones along the paths' verges (stones.js): real, standing out of the turf, throwing their shadows
     this.stones = placeStones(ground, this.U, { tier, base, world });
     this.land.add(this.stones);
@@ -583,7 +589,7 @@ export class CountrysideScene {
     const changed = () => { if (this.shadow) this.shadow.casters = null; if (this.shadowFar) this.shadowFar.casters = null; };
     // (the cities' ground materials by city, once the furniture has read them: the houses' door steps are made of them)
     const ground = {};
-    const blocks = timed('later: blocks made', () => buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground }));
+    const blocks = timed('later: blocks made', () => buildCityBlocks(this.U, { base, far: G.blocksFar ?? Infinity, relief: G.reliefNear ?? 380, tiles: G.tilesNear ?? 1200, changed, heightAt: (x, z) => world.heightAt(x, z), ground, merge: G.blocksMerge ?? 0 }));
     // and their bridges (world/citybridges.js): the walker crosses them as the country ones (one deckAt for both)
     const bridges = timed('later: bridges made', () => buildCityBridges(this.U, { base }));
     // the yards made gardens, and the yards' and streets' furniture: fountains, benches, lamps, gates, trees
@@ -930,7 +936,7 @@ export class CountrysideScene {
       renderer.clearDepth();
     }
     // (everything in the land placed for this frame: once, for the shadows and the view alike)
-    this.land.updateMatrixWorld();
+    this.parts.update();
     // the birches' shadows, while the sun is out over the hilltop
     if (this.shadow) {
       renderer.setRenderTarget(null);
@@ -950,7 +956,8 @@ export class CountrysideScene {
       }
       renderer.setRenderTarget(this.rt);
     }
-    timed('frame: the land drawn', () => renderer.render(this.land, this.cam));
+    // (the parts of the land out of the view left out whole: world/landparts.js)
+    timed('frame: the land drawn', () => { this.parts.hide(this.cam); renderer.render(this.land, this.cam); this.parts.show(); });
     // (the picture brought up to the screen's size, where it was drawn smaller: upscale.js)
     if (this.up && this.upRT) this.upscaler.upscale(renderer, this.rt.texture, this.size, this.upRT);
     // (where the sun stands on the screen, for the shafts; faded as it leaves the view and when a cloud is over it)

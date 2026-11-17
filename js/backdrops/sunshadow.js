@@ -176,9 +176,68 @@ export class SunShadow {
     this.groups = groups; this.casters = casters;
   }
 
+  /** The land in parts (landparts.js): each picture then turns to depth, and draws, only the parts within its reach. */
+  useParts(parts) { this.parts = parts; this.byPart = new Map(); }
+
+  /** Whether `o` throws a shadow into this picture (as _gather takes it). */
+  _casts(o) {
+    return o.isMesh && !o.userData.noCast && !(this.layer === 2 && o.userData.noCastFar) && !(this.layer === 1 && o.userData.noCastNear) && !!this.depthOf(o);
+  }
+  /** The casters of the land's part `p` in this picture, gathered again whenever the part was measured again. */
+  _castOf(p) {
+    let e = this.byPart.get(p);
+    if (e && e.gen === p.gen) return e.list;
+    if (!e) {
+      e = { gen: -1, list: [], mine: false };
+      for (let a = p.node; a; a = a.parent) if (this.groups.includes(a)) { e.mine = true; break; }
+      this.byPart.set(p, e);
+    }
+    e.list.length = 0;
+    if (e.mine) p.node.traverse((o) => { if (this._casts(o)) { o.layers.enable(this.layer); e.list.push(o); } });
+    if (e.list.length) p.layers |= 1 << this.layer;
+    e.gen = p.gen;
+    return e.list;
+  }
+  /** The depth picture drawn with the land's parts: those holding nothing on this picture's layer, or out of its reach,
+   *  hidden while it is drawn; the casters of the rest turned to their depth materials and back. The same casters
+   *  drawn, with the same materials, as by going through the whole land. */
+  _renderParts(renderer, scene, on, key) {
+    if (!on) { this.U[key].value = 0; return; }
+    const P = this.parts, mask = this.cam.layers.mask, hid = this._hid ??= [], list = this._list ??= [];
+    if (this.byPart.size > P.parts.length * 2 + 256) { const live = new Set(P.parts); for (const k of this.byPart.keys()) if (!live.has(k)) this.byPart.delete(k); }
+    P.aim(this.cam);
+    let total = 0;
+    for (const p of P.parts) {
+      const o = p.node;
+      if (!p.shown) continue;
+      const c = this._castOf(p);
+      total += c.length;
+      if ((p.layers & mask) !== 0 && P.seen(p)) { for (let i = 0; i < c.length; i++) list.push(c[i]); }
+      else if (!p.always) { o.visible = false; hid.push(o); }
+    }
+    this.U[key].value = total ? 1 : 0;
+    if (total) {
+      const mats = this._mats ??= [], vis = this._vis ??= [];
+      for (let i = 0; i < list.length; i++) { const m = list[i]; mats[i] = m.material; vis[i] = m.visible; m.material = m.userData.depthMat; }
+      const prev = renderer.getRenderTarget();
+      renderer.setRenderTarget(this.rt);
+      depthMode(renderer, false);
+      renderer.clear(true, true, false);
+      renderer.render(scene, this.cam);
+      depthMode(renderer, true);
+      for (let i = 0; i < list.length; i++) { const m = list[i]; m.material = mats[i]; m.visible = vis[i]; }
+      mats.length = 0; vis.length = 0;
+      renderer.setRenderTarget(prev);
+    }
+    list.length = 0;
+    for (const o of hid) o.visible = true;
+    hid.length = 0;
+  }
+
   /** Draw the depth picture (if the sun is out at all), from `scene`. */
   render(renderer, scene, on) {
     const key = 'uSunShadowOn' + this.slot;
+    if (this.parts) { this._renderParts(renderer, scene, on, key); return; }
     if (!this.casters || (this.frame = (this.frame ?? 0) + 1) % 30 === 0) this.casters = this._gather();
     this.U[key].value = on && this.casters.length ? 1 : 0;
     if (!this.U[key].value) return;

@@ -8,6 +8,7 @@
 // shown. A tile is drawn within `show` m (the machine's setting; everywhere on the full tiers).
 import { gltfLoader } from '../gltf.js';
 import { gate, allowed } from './reveal.js';
+import { SPAN, superTile, superKeep, superBuild } from './supertiles.js';
 
 const DIR = 'assets/world/cities/';
 const MAX = 16;                           // (files being read at once, all cities and kinds together)
@@ -45,12 +46,14 @@ export function materialLibrary(url, dress) {
  * One city's tiles of one kind ('h' houses, 'g' ground), all read at once and kept in `group`.
  * show: drawn within this of the camera (to the tile's edge).
  * library: a promise of { name: material }; each(mesh): the caller's own flags for a mesh as it comes in;
- * changed(): called when tiles came or went (the sun's pictures gather their casters again).
+ * changed(): called when tiles came or went (the sun's pictures gather their casters again);
+ * merge: a camera farther than this (m) from a super-tile draws it whole, its tiles joined material by material
+ * (supertiles.js), in place of its tiles; 0: never.
  */
-export function tileStream({ base = '', city, kind, show = Infinity, group, library = null, each = null, changed = null, standIn = null }) {
-  const tiles = new Map();
+export function tileStream({ base = '', city, kind, show = Infinity, group, library = null, each = null, changed = null, standIn = null, merge = 0 }) {
+  const tiles = new Map(), supers = new Map();
   let T = 400;
-  const st = { ready: false, tiles, loaded: 0, bytes: 0 };
+  const st = { ready: false, tiles, supers, loaded: 0, bytes: 0 };
   fetch(base + DIR + city + '-tiles/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((J) => {
     if (!J) { st.ready = true; return; }
     T = J.tile || 400;
@@ -60,13 +63,19 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
       const t = { key: k, x: (i + 0.5) * T, z: (j + 0.5) * T, state: 0, scene: null, meshes: null, bytes: v[kind], shown: false };
       t.read = () => read(t);
       tiles.set(k, t);
+      if (merge > 0) {
+        const si = Math.floor(i / SPAN), sj = Math.floor(j / SPAN), sk = si + '_' + sj;
+        let S = supers.get(sk);
+        if (!S) supers.set(sk, (S = superTile(sk, si * SPAN * T, sj * SPAN * T, (si + 1) * SPAN * T, (sj + 1) * SPAN * T)));
+        S.members.push(t); t.sup = S;
+      }
     }
     st.ready = true;
   });
   async function read(t) {
     try {
       const [g, lib] = await Promise.all([gltfLoader().loadAsync(`${base}${DIR}${city}-tiles/${kind}_${t.key}.glb`), library]);
-      if (t.state !== 1) { g.scene.traverse((o) => o.geometry?.dispose()); return; }
+      if (t.state !== 1) { g.scene.traverse((o) => o.geometry?.dispose()); if (t.sup) t.sup.dropped = true; return; }
       g.scene.updateMatrixWorld(true);
       const meshes = [];
       g.scene.traverse((o) => {
@@ -78,6 +87,8 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
         // (its bounds as the file gives them: the model loader takes them from the file's own extents, never from
         // the triangles - a sum over every vertex of every mesh, the longest part of a tile's coming in)
         if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+        // (its triangles copied for its super-tile while the page still has them: supertiles.js)
+        if (t.sup) superKeep(t.sup, o);
         letGo(o.geometry);
         meshes.push(o);
       });
@@ -95,6 +106,17 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
       changed?.();
     } catch { t.state = 3; }              // (not there: not asked for again)
   }
+  // A super-tile joined once every one of its tiles is read (one a frame), and put in through the gate - nothing to
+  // rise: it takes the place of tiles that stand there already.
+  function join(S) {
+    const scene = S.dropped ? null : superBuild(S, `${city}-${kind}-S${S.key}`);
+    S.scene = scene ?? false;
+    if (!scene) return;
+    scene.visible = false;
+    gate(scene, S.cx, S.cz, { rise: () => false, cancel: () => !scene.parent, batch: city + '-' + kind + '-far', wave: 1800 });
+    group.add(scene);
+    changed?.();
+  }
   /** Once a frame: every tile asked for (once), and each read in shown within `show` as the gate allows. */
   st.update = (pos) => {
     if (!st.ready) return;
@@ -107,6 +129,22 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
         if (t.scene.userData.gate) t.scene.visible = allowed(t.scene, true) && want;   // (asked for wherever it stands)
         else t.scene.visible = want;
         t.shown = t.scene.visible;
+      }
+    }
+    // (each super-tile drawn whole in its tiles' place while the camera is farther than `merge` from it and every tile
+    // of it is shown and stands in its place - the very tiles, drawn together; else its tiles as they are)
+    if (merge > 0) {
+      let joined = false;
+      for (const S of supers.values()) {
+        if (S.scene === null) { if (!joined && S.members.every((t) => t.state >= 2)) { join(S); joined = true; } continue; }
+        if (S.scene === false) continue;
+        const dx = Math.max(0, S.x0 - pos.x, pos.x - S.x1), dz = Math.max(0, S.z0 - pos.z, pos.z - S.z1);
+        const dy = pos.y === undefined ? 0 : Math.max(0, S.y0 - pos.y, pos.y - S.y1);
+        let want = Math.hypot(dx, dy, dz) > merge;
+        if (want) for (const t of S.members) if (t.state === 2 && !(t.shown && t.scene.userData.risen)) { want = false; break; }
+        const on = want && allowed(S.scene, true);
+        S.scene.visible = on;
+        if (on) for (const t of S.members) if (t.state === 2) t.scene.visible = false;     // (t.shown stays: what stands on a tile waits for it)
       }
     }
     next();

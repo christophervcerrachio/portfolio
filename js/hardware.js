@@ -37,8 +37,10 @@ export const TIERS = {
   // ladder keeps them for the trees walked among;
   // shadowFarEvery: the sun's far picture drawn every so many frames; reliefNear: the house fronts' mouldings and open
   // windows built within; tilesNear: (no longer read: since v0.0.92 every tile of houses is read under the loading picture, and drawn to blocksFar; a tile of houses is about 14,000 triangles and 0.4 MB); marksFar / bridgesFar: the
-  // landmarks (churches, the Kremlin, the palaces) and the country bridges drawn within; propsFull: the cities'
-  // furniture in its full models in the tiles this near, its light copies beyond; texMax: the longest side a picture
+  // landmarks (churches, the Kremlin, the palaces) and the country bridges drawn within; blocksMerge: a camera farther
+  // than this (m) from a 1.6 km square of the houses' tiles draws them joined, material by material - the same
+  // triangles in a twentieth of the draws (world/supertiles.js; their copy on the card is the cost: the full tiers
+  // only); propsFull: the cities' furniture in its full models in the tiles this near, its light copies beyond; texMax: the longest side a picture
   // is kept at (texcap.js: the walk's 189 pictures are 2.3 GB on the card at their full size, 0.8 GB at 1024, and a
   // laptop's built-in graphics holds them in the machine's own memory); aniso: the most any texture is filtered at
   // a glancing angle (16 where not given); cribStones: a bridge pier's field stones drawn stone by stone within, as
@@ -55,8 +57,8 @@ export const TIERS = {
   // Measured 11 Nov 2026 on the walk as published (v0.0.31): the meadow alone was 1.5 to 4.8 million triangles a frame
   // on every tier below Full - its grass at a third of the full density out to 950 m, 21 kinds of flower by the
   // thousand - even in the 240-line pictures, even over a city.
-  ultra:   { pixelRatio: 2,    scale: 1,    minScale: 0.67, msaa: 8, scene: 'high', woods: [[60, 'full', 'full'], [220, 'full', 'light'], [450, 'light']], shadowFarEvery: 1, woodsFar: 1800, canopyAt: 1650, propsFull: 150, propsNear: 600, footNear: 900, yardNear: 1400, shadows: 'both', shadowSize: 2048 , marksFar: Infinity, bridgesFar: 8000, tilesNear: 2500, reliefNear: 380, blocksFar: Infinity, smokeNear: 420 },
-  high:    { pixelRatio: 1.5,  scale: 0.67, minScale: 0.5,  msaa: 4, scene: 'high', woods: [[12, 'full', 'full'], [45, 'full', 'mid'], [95, 'mid', 'light'], [140, 'mid', 'light'], [220, 'light', 'lighter'], [320, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 130, propsNear: 500, footNear: 750, yardNear: 1100, shadows: 'both', shadowSize: 2048 , marksFar: 6000, bridgesFar: 4000, cribStones: 350, tilesNear: 1800, reliefNear: 380, blocksFar: 7000, smokeNear: 320 },
+  ultra:   { pixelRatio: 2,    scale: 1,    minScale: 0.67, msaa: 8, scene: 'high', woods: [[60, 'full', 'full'], [220, 'full', 'light'], [450, 'light']], shadowFarEvery: 1, woodsFar: 1800, canopyAt: 1650, propsFull: 150, propsNear: 600, footNear: 900, yardNear: 1400, shadows: 'both', shadowSize: 2048 , marksFar: Infinity, bridgesFar: 8000, tilesNear: 2500, reliefNear: 380, blocksFar: Infinity, blocksMerge: 250, smokeNear: 420 },
+  high:    { pixelRatio: 1.5,  scale: 0.67, minScale: 0.5,  msaa: 4, scene: 'high', woods: [[12, 'full', 'full'], [45, 'full', 'mid'], [95, 'mid', 'light'], [140, 'mid', 'light'], [220, 'light', 'lighter'], [320, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 130, propsNear: 500, footNear: 750, yardNear: 1100, shadows: 'both', shadowSize: 2048 , marksFar: 6000, bridgesFar: 4000, cribStones: 350, tilesNear: 1800, reliefNear: 380, blocksFar: 7000, blocksMerge: 250, smokeNear: 320 },
   // (the six below: `style` names the older machine whose way of drawing the tier takes - STYLES; scale, minScale and
   // pixelRatio are not used by them: the picture has the style's own number of lines whatever the screen)
   // (a 360's: 720 lines, near the full look's world but a little less of it - the step between Full and the GameCube)
