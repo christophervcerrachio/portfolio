@@ -285,7 +285,8 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   // stand-in does (yaw, radians). A kit whose model has an outline in plans.json is set down by the model's outline,
   // not the stand-in's.
   const MODELED = {
-    // (the country churches in brick, after my reference chapel: dev\world\chapel_kit.py in Blender, ComfyUI's tiles)
+    // (the country churches in brick, after my chapel picture: the wayside chapel measured off it and the village church
+    // in its family - dev\world\country-churches\chapel_kit.py and village_church_kit.py in Blender, ComfyUI's tiles)
     church: [{ file: 'church-brick.glb', yaw: 0 }],
     chapel: [{ file: 'chapel-brick.glb', yaw: 0 }],
     // (the country's own buildings and things: dev\world\models\country_kit.py in Blender, ComfyUI's photographed
