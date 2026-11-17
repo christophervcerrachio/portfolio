@@ -243,10 +243,14 @@ function bytesOf(list) {
 // page's time and 50 of the card's - every 200 m of a flight over a city, and again as each of its cells came within
 // reach (measured on an RTX 5090 over Moscow). Now such a piece's triangles go up before it is shown, a frame's share
 // at a time, each mesh's by a stand-in: a mesh of the same kind, with the same material and the very same arrays but a
-// geometry of its own whose draw range is empty, put for a frame in a group of the scene's own - drawn with the
-// program the mesh itself will be drawn with (made already: the piece's first step), it sends the arrays up and draws
-// nothing. Once all of it is on the card the piece is shown, whole, as before: a few frames later.
+// geometry of its own that draws one triangle, put for a frame in a group of the scene's own - drawn with the program
+// the mesh itself will be drawn with (made already: the piece's first step), it sends the arrays up and draws nothing
+// that can be seen: its triangle has no size and stands far behind the camera. One it must draw: drawn with none, the
+// arrays went up but the browser made them the card's own only when something was first drawn from them, and that
+// frame still took 30 to 80 ms of the card's (v0.0.132, measured as each row of the relief's cells came within reach).
+// Once all of it is on the card the piece is shown, whole, as before: a few frames later.
 const UP = { group: null, now: [], done: new WeakSet() };
+const _at = new THREE.Vector3(), _back = new THREE.Vector3();
 /** Whether `a` will be drawn in the scene's own picture - where its stand-ins are drawn. */
 function inScene(a) {
   for (let p = a.gate ? a.list[0]?.parent : a.parent; p; p = p.parent) if (p === A.scene) return true;
@@ -277,11 +281,16 @@ function upStandIn(a, m) {
   const g = m.geometry, pg = new THREE.BufferGeometry();
   pg.index = g.index; pg.attributes = g.attributes; pg.morphAttributes = g.morphAttributes; pg.morphTargetsRelative = g.morphTargetsRelative;
   pg.groups = g.groups;
-  pg.setDrawRange(0, 0);
+  pg.setDrawRange(0, 3);
   // (its bounds the mesh's own, or any: three.js sorts by them, and the arrays it would measure are let go as they go up)
   pg.boundingSphere = g.boundingSphere ?? new THREE.Sphere(); pg.boundingBox = g.boundingBox;
   const s = m.isInstancedMesh ? new THREE.InstancedMesh(pg, m.material, 0) : new THREE.Mesh(pg, m.material);
-  if (m.isInstancedMesh) { s.instanceMatrix = m.instanceMatrix; s.instanceColor = m.instanceColor; s.count = m.count; s.boundingSphere = m.boundingSphere ?? new THREE.Sphere(); }
+  if (m.isInstancedMesh) { s.instanceMatrix = m.instanceMatrix; s.instanceColor = m.instanceColor; s.count = Math.min(1, m.count); s.boundingSphere = m.boundingSphere ?? new THREE.Sphere(); }
+  // (its triangle drawn with no size, 10 km behind the camera: clipped, whatever a shader does to its corners)
+  s.matrix.makeScale(0, 0, 0);
+  const cam = A.cam?.();
+  if (cam) { cam.getWorldPosition(_at); cam.getWorldDirection(_back); s.matrix.setPosition(_at.addScaledVector(_back, -1e4)); }
+  else s.matrix.setPosition(0, -1e6, 0);
   s.frustumCulled = false; s.matrixAutoUpdate = false; s.receiveShadow = m.receiveShadow; s.renderOrder = m.renderOrder;
   s.layers.set(0); s.userData.noCast = true;
   s.onAfterRender = () => { s.userData.drawn = true; };
