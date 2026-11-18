@@ -89,6 +89,8 @@ const BROW = [[-0.334, 0.62], [0, 0.62], [0.08, 0.64], [0.16, 0.66], [0.25, 0.7]
 const ROUND = [[-Math.PI / 2, 0.66], [Math.PI, 0.64], [Math.PI / 2, 0.70]].map(([a, v]) => [a, v - 0.012]);
 export { LANDMARKS };
 const QUAD_VERT = /* glsl */`varying vec2 vUv; void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.9999, 1.0); }`;
+// (the full look's own finishing, whatever look is drawn: the book is finished so in every look - bookover.js)
+export const FULL_SHOW = { sharp: 0.2, grade: [0.86, 1.08, 0.015, 0.3] };          // (sharpening; saturation, contrast, lift, vignette)
 // The landscape, drawn in linear light with its highlights kept, gets the hands' own tone mapping and exposure here,
 // then the weather's grade: a little less colour, cool shadows and warm lights, lifted blacks, a soft vignette.
 const SHOW_FRAG = /* glsl */`
@@ -374,8 +376,8 @@ export class CountrysideScene {
     this.parts = new LandParts(this.land);
     this.rt = null; this.distRT = null;
     // what the hero shows: the landscape's picture, behind the hands
-    this.showU = { uPic: { value: null }, uAlpha: { value: 1 }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) }, uSharp: { value: 0.2 },
-      uGrade: { value: new THREE.Vector4(0.86, 1.08, 0.015, 0.3) },            // saturation, contrast, lift, vignette
+    this.showU = { uPic: { value: null }, uAlpha: { value: 1 }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) }, uSharp: { value: FULL_SHOW.sharp },
+      uGrade: { value: new THREE.Vector4(...FULL_SHOW.grade) },            // saturation, contrast, lift, vignette
       // (the evening's grade: cool in the shade, warm in the light: my picture, 8 Nov 2026)
       uShadowTint: { value: new THREE.Vector3(-0.012, 0.004, 0.026) }, uLightTint: { value: new THREE.Vector3(0.022, 0.01, -0.016) },
       uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uSunVis: { value: 0 }, uRays: { value: 1.1 },

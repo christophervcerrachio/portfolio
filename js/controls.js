@@ -1,14 +1,16 @@
-// The controls, told once: on a visitor's first visits a small pane of the menu's glass at the foot of the view, at the
-// left, names the four things to do - walk, the book, look closer, fly - and marks each as it is first done. When all
-// four have been done it fades and is not shown again in this browser (localStorage 'career-controls': the ones done,
-// kept as each is done, so a visit that ends halfway goes on where it left off). Not on a touch screen, whose ways are
-// its own (a drag looks, a tap raises the book), and not in a still. ?controls shows it from the start and keeps nothing.
+// The controls, told once: on a visitor's first visits a small pane of glass at the foot of the view, at the left, names
+// the things to do - walk, the book, look closer, fly - and Esc, which lets the mouse go (and brings nothing up: 18 Nov
+// 2026), and marks each as it is first done. When all have been done it fades and is not shown again in this browser
+// (localStorage 'career-controls': the ones done, kept as each is done, so a visit that ends halfway goes on where it
+// left off - and one that had done the first four is shown Esc). Not on a touch screen, whose ways are its own (a drag
+// looks, a tap raises the book), and not in a still. ?controls shows it from the start and keeps nothing.
 const KEY = 'career-controls';
 export const CONTROLS = [
   ['walk', ['W', 'A', 'S', 'D'], 'Walk'],
   ['book', ['Right click'], 'Open the book of places'],
   ['zoom', ['Scroll'], 'Look closer'],
   ['fly', ['Z'], 'Fly free, and Z again to land'],
+  ['esc', ['Esc'], 'Release the cursor'],
 ];
 
 /** The pane in `container`, hidden until show(true). fresh: from the start, nothing kept. */
@@ -35,9 +37,9 @@ export function makeControls({ container, fresh = false }) {
   let gone = false, want = false;
   const save = () => { if (!fresh) try { localStorage.setItem(KEY, JSON.stringify([...done])); } catch { /* (not kept) */ } };
   return {
-    /** shown or not: not under the loading picture, nor while the menu or the book is up (walk.js, every frame) */
+    /** shown or not: not under the loading picture, nor while the book is up (walk.js, every frame) */
     show(on) { on = !!on; if (on === want) return; want = on; if (!gone) el.hidden = !want; },
-    /** one of the four done: its line marked; all four, the pane fades away */
+    /** one of them done: its line marked; all of them, the pane fades away */
     used(id) {
       if (gone || done.has(id) || !CONTROLS.some(([k]) => k === id)) return;
       done.add(id); save();

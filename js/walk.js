@@ -11,7 +11,6 @@
 // Dev only (remove with the free-cam): P copies the view's pose, then a box dragged round the problem; __walk.pose()
 // reads the pose and __walk.goTo(pose) returns to it.
 import { chooseTier, guessTier, rememberTier, keepChoice, step, TIERS, ORDER, STYLES, CHOICES, choiceOf } from './hardware.js';
-const PAGE_W_PER_H = 212 / 270;                     // (a page of the book, its width to its height: bookpages.js)
 import { setTextureCap } from './texcap.js';
 import { useStyle } from './retro.js';
 import { initDepth } from './depthmode.js';
@@ -21,8 +20,9 @@ import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
 import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
-import { startLoading } from './loading.js';
+import { startLoading, makeLoading } from './loading.js';
 import { makeBook } from './book.js';
+import { makeBookOver } from './bookover.js';
 import { makeControls } from './controls.js';
 import * as report from './loadreport.js';
 
@@ -61,7 +61,12 @@ export async function initWalk(container, opts = {}) {
   // (below the full look, an older machine's way of drawing - hardware.js STYLES, retro.js: its own number of lines
   // whatever the screen, its textures' filtering, its corners on the pixel grid; set before anything is made)
   const retro = useStyle(GFX.style ? STYLES[GFX.style] : null, canvas);
-  renderer.setPixelRatio(retro ? 1 : Math.min(devicePixelRatio || 1, GFX.pixelRatio));
+  // (the book at the screen's own resolution in every look: an older machine's picture is then drawn into the corner of a
+  // canvas the screen's size and brought up to it by the page itself, the book laid over it - bookover.js; a still and
+  // ?nobook, with no book, keep the canvas the look's own size, scaled up by the browser, as before)
+  const overLow = !!retro && !still && !params.has('nobook');
+  if (overLow) canvas.style.imageRendering = 'auto';
+  renderer.setPixelRatio(retro && !overLow ? 1 : Math.min(devicePixelRatio || 1, retro ? 2 : GFX.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   // (a 360's picture finished with the film-like curve of its years - retro.js tone - the rest with the neutral one)
   renderer.toneMapping = retro?.tone === 'filmic' ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
@@ -73,7 +78,9 @@ export async function initWalk(container, opts = {}) {
   // the ways, bark, planks - stay sharp into the distance. On a tier with `aniso` no texture is filtered past that,
   // whatever it asks for: three clamps each to what the card says it can do, so the card is made to say less - a
   // built-in chip pays for every tap)
-  if (GFX.aniso) { const most = renderer.capabilities.getMaxAnisotropy(); renderer.capabilities.getMaxAnisotropy = () => Math.min(most, GFX.aniso); }
+  // (the card's own, kept for the book: its pictures are read as the full look reads them in every look - book.js)
+  const cardAniso = renderer.capabilities.getMaxAnisotropy();
+  if (GFX.aniso) renderer.capabilities.getMaxAnisotropy = () => Math.min(cardAniso, GFX.aniso);
   THREE.Texture.DEFAULT_ANISOTROPY = renderer.capabilities.getMaxAnisotropy();
   const stage = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();        // (the scene draws through its own camera; this one only shows it)
@@ -85,6 +92,8 @@ export async function initWalk(container, opts = {}) {
   stage.background = s.horizon;
   stage.add(s.group);
   s.setFade(1);
+  // (the book over the picture at the screen's resolution, where the picture is smaller than the screen - bookover.js)
+  const over = makeBookOver({ renderer, scene: s, low: overLow, smooth: overLow && STYLES[GFX.style].scaleUp === 'smooth' });
   // (what comes in once the walk has begun - world/arrive.js: made for the scene's own picture, rising into place)
   setupArrivals({ renderer, scene: s.land, camera: () => s.cam, target: () => s.rt, shadow: () => s.shadow, still: still || noRise,
     budget: GFX.style ? { ms: 4, tex: 8e6, geo: 5e6, compiles: 2 } : null });
@@ -105,7 +114,9 @@ export async function initWalk(container, opts = {}) {
   let framesSince = 0, veilUp = !still, gfxChecked = still, bench = null, benchLast = null;
   // (the look the walk was meant to open on, and the moment the loading picture is gone: nothing turns the view before it)
   let firstLook = null, stillUntil = 0;
-  const frozen = () => veilUp || performance.now() < stillUntil;
+  // (a place chosen in the book: the loading picture up over the walk while he is carried there - travel, below)
+  let travelUp = false;
+  const frozen = () => veilUp || travelUp || performance.now() < stillUntil;
   const veilStart = performance.now();
   // (the load's timeline in the console - "[load] <stage> <ms since the page began>" - so its slow parts can be found)
   // (and how much of it the page's own work held the browser up: its long tasks, summed)
@@ -171,7 +182,7 @@ export async function initWalk(container, opts = {}) {
     if (book && !book.primed && now - settledAt < 8000) return;
     {
         veilUp = false; tl('veil lifted'); held.clear(); opened = true; openedAt = now;
-        controls?.show(!menuOpen);
+        controls?.show(true);
         open();
         // (the rest - the cities, their landmarks, the bridges - asked for at once too, each rising as it comes)
         s.loadRestFar(); later();
@@ -276,7 +287,7 @@ export async function initWalk(container, opts = {}) {
     tl('scene load: built'); s.setFree(true);
     if (!still) prime();
     // (the country places' and the estate's models: asked for as the picture lifts, not under it - v0.0.117)
-    // (a change of graphics in the menu loads the walk again: the walker put back where he stood, looking the way he looked)
+    // (a change of graphics in the book loads the walk again: the walker put back where he stood, looking the way he looked)
     // (else the walk begins where it begins: SPAWN)
     let kept = null;
     try { kept = sessionStorage.getItem('career-pose'); if (kept) sessionStorage.removeItem('career-pose'); } catch { /* (none) */ }
@@ -291,9 +302,12 @@ export async function initWalk(container, opts = {}) {
   function frame() {
     const w = container.clientWidth || innerWidth, h = container.clientHeight || innerHeight;
     if (retro) {
-      // (an older machine's picture: its own lines, the canvas itself that small and scaled up by the page)
+      // (an older machine's picture: its own lines, the canvas itself that small and scaled up by the page - or, with the
+      // book, the canvas the screen's size and the picture in its corner, at least that many pixels: bookover.js)
       const [W, H] = retro.size(w, h);
-      renderer.setSize(W, H, false); s.resize(W, H);
+      if (overLow) { renderer.setPixelRatio(Math.max(Math.min(devicePixelRatio || 1, 2), H / h, W / w)); renderer.setSize(w, h, false); }
+      else renderer.setSize(W, H, false);
+      s.resize(W, H);
     } else {
       renderer.setSize(w, h, false);
       const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -337,7 +351,8 @@ export async function initWalk(container, opts = {}) {
   }
   // ---- the mouse. Three states, always one of them:
   //   captured  - the browser has given the page the mouse (pointer lock): moving it turns the view, no cursor, no edge;
-  //               Esc lets it go.
+  //               Esc lets it go (and nothing comes up: the graphics are on the book's left page - 18 Nov 2026, the
+  //               menu Esc had brought up taken away; the pane of the controls names Esc, marked once it is used).
   //   free      - not captured yet, or let go: the cursor shows, and a small "Click to look around" asks for a click (or any
   //               walking key) to capture it.
   //   refused   - this browser will not give the page the mouse (an embedded pane, a page that is not the focused
@@ -346,10 +361,10 @@ export async function initWalk(container, opts = {}) {
   //               taken (Chrome, Edge).
   // A browser refuses a capture asked for just after Esc (about a second): the next click tries again.
   const locked = () => document.pointerLockElement === canvas;
-  let refusals = 0, noted = false, everHeld = false, menuOpen = false;
-  // (the note, the view-copy mark and the pose's units (below) are read by the keys, the mouse and the menu from the
-  // first moment, the walk still loading: declared here, before any of them is listened for - declared further down,
-  // an Esc while loading had stopped on them unread, and the menu never came up)
+  let refusals = 0, noted = false, everHeld = false;
+  // (the note, the view-copy mark and the pose's units (below) are read by the keys and the mouse from the first
+  // moment, the walk still loading: declared here, before any of them is listened for - declared further down, a key
+  // pressed while loading had stopped on them unread)
   let note = null, marking = null, book = null;
   const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   const hint = document.createElement('div');
@@ -372,44 +387,14 @@ export async function initWalk(container, opts = {}) {
     }
     if (refused) return;
     hint.textContent = 'Click to look around';
-    hint.style.opacity = locked() || still || !s.ready || menuOpen ? '0' : '1';
+    hint.style.opacity = locked() || still || !s.ready || travelUp ? '0' : '1';
   }
 
-  // ---- the menu. Esc lets the mouse go and the menu comes up: whose page this is, Resume, and how the picture is
-  // drawn - Full, or one of the older machines' ways (hardware.js CHOICES). A choice is kept for this browser and the
-  // walk loads again where the walker stands. It is a pane of glass over the scene (index.html .walk-menu): the scene
-  // shows through it, blurred, and a click on the scene beside it resumes as it always did. It comes up while the walk
-  // is still loading too (over the loading picture), and the newest choice is the one kept: a heavy look's load is not
-  // waited out to choose another, and a second choice made while the page is going still counts (until 12 Nov 2026 the
-  // menu came up only once the walk was in, and every choice was greyed out until the next page had loaded)
-  const menu = document.createElement('div');
-  menu.className = 'walk-menu'; menu.hidden = true;
-  menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Menu');
+  // ---- a change of look, from the book's left page: kept for this browser, and the walk loads again where the walker
+  // stands. It is made while the walk is still loading too (over the loading picture), and the newest choice is the
+  // one kept: a heavy look's load is not waited out to choose another
   const mine = choiceOf(guessTier(renderer.getContext()).tier), nowIs = choiceOf(gfxInfo.tier);
-  menu.innerHTML = `<div class="walk-menu-pane">
-    <h1>Christopher Cerrachio</h1>
-    <button type="button" class="walk-menu-resume">Resume</button>
-    <fieldset>
-      <legend>Graphics</legend>
-      ${CHOICES.map((c) => `<label class="walk-menu-choice"><input type="radio" name="walk-gfx" value="${c.id}"${c.id === nowIs ? ' checked' : ''}>
-        <span class="walk-menu-name">${c.name}${c.id === mine ? '<small>this computer\u2019s</small>' : ''}</span>
-        <span class="walk-menu-about">${c.about}</span></label>`).join('')}
-    </fieldset>
-    <p class="walk-menu-note" aria-live="polite">A change loads the walk again, where you stand.</p>
-  </div>`;
-  container.appendChild(menu);
-  const menuNote = menu.querySelector('.walk-menu-note'), resumeBtn = menu.querySelector('.walk-menu-resume');
   let leaving = false;
-  function showMenu(on) {
-    on = !!on && !still;
-    if (on === menuOpen) return;
-    menuOpen = on; menu.hidden = !on; controls?.show(!on && !veilUp);
-    if (on) { held.clear(); resumeBtn.focus({ preventScroll: true }); } else canvas.focus({ preventScroll: true });
-    mouseState();
-  }
-  resumeBtn.addEventListener('click', () => { startSound(); takeMouse(); if (refusals >= 2) showMenu(false); });
-  menu.addEventListener('change', (e) => choose(e.target?.value));
-  // (a choice of look, from the menu or from the book's left page)
   function choose(id) {
     if (!id || (id === nowIs && !leaving)) return;
     // (kept for this browser; where the walker stands and looks kept for the page that loads next - unless the place
@@ -420,7 +405,6 @@ export async function initWalk(container, opts = {}) {
       if (!sessionStorage.getItem('career-pose')) sessionStorage.setItem('career-pose', JSON.stringify(pose()));
       sessionStorage.removeItem('career-gfx-tries');
     } catch { /* (none) */ }
-    menuNote.textContent = 'Loading the walk again\u2026';
     if (leaving) return;
     leaving = true;
     const u = new URL(location.href); u.searchParams.delete('gfx');
@@ -432,7 +416,6 @@ export async function initWalk(container, opts = {}) {
   // chosen - fades in over the walk, and the page loads again under the same picture, which goes on exactly as on a
   // first visit: the land and the things rising as their files come in, the bar moving)
   async function leave(look) {
-    showMenu(false);
     const html = window.__walkLoadHTML;
     if (!html) return;
     const box = document.createElement('div'); box.innerHTML = html;
@@ -445,6 +428,63 @@ export async function initWalk(container, opts = {}) {
     await new Promise((r) => setTimeout(r, 550));
   }
 
+  // ---- a place chosen in the book: the walk's own loading picture, in the look in force, comes up over the walk; under
+  // it the book is lowered and the walker carried there, and it lifts once the place is in - its ground, everything
+  // waiting to come in come, no file being read - or after TRAVEL.most s, the rest rising as it comes (18 Nov 2026: the
+  // book's leaves had turned while he was carried there, the place coming in behind the book)
+  const TRAVEL = { fade: 0.5, most: 10 };
+  let trip = null;
+  const placeIn = () => groundLoaded() && arrivalsWaiting() === 0 && pending === 0 && !managerBusy;
+  function travel(p) {
+    if (travelUp || leaving || !p) return;
+    travelUp = true; held.clear(); vel.x = 0; vel.z = 0;
+    controls?.show(false); mouseState();
+    const look = GFX.style ?? 'full', html = window.__walkLoadHTML;
+    let el = null, pic = null;
+    if (html && !still) {
+      const box = document.createElement('div'); box.innerHTML = html;
+      el = box.firstElementChild;
+      if (look !== 'full') el.dataset.style = look; else delete el.dataset.style;
+      el.style.opacity = '0'; el.style.transition = `opacity ${TRAVEL.fade}s ease`;
+      container.appendChild(el);
+      el.getBoundingClientRect();
+      el.style.opacity = '1';
+      pic = makeLoading(el, { style: look, base });
+    }
+    trip = { p, el, pic, at: 0, most: 0 };
+    // (carried there once the picture covers the walk - its fade ended, or a moment after it should have: the jump not
+    // seen, however slow the frames)
+    let carried = false;
+    const carry = () => {
+      if (carried || !trip) return;
+      carried = true;
+      book?.lower();
+      if (s.freeCam.on) s.exitFree();
+      stance.now = 'stand';
+      s.walkTo(p.at[0], p.at[1], true);
+      const L = s.look; L.anchor = null; L.yaw = p.yaw / DEG; L.pitch = p.pitch / DEG; L.goal = [L.yaw, L.pitch]; L.zoom = L.zoomGoal = 1; s._lens();
+      console.info('[book] to', p.id, p.at);
+      trip.at = performance.now();
+    };
+    if (!el) { carry(); return; }
+    const t0 = performance.now(), opaque = () => getComputedStyle(el).opacity === '1';
+    el.addEventListener('transitionend', (e) => { if (e.propertyName === 'opacity' && opaque()) carry(); });
+    const check = () => { if (carried || !trip) return; if (opaque() || document.hidden || performance.now() - t0 > 8000) carry(); else setTimeout(check, 200); };
+    setTimeout(check, TRAVEL.fade * 1000 + 50);
+  }
+  function travelCheck(now) {
+    if (!trip?.at) return;
+    // (how far the place has come in: its ground first, then what waits to come in, against the most that waited)
+    const w = arrivalsWaiting(); trip.most = Math.max(trip.most, w);
+    trip.pic?.progress(groundLoaded() ? 0.5 + 0.45 * (1 - w / Math.max(1, trip.most)) : 0.3 * Math.min(1, (now - trip.at) / 3000));
+    if (!placeIn() && now - trip.at < TRAVEL.most * 1000) return;
+    // (lifted as the first picture lifts: faded over the walk, nothing turning the view until it has gone - loading.js)
+    if (trip.el) { trip.el.style.opacity = ''; trip.el.style.transition = ''; }
+    trip.pic?.done();
+    trip = null; travelUp = false; held.clear(); stillUntil = now + 1400;
+    controls?.show(!book?.up); mouseState();
+  }
+
   function takeMouse() {
     if (locked() || still) return;
     try {
@@ -452,12 +492,14 @@ export async function initWalk(container, opts = {}) {
       if (p && p.catch) p.catch(() => {});      // (the refusal arrives as pointerlockerror, counted below)
     } catch { refusals++; mouseState(); }
   }
+  // (let go with the page still in front - Esc; not a window gone behind another, nor the view's copy taking it: the
+  // controls' pane marks Esc as done)
   document.addEventListener('pointerlockchange', () => {
-    if (locked()) { refusals = 0; everHeld = true; showMenu(false); } else { held.clear(); if (everHeld && !marking) showMenu(true); }
+    if (locked()) { refusals = 0; everHeld = true; } else { held.clear(); if (everHeld && !marking && document.hasFocus()) controls?.used('esc'); }
     mouseState();
   });
-  // (a browser refuses a capture asked for within a second of Esc: with the menu up that is Resume pressed at once -
-  // not a window that cannot hold the mouse; the next press is taken)
+  // (a browser refuses a capture asked for within a second of Esc: a click at once after it - not a window that cannot
+  // hold the mouse; the next press is taken)
   document.addEventListener('pointerlockerror', () => { if (!everHeld) refusals++; mouseState(); });
   // (captured: the raw movement, a jump of hundreds of pixels in one event ignored - some systems send one on capture)
   document.addEventListener('mousemove', (e) => {
@@ -469,7 +511,7 @@ export async function initWalk(container, opts = {}) {
   // ---- the book: right click brings it up to the face and lowers it again (not under the loading picture, not while
   // flying free); the browser's own menu never shows on the walk
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  function bookToggle() { if (!book?.loaded || frozen() || s.freeCam?.on || menuOpen) return; book.toggle(); controls?.used('book'); }
+  function bookToggle() { if (!book?.loaded || frozen() || s.freeCam?.on) return; book.toggle(); controls?.used('book'); }
   // (one finger on a touch screen looks round, two pinch; with the mouse, a press captures it, or drags where refused)
   const pts = new Map();
   let pinch = null, tap = null;
@@ -539,14 +581,12 @@ export async function initWalk(container, opts = {}) {
     // FREE-CAM (dev only; remove with it): Z toggles flying; the second Z sets the walker down where the camera is.
     if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
       e.preventDefault();
-      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); controls?.used('fly'); } book?.show(!s.freeCam.on); }
+      if (s.ready && !veilUp && !travelUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); controls?.used('fly'); } book?.show(!s.freeCam.on); }
       return;
     }
     // VIEW POSE (dev only; remove with the free-cam): P copies where the view is, to note a fault where it was seen.
     if (e.code === 'KeyP' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { e.preventDefault(); copyPose(); return; }
     if (e.code === 'Escape' && marking) { endMark(); showNote('View copied, without a box.', 3000); return; }
-    if (e.code === 'Escape' && !locked() && !e.repeat) { showMenu(!menuOpen); return; }
-    if (menuOpen) return;                              // (the menu's own keys: Tab, the arrows, Enter)
     const k = KEYS[e.code];
     if (frozen()) { if (k) e.preventDefault(); return; } // (nothing moves under the loading picture, nor as it fades: lookBy)
     if (!k || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -623,7 +663,8 @@ export async function initWalk(container, opts = {}) {
     const b = performance.now();
     s.prerender(renderer);
     const c = performance.now();
-    renderer.render(stage, camera);
+    if (over.low) over.showLow(() => renderer.render(stage, camera)); else renderer.render(stage, camera);
+    over.book(book);
     const d = performance.now();
     if (veilUp) report.frame(b - a, c - b, d - c, lastPump); else report.frameAfter(b - a, c - b, d - c, lastPump);
     if (d - a > 24 && s.ready && HEAVY.length < 80) HEAVY.push({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1), pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1), came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
@@ -661,13 +702,14 @@ export async function initWalk(container, opts = {}) {
     }
     last = now;
     veilCheck(now);
+    travelCheck(now);
     if (warming) return;                 // (nothing drawn or moved while the shaders are made: prime)
     clock += dt;
     if (s.ready) { if (s.freeCam.on) fly(dt); else { body(dt); walk(dt); } }
     book?.update(dt);
     // (the controls' pane not over the book while it is up - its left page's foot is where the pane stands: shown again
     // as the book is lowered)
-    controls?.show(!menuOpen && !veilUp && !book?.up);
+    controls?.show(!veilUp && !travelUp && !book?.up);
     renderAt(clock);
   }
   renderAt(clock);
@@ -675,24 +717,18 @@ export async function initWalk(container, opts = {}) {
   await loaded;
   // ---- the book, once the scene is in (none in a still: book.js; declared with the mouse's state, above)
   if (!still && !params.has('nobook')) {
-    const lines = retro ? STYLES[GFX.style].lines : 1080;
-    book = makeBook({ s, base, canvas, coarse: lines <= 240, pageW: lines <= 240 ? Math.round(lines * 0.85 * PAGE_W_PER_H) : lines <= 480 ? 768 : lines <= 720 ? 1024 : 1536,
+    // (its pages at the full look's size in every look: the book is drawn at the screen's resolution - bookover.js)
+    book = makeBook({ s, base, canvas, coarse: false, pageW: 1536, aniso: cardAniso,
       choices: CHOICES, now: nowIs, mine, touch: matchMedia('(pointer: coarse)').matches,
       environment: () => s.environment(renderer),
       speed: () => Math.hypot(vel.x, vel.z),
-      // (the place travelled to is in: its ground, everything waiting to come in come, no file being read)
-      isIn: () => groundLoaded() && arrivalsWaiting() === 0 && pending === 0 && !managerBusy,
-      onTravel: (p) => {
-        if (s.freeCam.on) s.exitFree();
-        held.clear(); vel.x = 0; vel.z = 0; stance.now = 'stand';
-        s.walkTo(p.at[0], p.at[1], true);
-        const L = s.look; L.anchor = null; L.yaw = p.yaw / DEG; L.pitch = p.pitch / DEG; L.goal = [L.yaw, L.pitch]; L.zoom = L.zoomGoal = 1; s._lens();
-        console.info('[book] to', p.id, p.at);
-      },
+      onTravel: (p) => travel(p),
       onChoose: (id) => choose(id),
     });
-    s.viewmodel = (r, dt) => book.render(r, dt);
-    book.ready.then(() => book.prime(renderer));
+    // (in the scene's picture: the book in colour, or its depth alone where it is drawn again over the picture at the
+    // screen's resolution - an older machine's look; the glove's cover kept wherever it is laid over the picture)
+    s.viewmodel = (r, dt) => book.render(r, dt, { paint: !over.low, cover: over.low || !!s.up });
+    book.ready.then(() => Promise.all([book.prime(renderer), over.compile()]));
   }
   container.classList.add('is-live');
   // (a still: no picture to lift - the rest comes in at once, in its place)

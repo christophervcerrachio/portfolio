@@ -1,8 +1,8 @@
 // The book's pages (js/book.js): each drawn on its own canvas, the way a page of the 1830s was printed - Bodoni Moda
 // (vendor/bodoni-moda, its licence beside it) in a warm black ink on the cream paper of the book's own tile, a red ink for
 // the line the cursor is on. The right page lists the places to travel to, grouped, each with how far it lies in
-// versts from where the walker stands; the left page, the graphics, as the menu has them; the leaves that turn between
-// carry pages of the guide itself (TEXTS).
+// versts from where the walker stands; the left page, the graphics, the look in force ringed. The line under the
+// printer's hand is red on either page.
 // A page is measured in millimetres from its top left as the reader sees it, the leaf's own size (PAGE); its canvas
 // is drawn at whatever size the look needs (book.js: finer for the full look, coarse and heavier for a picture of
 // 240 lines or fewer, where the small lines under each place are left out). Every line that can be chosen is kept with
@@ -28,31 +28,6 @@ export async function loadFonts(base = '') {
   return fontsIn;
 }
 const face = (size, { italic = false, weight = 400 } = {}) => `${italic ? 'italic ' : ''}${weight} ${size}px ${fontsIn ? `"${FAMILY}", ` : ''}${FALLBACK}`;
-
-// ---- the guide's own pages, for the leaves that turn (each its running head, its folio, its text)
-export const TEXTS = [
-  { head: 'St Petersburg', title: 'The Admiralty', folio: 23,
-    argument: 'Its tower and spire.—The three streets.—The boulevard.—The Neva.', text: [
-    'The Admiralty stands where the city began, at the head of the three long streets that run out from it through the town, and its slender gilded spire, with the little ship upon its point, closes the view down every one of them. It is the first thing the traveller looks for on coming into Petersburg, and the last he loses sight of on leaving it.',
-    'The building he sees was raised in the reign of Alexander by the architect Zakharov, who kept the old plan of the yards and clothed it anew: a front of nearly a quarter of a mile toward the boulevard, two wings running down to the river, and in the middle the tower over the great arch, with its colonnade and its statues.',
-    'Along the front lies the boulevard, shaded by lime trees, where the city walks in the afternoon; from its end the Neva is seen in all its breadth, and across it the Exchange and the columns of the Strelka.'] },
-  { head: 'St Petersburg', title: 'The Winter Palace', folio: 26,
-    argument: 'Its fronts.—The great square.—The arch of the General Staff.', text: [
-    'Beside the Admiralty, along the river, stands the Winter Palace, built for the Empress Elizabeth by Rastrelli and finished in the first year of the reign of Catherine. Its four fronts are crowded with columns, and statues and vases stand all along its roof; that toward the river runs some two hundred yards.',
-    'Before its other front opens the great square, closed on the far side by the curving building of the General Staff, which Rossi built a few years since, with its triumphal arch crowned by the chariot of Glory; through the arch the way leads on to the Nevsky Prospekt.',
-    'On a fine day the square is crossed by carriages without number, and a regiment drilling in it looks no more than a company.'] },
-  { head: 'Moscow', title: 'The Kremlin', folio: 141,
-    argument: 'The view from the river.—The cathedrals.—The Red Square.—St Basil’s.', text: [
-    'Seen from the stone bridge over the Moskva, the Kremlin shows the whole length of its red walls and towers along the river, and over them the gilded domes of its cathedrals and the white tower of Ivan the Great.',
-    'Within the walls stand the cathedral of the Assumption, where the emperors are crowned, that of the Archangel, where the old tsars lie, and that of the Annunciation; the Palace of the Facets, the Arsenal and the Senate.',
-    'Beyond the Spassky gate the Red Square opens, and at its far end, above the slope to the river, the church of St Basil raises its nine chapels, each with its own painted dome.',
-    'The traveller should climb the tower of Ivan the Great toward evening, when the whole of Moscow lies below him, its gardens and its numberless churches, and the bells begin.'] },
-  { head: 'The Caucasus', title: 'Pyatigorsk', folio: 212,
-    argument: 'The springs.—The boulevard.—The Aeolian harp.—Elbrus.', text: [
-    'Pyatigorsk lies at the foot of Mount Mashuk, where the hot springs rise smelling of sulphur. A broad boulevard leads up from the town to the baths and the galleries, where the company walks in the morning between one glass of the waters and the next.',
-    'Above them, on the hill, a little pavilion holds an Aeolian harp, which sounds when the wind blows. On a clear morning the snows of Elbrus are seen from the heights, and across the plain rise the five peaks of Beshtau, from which the town takes its name.',
-    'The season is the summer, when the families come from Moscow and Petersburg to take the waters and the officers ride in from the line; in the evening there is music on the boulevard.'] },
-];
 
 // ---- drawing
 const roman = (n) => { const r = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']]; let s = ''; for (const [v, c] of r) while (n >= v) { s += c; n -= v; } return s; };
@@ -125,9 +100,7 @@ export function versts(m) {
   return String(Math.round(v));
 }
 
-/** The right page: the places. data: { places: [{id, group, title, sub, dist (m)}], hover (an id), hand (the printer's
- *  hand drawn before the hovered place: { img, w (mm), tip: its fingertip as fractions of img from its top left }) }.
- *  Returns its boxes. */
+/** The right page: the places. data: { places: [{id, group, title, sub, dist (m)}], hover (an id) }. Returns its boxes. */
 export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) {
   const k = W / PAGE.w, side = 'recto', [x0, x1] = BLOCK[side].map((v) => v * k), boxes = [];
   paper(g, W, H, tile, k);
@@ -155,14 +128,6 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
     while (t > T * 0.7 && g.measureText(p.title).width > x1 - x0 - dw - 5 * k) { t -= T * 0.05; g.font = face(t * k, { weight: coarse ? 700 : (on ? 500 : 400) }); }
     const name = p.title, nw = g.measureText(name).width;
     g.fillText(name, x0, y * k);
-    if (on && data.hand) {
-      // (the printer's hand in the margin before the line, pointing at it: its fingertip just short of the name's
-      // first letter, level with the middle of its capitals; printed into the paper, so it follows the leaf)
-      const Hd = data.hand, hw = Hd.w * k, hh = hw * Hd.img.height / Hd.img.width;
-      g.save(); g.globalCompositeOperation = 'multiply';
-      g.drawImage(Hd.img, x0 - 1.2 * k - Hd.tip[0] * hw, (y - 0.3 * t) * k - Hd.tip[1] * hh, hw, hh);
-      g.restore(); g.fillStyle = on ? RED : INK;
-    }
     g.font = face(T * k, { italic: here, weight: coarse ? 700 : 400 });
     g.textAlign = 'right'; g.fillText(d, x1, y * k); g.textAlign = 'left';
     leaders(g, k, x0 + nw + 1.2 * k, x1 - dw - 1.2 * k, y * k, T);
@@ -208,41 +173,6 @@ export function drawGraphics(g, W, H, data, { tile = null, coarse = false } = {}
   g.fillStyle = INK; g.font = face((coarse ? 4.6 : 3.9) * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'center';
   g.fillText('A change loads the walk again, where you stand.', (x0 + x1) / 2, (BLOCK.bottom - 4) * k); g.textAlign = 'left';
   return boxes;
-}
-
-/** A page of the guide: its running head, its folio, its paragraphs set justified, the first line of each indented. */
-export function drawText(g, W, H, page, side, { tile = null, coarse = false } = {}) {
-  const k = W / PAGE.w, [x0, x1] = BLOCK[side].map((v) => v * k);
-  paper(g, W, H, tile, k);
-  g.textBaseline = 'alphabetic';
-  runningHead(g, k, side, page.head, String(page.folio), coarse);
-  const size = (coarse ? 6.2 : 4.5) * k, lead = (coarse ? 8.2 : 6.3) * k, indent = 5 * k, cx = (x0 + x1) / 2;
-  g.fillStyle = INK;
-  smallCaps(g, page.title, cx, (BLOCK.top + 22) * k, (coarse ? 8 : 7) * k, { align: 'center', track: 0.16, weight: coarse ? 700 : 500 });
-  let y = (BLOCK.top + 30) * k;
-  if (page.argument && !coarse) {
-    g.font = face(3.9 * k, { italic: true }); g.textAlign = 'center'; g.fillText(page.argument, cx, y); g.textAlign = 'left'; y += 4 * k;
-  }
-  rule(g, cx - 10 * k, cx + 10 * k, y, Math.max(1, 0.25 * k)); y += 10 * k;
-  g.font = face(size);
-  const space = g.measureText(' ').width;
-  for (const para of page.text) {
-    const words = para.split(' '); let line = [], w = 0, first = true;
-    const flush = (last) => {
-      const avail = x1 - x0 - (first ? indent : 0), used = line.reduce((a, b) => a + g.measureText(b).width, 0);
-      const gap = last || line.length < 2 ? space : (avail - used) / (line.length - 1);
-      let x = x0 + (first ? indent : 0);
-      for (const word of line) { g.fillText(word, x, y); x += g.measureText(word).width + gap; }
-      y += lead; line = []; w = 0; first = false;
-    };
-    for (const word of words) {
-      const ww = g.measureText(word).width, avail = x1 - x0 - (first ? indent : 0);
-      if (line.length && w + space + ww > avail) flush(false);
-      w += (line.length ? space : 0) + ww; line.push(word);
-    }
-    if (line.length) flush(true);
-    if (y > (BLOCK.bottom - 6) * k) break;
-  }
 }
 
 /** The line under page point (x, y mm), from a page's boxes: its id, or null. */

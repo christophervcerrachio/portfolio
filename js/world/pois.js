@@ -749,8 +749,10 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   // rises out of the ground, the nearest places first: arrive.js)
   const atPlace = new Map(), toPlace = (place, o) => { let l = atPlace.get(place); if (!l) atPlace.set(place, (l = [])); l.push(o); };
   for (const [k, list] of Object.entries(lists)) {
-    // (a kit whose model's outline is known is set down by it: the stand-in is not shown unless the model fails to come)
-    const modeled = (MODELED[k] ?? []).some((f) => shapes[stem(f.file)]);
+    // (a kit with a model to come is not shown as its stand-in unless the model fails to: the model's copies rise in its
+    // place once they come - loadModels. A model's outline, where known, only sets the copies down; the fences' have
+    // none, and their stand-ins had come in with their places, gone when the models came and risen again with them)
+    const modeled = (MODELED[k] ?? []).length > 0;
     for (const [place, l] of byPlace(list)) {
       const inst = new THREE.InstancedMesh(kits[k].geo, MAT, l.length);
       l.forEach((o, i) => inst.setMatrixAt(i, placing(o)));

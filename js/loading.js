@@ -11,9 +11,11 @@
 //
 // index.html starts it as the page opens (so it is there before the walk's code has even come in); walk.js then tells
 // it how far the load has come:
-//   startLoading(el, { style, still, idle, base }) -> { stage(label), say(text), done(), remove() }
+//   startLoading(el, { style, still, idle, base }) -> { stage(label), say(text), progress(p), done(), remove() }
 //     style: 'full' or an older machine's name; still: none (?still - tests); idle: the browser cannot draw the walk -
 //     the picture stays, everything risen, with no words. A second call returns the same picture (its style updated).
+//   makeLoading(el, opts): a picture of its own, the same in every way - a place chosen in the book is travelled to
+//     under one (walk.js travel), told how far the place has come in (progress, 0 to 1).
 
 // (how far the load has come at each of the walk's stages: walk.js tl(), countryside.js load())
 const STEPS = [
@@ -37,6 +39,9 @@ export function startLoading(el, opts = {}) {
   return C;
 }
 
+/** A loading picture of its own in `el`, apart from the page's first (a place travelled to). */
+export function makeLoading(el, opts = {}) { return el ? make(el, opts) : null; }
+
 function make(el, { style = 'full', still = false, idle = false, base = '' }) {
   const dir = base + 'assets/load/';
   const reduce = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
@@ -55,6 +60,12 @@ function make(el, { style = 'full', still = false, idle = false, base = '' }) {
       next = STEPS.find(([, q]) => q > p)?.[1] ?? 1;
     },
     say(text) { if (words) words.textContent = text; },
+    /** how far it has come in, 0 to 1 (a place travelled to): the bar and the things rising with it */
+    progress(p) {
+      p = Math.min(0.97, Math.max(0, p));
+      if (p <= reached) return;
+      reached = p; since = performance.now(); next = Math.min(0.99, p + 0.12);
+    },
     done() {
       if (gone || doneAt) return;
       doneAt = performance.now();
@@ -72,7 +83,7 @@ function make(el, { style = 'full', still = false, idle = false, base = '' }) {
 
   function remove() {
     if (gone) return;
-    gone = true; clearInterval(timer); el.remove(); C = null;
+    gone = true; clearInterval(timer); el.remove(); if (C === api) C = null;
   }
 
   el.dataset.style = style;

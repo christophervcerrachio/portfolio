@@ -59,10 +59,16 @@ export function unforced(t) {
   return c;
 }
 
+// (three's own shader pieces as they were before a style changed them: what is drawn at the screen's own resolution
+// whatever the look - the book, book.js - is drawn with these, its corners where they are and its pictures in depth)
+const PLAIN = {};
+const CHANGED = ['project_vertex', 'uv_pars_vertex', 'uv_vertex', 'uv_pars_fragment', 'map_fragment'];
+
 /** The corners snapped to the picture's pixels and the textures drawn straight across: three's own shader pieces,
  *  changed before any material is made. grid: half the picture's size in pixels (clip space runs -1 to 1). */
 function patchChunks(style, grid) {
   const C = THREE.ShaderChunk, f = (v) => v.toFixed(4);
+  for (const k of CHANGED) PLAIN[k] ??= C[k];
   let end = '';
   if (style.snap) {
     // (only what is before the eye, and only in a view with depth: a shadow's flat picture keeps its own places)
@@ -87,6 +93,25 @@ if ( gl_Position.w > 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) {
     C.map_fragment = C.map_fragment.replace('texture2D( map, vMapUv )', 'texture2D( map, vRetroUv.xy / vRetroUv.z )');
   }
   if (end) C.project_vertex += end;
+}
+
+/** A material drawn as the full look draws it whatever the style: its corners not moved to the picture's pixels, its
+ *  textures drawn in depth (three's own pieces, as they were before the style changed them). Nothing where the style
+ *  changes neither. Returns the material. */
+export function unstyled(mat) {
+  if (!mat || !Object.keys(PLAIN).length || mat.userData.unstyled) return mat;
+  mat.userData.unstyled = true;
+  const prev = mat.onBeforeCompile, own = Object.prototype.hasOwnProperty.call(mat, 'customProgramCacheKey') ? mat.customProgramCacheKey.bind(mat) : null;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    for (const k of CHANGED) {
+      const inc = '#include <' + k + '>';
+      sh.vertexShader = sh.vertexShader.split(inc).join(PLAIN[k]); sh.fragmentShader = sh.fragmentShader.split(inc).join(PLAIN[k]);
+    }
+  };
+  mat.customProgramCacheKey = () => (own ? own() : String(prev ?? '')) + '-unstyled';
+  mat.needsUpdate = true;
+  return mat;
 }
 
 /**

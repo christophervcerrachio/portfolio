@@ -30,7 +30,7 @@ const EVE = {
 const EVE_SUN = { color: new THREE.Color('#ffc19a'), intensity: 0.85 };
 const EVE_HEMI = { sky: new THREE.Color('#aab3bf'), ground: new THREE.Color('#6d6b61'), intensity: 1.25 };
 const EVE_FOG = { color: new THREE.Color('#b7bdc2'), near: 3000, far: 90000 };
-const EVE_GRADE = new THREE.Vector4(0.8, 1.05, 0.03, 0.36);          // (saturation, contrast, lift, vignette)
+export const EVE_GRADE = new THREE.Vector4(0.8, 1.05, 0.03, 0.36);   // (saturation, contrast, lift, vignette)
 const EVE_SHADE = new THREE.Vector3(-0.022, 0.0, 0.034), EVE_LIGHT = new THREE.Vector3(0.03, 0.012, -0.022);
 
 // the cycle, s: the first minute into the day, then day, sunset, evening, sunrise

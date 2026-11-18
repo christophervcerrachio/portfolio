@@ -4,26 +4,26 @@
 // cut from the book it held and set on this one in Blender (dev\book\hands\hands_fit.py: hands.glb, its pictures its
 // own); the book's leather, paper, gilt and silk from ComfyUI's tiles (assets/book/*.jpg). It is drawn into the
 // scene's own picture after the land (countryside.js prerender: viewmodel), in a sliver of the depth nearest the eye,
-// so it is always in front and every look (hardware.js STYLES) draws it as it draws everything else; it stands in the
-// world itself, in front of the eye, so the sun and the shadows of the trees and the houses fall on it as they fall on
-// the land.
+// so it is always in front; it stands in the world itself, in front of the eye, so the sun and the shadows of the trees
+// and the houses fall on it as they fall on the land. The book itself at the screen's own resolution in every look
+// (18 Nov 2026): its pictures full, its corners and textures as the full look draws them, and - where the scene's
+// picture is smaller than the screen - drawn again over it at the screen's size (renderFull, bookover.js); the glove
+// stays the look's own, drawn in the picture with everything else.
 // Held low at the right as the walker goes; right click brings it up before the face, the right page the places
-// (assets/book/places.json: dev\book\places.py; places that stand close together are one line), the left the graphics
-// (as the menu's); a printer's hand moves over them with the mouse (on a place it stands in the margin, pointing at its
-// name); a click on a place sets the leaves turning fast while the walker is carried there, until the place is in;
-// then they stop on the same two pages. Right click again lowers it. On a touch screen a tap on the book raises it, a
-// tap on a line chooses it, a tap off the book lowers it.
+// (assets/book/places.json: dev\book\places.py; places that stand close together are one line), the left the graphics;
+// a printer's hand moves over both pages with the mouse from the moment the book comes up, and the line under it is
+// red - a place as a look (18 Nov 2026: the hand had stood in the margin before a place, and shown only once the book
+// was all the way up). A click on a place carries the walker there under the walk's own loading picture, in the look in
+// force (walk.js travel); the book is lowered under it. Right click again lowers it. On a touch screen a tap on the
+// book raises it, a tap on a line chooses it, a tap off the book lowers it.
 import * as THREE from 'three';
 import { gltfLoader } from './gltf.js';
-import { capImage } from './texcap.js';
+import { unstyled } from './retro.js';
 import { receiveSun } from './backdrops/sunshadow.js';
 import { DEPTH, towardCamera } from './depthmode.js';
-import { loadFonts, drawPlaces, drawGraphics, drawText, TEXTS, PAGE, hit } from './bookpages.js';
+import { loadFonts, drawPlaces, drawGraphics, PAGE, hit } from './bookpages.js';
 
 const RAISE = 0.45, LOWER = 0.40;                  // s: up to the face, back down
-// (s: one leaf's turn, one after another, the least and the most they turn for - a second or two whatever is still coming
-// in at the place: the walk goes on bringing it in behind the book)
-const FLIP = { dur: 0.42, every: 0.075, min: 0.9, max: 1.4, settle: 0.2 };
 const VERST = 1066.8;
 const ease = (t) => t * t * (3 - 2 * t);
 const TIP = [0.99, 0.056];                           // (the manicule's fingertip in its picture, from its top left)
@@ -37,23 +37,30 @@ export function makeBook(o) {
   const sun = new THREE.DirectionalLight('#ffffff', 2); scene.add(sun, sun.target);
   const hemi = new THREE.HemisphereLight('#c2cdd8', '#98a05e', 1.35); scene.add(hemi);
   const fill = new THREE.DirectionalLight('#fff4e6', 0.5); scene.add(fill, fill.target);     // (from over the reader's shoulder)
-  const st = { up: 0, goal: 0, flip: null, cursor: new THREE.Vector2(0.25, -0.15), hover: { l: null, r: null }, ready: false,
-    bob: 0, swayY: 0, swayP: 0, lastYaw: null, lastPitch: null, shown: true, distAt: null, travelling: null };
+  for (const l of [sun, hemi, fill]) l.layers.enableAll();   // (lighting the book's layer and the glove's alike: render)
+  // (the book as depth alone, where it is drawn again at the screen's resolution over the picture: render)
+  const DEPTH_ONLY = unstyled(new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
+  const clearTo = new THREE.Color();
+  const st = { up: 0, goal: 0, cursor: new THREE.Vector2(0.25, -0.15), hover: { l: null, r: null }, ready: false,
+    bob: 0, swayY: 0, swayP: 0, lastYaw: null, lastPitch: null, shown: true, distAt: null };
   const T = {};                                     // the pictures
   const P = {};                                     // the pages: canvases, textures, boxes
-  let J = null, places = [], parts = {}, leaves = [], cursor = null, vignette = null, env = null;
+  let J = null, places = [], parts = {}, cursor = null, vignette = null, env = null;
   const cuff = [];                                   // (the cuff's end: fitUp keeps it below the window's foot)
 
   // ---- the pictures: each tile at its real size (the model's coordinates are in tiles already)
+  // (the book's pictures whatever the look: at their full size, filtered as the full look filters them - retro.js leaves a
+  // picture marked keepFilter as it is - and at the card's own anisotropy, o.aniso)
+  const full = (t) => { t.userData.keepFilter = true; t.anisotropy = o.aniso ?? THREE.Texture.DEFAULT_ANISOTROPY; return t; };
   const tex = (name, srgb = true) => new Promise((res) => new THREE.TextureLoader().load(base + 'assets/book/' + name, (t) => {
-    capImage(t); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
+    full(t); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
   }, undefined, () => res(null)));
 
   // ---- a page's canvas: the size the look needs (a picture of 240 lines or fewer: coarse, as its own pixels)
   const pageW = o.pageW ?? 1536, pageH = Math.round(pageW * PAGE.h / PAGE.w);
   function canvasTex(w = pageW, h = pageH) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const t = new THREE.CanvasTexture(c); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = THREE.Texture.DEFAULT_ANISOTROPY;
+    const t = full(new THREE.CanvasTexture(c)); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace;
     return { c, g: c.getContext('2d'), t };
   }
 
@@ -71,8 +78,9 @@ export function makeBook(o) {
     [T.morocco, T.moroccoN, T.gilt, T.giltN, T.paper, T.paperN, T.silk, T.cursor, vignette, J] = pics;
     places = places_.places || [];
     env = o.environment?.() ?? null;
-    // the materials, by the parts' names (book_kit.py)
-    const std = (p) => receiveSun(new THREE.MeshStandardMaterial(p), s.U);
+    // the materials, by the parts' names (book_kit.py): the book's drawn as the full look draws them, the glove's as the
+    // look draws everything (retro.js unstyled)
+    const lit = (p) => receiveSun(new THREE.MeshStandardMaterial(p), s.U), std = (p) => unstyled(lit(p));
     const M = {
       leather: std({ map: T.morocco, normalMap: T.moroccoN, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.46, color: '#ffffff' }),
       gilt: std({ color: '#e0b062', metalness: 1, roughness: 0.3, envMap: env, envMapIntensity: 1.1 }),
@@ -95,12 +103,15 @@ export function makeBook(o) {
       if (!m.isMesh) return;
       const g = m.material;
       m.frustumCulled = false;
-      m.material = std({ map: g.map, normalMap: g.normalMap, normalScale: g.normalScale?.clone(), roughnessMap: g.roughnessMap,
+      m.material = lit({ map: g.map, normalMap: g.normalMap, normalScale: g.normalScale?.clone(), roughnessMap: g.roughnessMap,
         roughness: g.roughnessMap ? 1 : 0.6, metalness: 0, aoMap: g.aoMap, aoMapIntensity: g.aoMap ? 1 : 0 });
       parts[m.name] = m;
     });
     if (parts['hand-r']) {
       book.add(parts['hand-r']);
+      // (the glove on a layer of its own: drawn after the book, its cover kept - render; never over the book drawn at the
+      // screen's resolution - renderFull)
+      parts['hand-r'].layers.set(1);
       // (the glove's cuff ends where its picture ended: that end is kept out of view - fitUp; its outermost points, in
       // the book's frame)
       const h = parts['hand-r'], pos = h.geometry.attributes.position, v = new THREE.Vector3(), pts = [];
@@ -116,13 +127,9 @@ export function makeBook(o) {
     }
     // the pages
     P.r = canvasTex(); P.l = canvasTex();
-    const gw = Math.min(pageW, 1024), gh = Math.round(gw * PAGE.h / PAGE.w);
-    P.text = TEXTS.map((t, i) => { const c = canvasTex(gw, gh); drawText(c.g, gw, gh, t, i % 2 ? 'recto' : 'verso', { tile: T.paper?.image, coarse }); c.t.needsUpdate = true; return c; });
     parts['page-r'].material.map = P.r.t; parts['page-l'].material.map = P.l.t;
     parts['page-r'].material.needsUpdate = parts['page-l'].material.needsUpdate = true;
     drawRight(); drawLeft();
-    // the turning leaves: the right page's own curve (book.json profile), both its sides printed
-    if (J?.profile) for (let i = 0; i < 8; i++) leaves.push(makeLeaf());
     // the cursor: the manicule's ink lying on the paper, its fingertip the point
     if (T.cursor) {
       T.cursor.wrapS = T.cursor.wrapT = THREE.ClampToEdgeWrapping;
@@ -138,109 +145,31 @@ export function makeBook(o) {
     const c = document.createElement('canvas'); c.width = 64; c.height = 16; const g = c.getContext('2d');
     for (let x = 0; x < 64; x++) { g.fillStyle = (x >> 2) % 2 ? '#c9b38a' : '#6c0a0c'; g.fillRect(x, 0, 1, 16); }
     g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, 0, 64, 3);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+    const t = full(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+
+  // (while the book's pictures go to the card: the card's own anisotropy, not a look's lower one - walk.js holds a look's
+  // down by what the card is made to say it can do)
+  function fullReads(renderer, fn) {
+    const caps = renderer.capabilities, said = caps.getMaxAnisotropy;
+    if (o.aniso) caps.getMaxAnisotropy = () => o.aniso;
+    try { fn(); } finally { caps.getMaxAnisotropy = said; }
   }
 
   // ---- the two pages, drawn again when what they show changes
   function dists() {
     const at = s.at; return places.map((p) => ({ ...p, dist: Math.hypot(p.at[0] - at.x, p.at[1] - at.z) }));
   }
-  // (on a place the printer's hand is printed in the margin before it, pointing at it: its fingertip short of the name)
-  function drawRight(hover = st.hover.r, hand = !!hover && !st.flip && !o.touch) {
+  // (the place under the printer's hand red, as a look is on the left page)
+  function drawRight(hover = st.hover.r) {
     if (!P.r) return;
-    const H = hand && T.cursor ? { img: T.cursor.image, w: (coarse ? 0.052 : 0.036) * 1000, tip: TIP } : null;
-    P.boxR = drawPlaces(P.r.g, pageW, pageH, { places: dists(), hover, hand: H }, { tile: T.paper?.image, coarse });
+    P.boxR = drawPlaces(P.r.g, pageW, pageH, { places: dists(), hover }, { tile: T.paper?.image, coarse });
     P.r.t.needsUpdate = true; st.distAt = { x: s.at.x, z: s.at.z };
   }
   function drawLeft() {
     if (!P.l) return;
     P.boxL = drawGraphics(P.l.g, pageW, pageH, { choices: o.choices, now: o.now, mine: o.mine, hover: st.hover.l, vignette }, { tile: T.paper?.image, coarse });
     P.l.t.needsUpdate = true;
-  }
-
-  // ---- a leaf: the right page's curve, turned over the fold to lie on the left page; its root goes first and its
-  // edge follows behind, as a leaf let go of runs
-  function makeLeaf() {
-    const prof = J.profile, n = prof.length, rows = 7, H = J.H;
-    const g = new THREE.BufferGeometry(), pos = new Float32Array(n * rows * 3), uv = new Float32Array(n * rows * 2), idx = [];
-    for (let j = 0; j < rows; j++) for (let i = 0; i < n; i++) { const k = j * n + i; uv[k * 2] = prof[i][2] / J.L; uv[k * 2 + 1] = j / (rows - 1); }
-    for (let j = 0; j < rows - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + 1, c = a + n + 1, d = a + n; idx.push(a, d, b, b, d, c); }
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
-    // (each side its own page: the front as the right page reads, the back flipped across, as the left reads)
-    const mk = (side) => receiveSun(new THREE.MeshStandardMaterial({ side, roughness: 0.9, normalMap: T.paperN, normalScale: new THREE.Vector2(0.3, 0.3),
-      polygonOffset: true, polygonOffsetFactor: towardCamera(-1), polygonOffsetUnits: towardCamera(-2) }), s.U);
-    const front = new THREE.Mesh(g, mk(THREE.FrontSide)), back = new THREE.Mesh(g, mk(THREE.BackSide));
-    front.frustumCulled = back.frustumCulled = false; front.visible = back.visible = false;
-    book.add(front, back);
-    // (the angle along the right page's leaf at each point, for the turn)
-    const ang = prof.map((p, i) => { const a = prof[Math.max(0, i - 1)], b = prof[Math.min(n - 1, i + 1)]; return Math.atan2(b[1] - a[1], b[0] - a[0]); });
-    return { g, pos, front, back, ang, n, rows, H, t0: 0, on: false };
-  }
-  function shapeLeaf(L, p) {
-    // (riffled, as a thumb lets the leaves go at the fore-edge: each leaf's edge turns first and its root last, so it
-    // rolls over the fold in a wave a few centimetres high, the corner at the foot a little ahead of the head's)
-    const prof = J.profile, n = L.n, lam = 1.6, x = L.x ??= new Float32Array(n), y = L.y ??= new Float32Array(n);
-    for (let j = 0; j < L.rows; j++) {
-      const pj = Math.min(1, Math.max(0, p + 0.07 * (j / (L.rows - 1) - 0.5) * Math.sin(Math.PI * p) * 2));
-      x[0] = prof[0][0]; y[0] = prof[0][1];
-      for (let i = 1; i < n; i++) {
-        const sf = prof[i][2] / J.L, ds = prof[i][2] - prof[i - 1][2];
-        const b = ease(Math.min(1, Math.max(0, pj * (1 + lam) - lam * (1 - sf))));
-        const a0 = L.ang[i], a = a0 + (Math.PI - 2 * a0) * b;
-        x[i] = x[i - 1] + Math.cos(a) * ds; y[i] = y[i - 1] + Math.sin(a) * ds;
-      }
-      const z = -L.H / 2 + L.H * j / (L.rows - 1), lift = 0.0005 + 0.002 * Math.sin(Math.PI * pj);
-      for (let i = 0; i < n; i++) { const k = (j * n + i) * 3; L.pos[k] = x[i]; L.pos[k + 1] = y[i] + lift * Math.min(1, i / 12); L.pos[k + 2] = z; }
-    }
-    L.g.attributes.position.needsUpdate = true; L.g.computeVertexNormals();
-  }
-
-  // ---- the turning of the leaves: each leaf takes the right page's top sheet over to the left; the page under it is
-  // the next of the guide's; the last leaf's back is the graphics page and under it again the places
-  let nextText = 0;
-  const pickText = () => P.text[(nextText++) % P.text.length].t;
-  function startFlip() {
-    st.flip = { t: 0, launched: 0, last: false, stop: false, done: false, wait: 0, landed: 0, lastLaunched: false };
-    const was = st.hover.r;
-    st.hover.l = st.hover.r = null; if (cursor) cursor.visible = false;
-    if (was) drawRight(was, false);                    // (the place chosen stays red as the leaves turn; the hand goes)
-  }
-  function stepFlip(dt) {
-    const F = st.flip; if (!F) return;
-    F.t += dt;
-    const done = o.isIn?.() ?? true;
-    if (!F.stop && F.t > FLIP.min && done) F.wait += dt; else if (!done) F.wait = 0;
-    if (!F.stop && (F.wait > FLIP.settle || F.t > FLIP.max)) F.stop = true;
-    // (a new leaf every so often, until the last one has gone)
-    while (!F.lastLaunched && F.t >= F.launched * FLIP.every) {
-      const L = leaves.find((x) => !x.on); if (!L) break;
-      const last = F.stop;
-      L.on = true; L.t0 = F.launched * FLIP.every; L.last = last;
-      L.front.material.map = parts['page-r'].material.map; L.front.material.needsUpdate = true;
-      const back = last ? P.l.t : pickText();
-      L.back.material.map = flipped(back); L.back.material.needsUpdate = true; L.backTex = back;
-      parts['page-r'].material.map = last ? P.r.t : pickText(); parts['page-r'].material.needsUpdate = true;
-      L.front.visible = L.back.visible = true;
-      F.launched++; if (last) F.lastLaunched = true;
-    }
-    for (const L of leaves) {
-      if (!L.on) continue;
-      const p = Math.min(1, (F.t - L.t0) / FLIP.dur);
-      shapeLeaf(L, p);
-      if (p >= 1) {
-        L.on = false; L.front.visible = L.back.visible = false;
-        parts['page-l'].material.map = L.backTex; parts['page-l'].material.needsUpdate = true;
-        if (L.last) { F.done = true; }
-      }
-    }
-    if (F.done && !leaves.some((x) => x.on)) { st.flip = null; drawRight(); o.onArrived?.(); }
-  }
-  // (a page's picture as the back of a leaf reads it: across the other way)
-  const backs = new Map();
-  function flipped(t) {
-    let b = backs.get(t);
-    if (!b) { b = t.clone(); b.repeat.x = -1; b.offset.x = 1; b.needsUpdate = true; b.source = t.source; backs.set(t, b); }
-    return b;
   }
 
   // ---- where the book is held: low at the right (0) or up before the face (1), in the eye's frame
@@ -313,6 +242,7 @@ export function makeBook(o) {
 
   // ---- the cursor: where it points on the screen (-1..1 each way), the page and the line under it
   const ray = new THREE.Raycaster();
+  ray.layers.enableAll();   // (the glove on a layer of its own is still the book's to a tap: onBook)
   function underCursor() {
     if (!parts['page-r']) return null;
     ray.setFromCamera(st.cursor, cam);
@@ -321,13 +251,15 @@ export function makeBook(o) {
     const side = h.object === parts['page-r'] ? 'r' : 'l';
     return { side, h, x: h.uv.x * PAGE.w, y: h.uv.y * PAGE.h };
   }
+  // (from the moment it is asked up - the hand on the page as soon as a page is under it, riding up with it - until it is
+  // asked down: it had shown only once the book was all the way up)
   function hover() {
-    const u = st.up >= 1 && !st.flip ? underCursor() : null;
+    const u = st.goal === 1 ? underCursor() : null;
     const r = u?.side === 'r' ? hit(P.boxR, u.x, u.y) : null, l = u?.side === 'l' ? hit(P.boxL, u.x, u.y) : null;
     if (r !== st.hover.r) { st.hover.r = r; drawRight(); }
     if (l !== st.hover.l) { st.hover.l = l; drawLeft(); }
     if (cursor) {
-      cursor.visible = !!u && !o.touch && !r;            // (on a place, the hand is in the page's margin: drawRight)
+      cursor.visible = !!u && !o.touch;                  // (on a place as on a look: never snapped to the line)
       if (u) {
         const n = u.h.face.normal.clone().transformDirection(u.h.object.matrixWorld);
         const across = new THREE.Vector3(1, 0, 0).transformDirection(book.matrixWorld);
@@ -347,35 +279,41 @@ export function makeBook(o) {
     /** whether its programs are made and its pictures on the card (prime): it is drawn only then */
     get primed() { return !!st.primed; },
     /** every program it will draw with made, without holding the page up (the browser's own parallel making), and
-     *  every picture it can show sent to the card - its pages, the guide's pages the leaves carry, the hand's - before
-     *  it is first drawn: made as it was first drawn, in the walk, they had held a frame up for a second and a half */
+     *  every picture it can show sent to the card - its pages, the hand's - before it is first drawn: made as it was
+     *  first drawn, in the walk, they had held a frame up for a second and a half */
     async prime(renderer) {
       if (st.primed || st.priming || !st.ready || !s.base) return;
       st.priming = true;
       const shown = [];
       scene.traverse((o) => { if ((o.isMesh || o.isGroup) && !o.visible) { shown.push(o); o.visible = true; } });
-      // (each leaf made ready as it turns, a page's picture on each side - made with none, its first turn had made both
-      // sides' programs anew, in the walk)
-      for (const L of leaves) {
-        L.front.material.map ??= parts['page-r']?.material.map ?? null;
-        if (P.l?.t) L.back.material.map ??= flipped(P.l.t);
-        L.front.material.needsUpdate = L.back.material.needsUpdate = true;
-      }
-      try { fitUp(); place(0); aim(); await renderer.compileAsync(scene, cam); } catch (e) { console.warn('[book] programs', e); }
+      cam.layers.enableAll();
+      // (and the book as depth alone: one program, whatever the part - made under the book's own lights, which its
+      // program counts though it does not use them)
+      const depthOnly = new THREE.Scene(); depthOnly.add(new THREE.Mesh(parts['page-r'].geometry, DEPTH_ONLY));
+      // (made for what it is drawn into: the scene's picture where there is one - a program drawing into a picture is
+      // not the one drawing onto the screen; made for the screen, the walk made them all again at the book's first draw)
+      const was = renderer.getRenderTarget();
+      let made = Promise.resolve();
+      try {
+        fitUp(); place(0); aim();
+        if (s.rt) renderer.setRenderTarget(s.rt);
+        made = Promise.all([renderer.compileAsync(scene, cam), renderer.compileAsync(depthOnly, cam, scene)]);
+      } catch (e) { console.warn('[book] programs', e); } finally { renderer.setRenderTarget(was); }
+      try { await made; } catch (e) { console.warn('[book] programs', e); }
       for (const o of shown) o.visible = false;
       const seen = new Set();
       const up = (t) => { if (t?.isTexture && t.image && !seen.has(t)) { seen.add(t); renderer.initTexture(t); } };
-      scene.traverse((o) => { for (const m of [].concat(o.material ?? [])) for (const v of Object.values(m)) up(v); });
-      for (const c of P.text ?? []) { up(c.t); up(flipped(c.t)); }
-      up(P.r?.t); up(P.l?.t); if (P.l?.t) up(flipped(P.l.t));
+      fullReads(renderer, () => {
+        scene.traverse((o) => { for (const m of [].concat(o.material ?? [])) for (const v of Object.values(m)) up(v); });
+        up(P.r?.t); up(P.l?.t);
+      });
       st.primed = true; st.priming = false;
     },
     get up() { return st.goal === 1; },
-    get flipping() { return !!st.flip; },
-    get state() { return { up: st.up, goal: st.goal, flipping: !!st.flip, hover: { ...st.hover }, cursor: st.cursor.toArray() }; },
+    get state() { return { up: st.up, goal: st.goal, hover: { ...st.hover }, cursor: st.cursor.toArray() }; },
     /** (dev: whether the free cursor is drawn - off the list - or not: on a place its hand is in the page's margin) */
     get cursorShown() { return !!cursor?.visible; },
-    toggle() { if (!st.ready || st.flip) return; st.goal = st.goal ? 0 : 1; if (st.goal) { st.cursor.set(0.25, -0.2); drawRight(); } else if (cursor) cursor.visible = false; },
+    toggle() { if (!st.ready) return; st.goal = st.goal ? 0 : 1; if (st.goal) { st.cursor.set(0.25, -0.2); drawRight(); } else if (cursor) cursor.visible = false; },
     raise() { if (st.goal !== 1) api.toggle(); },
     lower() { if (st.goal !== 0) api.toggle(); },
     /** the mouse moved while held (pixels): the cursor moves over the pages */
@@ -391,19 +329,19 @@ export function makeBook(o) {
     },
     /** a click: the line under the cursor chosen. Returns what was chosen, or null */
     click() {
-      if (st.up < 1 || st.flip) return null;
+      if (st.up < 1) return null;
       const u = underCursor(); if (!u) return null;
       if (u.side === 'r') {
         const id = hit(P.boxR, u.x, u.y), p = places.find((q) => q.id === id);
         if (!p) return null;
-        startFlip(); o.onTravel?.(p); return { place: id };
+        o.onTravel?.(p); return { place: id };
       }
       const id = hit(P.boxL, u.x, u.y);
       if (id && id !== o.now) { o.onChoose?.(id); return { look: id }; }
       return null;
     },
-    /** travel there now (tests): the leaves turn as for a click */
-    travel(id) { const p = places.find((q) => q.id === id); if (!p || st.flip) return false; if (st.goal !== 1) { st.goal = 1; st.up = 1; } startFlip(); o.onTravel?.(p); return true; },
+    /** (tests) travel there now, as a click on its line does */
+    travel(id) { const p = places.find((q) => q.id === id); if (!p) return false; o.onTravel?.(p); return true; },
     /** whether a point of the window is on the book (a tap on it raises it) */
     onBook(cx, cy) {
       if (!st.ready) return false;
@@ -430,20 +368,63 @@ export function makeBook(o) {
         const r = st.goal > st.up ? dt / RAISE : -dt / LOWER;
         st.up = THREE.MathUtils.clamp(st.up + r, 0, 1);
       }
-      stepFlip(dt);
       // (the distances kept true while it is up: drawn again when the walker has gone 100 m)
-      if (st.up >= 1 && !st.flip && st.distAt && Math.hypot(s.at.x - st.distAt.x, s.at.z - st.distAt.z) > 100) drawRight();
+      if (st.up >= 1 && st.distAt && Math.hypot(s.at.x - st.distAt.x, s.at.z - st.distAt.z) > 100) drawRight();
     },
-    /** drawn into the scene's picture, nearest of all: countryside.js prerender */
-    render(renderer, dt = 0) {
+    /** drawn into the scene's picture, nearest of all: countryside.js prerender. paint false: the book as depth alone
+     *  (drawn again at the screen's resolution over the picture: renderFull), so the glove behind it is hidden as ever and
+     *  nothing of a coarse book shows round the sharp one; cover: the glove's cover written into the picture's alpha (all
+     *  of it cleared first), for what lays the book over the picture (bookover.js) */
+    render(renderer, dt = 0, { paint = true, cover = false } = {}) {
       if (!st.ready || !st.shown || !s.base) return;
       // (not drawn until it is made ready: made ready here if the walk has not asked - its first frames wait, not stall)
       if (!st.primed) { api.prime(renderer); return; }
       fitUp(); place(dt); aim(); hover();
       const gl = renderer.getContext(), rev = DEPTH.reversed;
       gl.depthRange(rev ? 0.982 : 0.0, rev ? 1.0 : 0.018);
+      // the book
+      const cursorWas = cursor?.visible;
+      if (!paint) { scene.overrideMaterial = DEPTH_ONLY; if (cursor) cursor.visible = false; }
+      cam.layers.set(0);
+      fullReads(renderer, () => renderer.render(scene, cam));
+      scene.overrideMaterial = null; if (cursor) cursor.visible = cursorWas;
+      // the glove, in front of the book where it is
+      if (cover) {
+        renderer.setRenderTarget(renderer.getRenderTarget());
+        gl.colorMask(false, false, false, true); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.colorMask(true, true, true, true);
+        renderer.state.buffers.color.reset();
+      }
+      cam.layers.set(1);
       renderer.render(scene, cam);
+      // (the book as depth alone: the glove where the book hides it drawn as well - farther than what is there, and only
+      // where the picture has no glove's cover yet, its cover left as it was - so what the look's picture shows round the
+      // book drawn at the screen's resolution is the glove going on behind it, not the land through a gap: bookover.js)
+      const g = parts['hand-r']?.material;
+      if (cover && !paint && g) {
+        const was = { depthFunc: g.depthFunc, depthWrite: g.depthWrite, blending: g.blending, blendSrc: g.blendSrc, blendDst: g.blendDst,
+          blendSrcAlpha: g.blendSrcAlpha, blendDstAlpha: g.blendDstAlpha, blendEquation: g.blendEquation, blendEquationAlpha: g.blendEquationAlpha };
+        Object.assign(g, { depthFunc: THREE.GreaterDepth, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+          blendEquationAlpha: THREE.AddEquation, blendSrc: THREE.OneMinusDstAlphaFactor, blendDst: THREE.DstAlphaFactor,
+          blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+        renderer.render(scene, cam);
+        Object.assign(g, was);
+      }
+      cam.layers.enableAll();
       gl.depthRange(0, 1);
+    },
+    /** the book (not the glove) at the size of `target` - the screen's - in colour, its pictures read at the card's own
+     *  anisotropy; drawn after render in the same frame (its place is render's). Returns whether it was drawn */
+    renderFull(renderer, target) {
+      if (!st.ready || !st.shown || !s.base || !st.primed || !target) return false;
+      const prev = renderer.getRenderTarget(), auto = renderer.autoClear, ca = renderer.getClearAlpha();
+      renderer.getClearColor(clearTo);
+      renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.autoClear = false;
+      renderer.clear(true, true, false);
+      cam.layers.set(0);
+      fullReads(renderer, () => renderer.render(scene, cam));
+      cam.layers.enableAll();
+      renderer.setRenderTarget(prev); renderer.setClearColor(clearTo, ca); renderer.autoClear = auto;
+      return true;
     },
   };
   return api;
