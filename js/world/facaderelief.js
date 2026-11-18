@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { interiors } from './interiors.js';
 import { openingsOf } from './openings.js';
-import { arrive } from './arrive.js';
+import { arrive, inBulk, makingArrival } from './arrive.js';
 import { letGo } from './citytiles.js';
 import { gltfLoader } from '../gltf.js';
 import { timed } from '../loadreport.js';
@@ -20,6 +20,40 @@ import { receiveSun } from '../backdrops/sunshadow.js';
 import { styleNow } from '../retro.js';
 
 const DIR = 'assets/world/cities/';
+// (a growing list of floats kept as 32-bit floats from the first - a tile's positions, normals, uvs and colours: a tile
+// of the centre's relief is millions of them, and kept as plain numbers they had been twice the memory, and copied
+// again into 32-bit floats for the card once the tile was done)
+class Floats {
+  constructor() { this.a = new Float32Array(1024); this.length = 0; }
+  push(...v) {
+    const n = this.length + v.length;
+    if (n > this.a.length) { const b = new Float32Array(Math.max(n, this.a.length * 2)); b.set(this.a); this.a = b; }
+    for (let i = 0; i < v.length; i++) this.a[this.length + i] = v[i];
+    this.length = n; return n;
+  }
+  /** the floats as an attribute of `size` (its array the list's own: nothing copied) */
+  attr(size) { return new THREE.BufferAttribute(this.a.subarray(0, this.length), size); }
+}
+// (a piece's bounds - its box, and the sphere round the box's middle out to its farthest point - worked out as three.js
+// works them out, number for number, a slice of points at a time: worked out whole, a cell's ironwork - its balconies'
+// railings, some 700,000 points - had been the longest step of a tile's building)
+const SLICE = 3 * 100000;
+function* boundsOf(geo, P) {
+  const p = P.a, n = P.length, lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  for (let i = 0; i < n; i += 3) {
+    lo.x = Math.min(lo.x, p[i]); lo.y = Math.min(lo.y, p[i + 1]); lo.z = Math.min(lo.z, p[i + 2]);
+    hi.x = Math.max(hi.x, p[i]); hi.y = Math.max(hi.y, p[i + 1]); hi.z = Math.max(hi.z, p[i + 2]);
+    if ((i + 3) % SLICE === 0) yield;
+  }
+  const box = new THREE.Box3(lo, hi), c = box.getCenter(new THREE.Vector3());
+  let r2 = 0;
+  for (let i = 0; i < n; i += 3) {
+    const dx = c.x - p[i], dy = c.y - p[i + 1], dz = c.z - p[i + 2];
+    r2 = Math.max(r2, dx * dx + dy * dy + dz * dz);
+    if ((i + 3) % SLICE === 0) yield;
+  }
+  geo.boundingBox = box; geo.boundingSphere = new THREE.Sphere(c, Math.sqrt(r2));
+}
 const NEAR = 380;               // (m: the relief is built for the tiles within this of the camera)
 const CELL = 200;               // (each tile's relief in cells of 200 m, each drawn while the camera is within SHOW m of its middle: every wall
 // within CUT of the camera in a drawn cell)
@@ -338,14 +372,17 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     return [x, z];
   };
 
-  function build(T, walls) {
+  // (built a bay of a wall at a time - a generator, stepped a little at a time by the walk's frames and the page's idle
+  // time: below)
+  function* buildSteps(T, walls) {
     // per front material: positions, normals, uvs
     const acc = new Map(); const boxes = [];
-    const get = (name, ck, cell = CELL) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, cell, p: [], n: [], u: [], c: [], k: [] })); return a; };
+    const get = (name, ck, cell = CELL) => { const k = name + '|' + ck; let a = acc.get(k); if (!a) acc.set(k, (a = { name, ck, cell, p: new Floats(), n: new Floats(), u: new Floats(), c: new Floats(), k: new Floats() })); return a; };
     // (the windows' frames are not built for an older machine's picture of 240 lines: its windows are the picture's own,
     // no holes - interiors.js)
     const frOK = !(styleNow() && styleNow().lines <= 240);
     for (const w of walls) {
+      yield;
       // (k0, cut: a wall shared with a lower house - it shows from `cut` up, its windows from storey band k0 up:
       // dev/world/facade_bays.py)
       // (lev: for each of the wall's doors, in their order along it, [the pavement's top before it, how far out the
@@ -513,7 +550,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         }
       }
       let s = 0;
-      bl.forEach((b, bi) => {
+      // (a bay at a time: a wall of a dozen bays and their balconies' ironwork had been one step of tens of ms)
+      for (let bi = 0; bi < bl.length; bi++) {
+        yield;
+        const b = bl[bi];
         const wpx = b[1] - b[0], wm = wpx * fb.mx * sc, sa = s; s += wm;
         const S = (x) => sa + (x - b[0]) / wpx * wm;
         // (the cornice along the top of the bay, from the picture's top rows over it; its ends closed at the wall's)
@@ -936,20 +976,21 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           }
           zb += hm;
         });
-      });
+      }
     }
     const g = new THREE.Group(); g.userData.cells = [];
     for (const a of acc.values()) {
+      yield;
       const name = a.name, mat = a.mat ?? (name.endsWith('#glass') ? glassMat(name.slice(0, -6)) : name.endsWith('#door') ? doorMat(name.slice(0, -5))
         : name.endsWith('#shut') ? shutMat(name.slice(0, -5)) : name.endsWith('#cut') ? cutMat(name.slice(0, -4)) : name.endsWith('#mould') ? mouldMat() : name.endsWith('#steps') ? stepMat(T.city, false) : name.endsWith('#stept') ? stepMat(T.city, true) : materials(name));
       if (!mat || !a.p.length) continue;
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(a.p, 3));
-      geo.setAttribute('normal', new THREE.Float32BufferAttribute(a.n, 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute(a.u, 2));
-      if (a.c.length) geo.setAttribute('aWinC', new THREE.Float32BufferAttribute(a.c, 3));
-      if (a.k.length) geo.setAttribute('color', new THREE.Float32BufferAttribute(a.k, 3));
-      geo.computeBoundingSphere(); geo.computeBoundingBox();
+      geo.setAttribute('position', a.p.attr(3));
+      geo.setAttribute('normal', a.n.attr(3));
+      geo.setAttribute('uv', a.u.attr(2));
+      if (a.c.length) geo.setAttribute('aWinC', a.c.attr(3));
+      if (a.k.length) geo.setAttribute('color', a.k.attr(3));
+      yield* boundsOf(geo, a.p);
       // (its arrays let go once the card has them: nothing reads them again, and a tile of the centre's relief is some
       // 130 MB of them - citytiles.js letGo)
       letGo(geo);
@@ -986,8 +1027,41 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     return g;
   }
 
+  // (a tile's relief built a bay of a wall at a time, the nearest tile first: within a share of each frame - 4 ms in the
+  // walk, 200 under the loading picture - and in the page's idle time between frames, as the browser gives it (built
+  // whole the moment its list came, a tile of a city's centre had held the page up for half a second and more, one after
+  // another as the city came in)
+  const building = [];
+  const BUILD_MS = { walk: 4, bulk: 200, idleLeft: 2 };
+  const at = { x: 0, z: 0 };
+  let idleAsked = false;
+  function runBuilding(more) {
+    const far = (T) => Math.max(Math.abs(T.c[0] - at.x), Math.abs(T.c[1] - at.z));
+    building.sort((a, b) => far(a.T) - far(b.T));
+    while (building.length && more()) {
+      const job = building[0];
+      if (!job.T.want) { building.shift(); job.T.state = 0; job.T.made?.(); continue; }     // (no longer near: asked for again when it is)
+      let r;
+      try { r = timed('fronts relief: a step', () => job.steps.next()); } catch (e) { building.shift(); job.T.state = 3; job.T.made?.(); console.warn('[relief]', e); continue; }
+      if (r.done) { building.shift(); job.T.g = r.value; hashWalls(job.T, job.walls); job.T.state = 2; job.T.fresh = true; }
+    }
+  }
+  function stepBuilding(pos) {
+    at.x = pos.x; at.z = pos.z;
+    if (!building.length) return;
+    const t0 = performance.now(), ms = inBulk() ? BUILD_MS.bulk : BUILD_MS.walk;
+    runBuilding(() => performance.now() - t0 < ms);
+    askIdle();
+  }
+  function askIdle() {
+    if (idleAsked || !building.length || typeof requestIdleCallback !== 'function') return;
+    idleAsked = true;
+    requestIdleCallback((d) => { idleAsked = false; runBuilding(() => d.timeRemaining() > BUILD_MS.idleLeft); askIdle(); });
+  }
+
   group.userData.update = (pos) => {
     if (!BAYS) return;
+    stepBuilding(pos);
     for (const T of tiles.values()) {
       const d = Math.max(Math.abs(T.c[0] - pos.x), Math.abs(T.c[1] - pos.z)) - T.I.tile / 2;
       const want = d < near;
@@ -997,10 +1071,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       if (want && T.state === 0) {
         T.state = 1;
         fetch(base + DIR + T.city + '-relief/' + T.key + '.json').then((r) => r.json()).then((walls) => {
-          T.g = timed('fronts relief: built', () => build(T, walls)); hashWalls(T, walls); T.state = 2; T.fresh = true;
+          // (while it is built it counts as coming in: what waits for everything to be in - the book's leaves, a test -
+          // waits for it as for anything else on its way; arrive.js)
+          T.made = makingArrival();
+          building.push({ T, walls, steps: buildSteps(T, walls) });
         }).catch(() => { T.state = 3; });
       }
       if (T.state === 2) {
+        // (built: from here it comes in as the arrivals let it, or waits for its houses, which are coming themselves)
+        if (T.made) { T.made(); T.made = null; }
         // (a tile's mouldings come in together and settle onto their fronts - a short rise, a metre: arrive.js; while
         // it comes in the tile is the arrival's to add. Not before the tile's houses stand: housesIn, cityblocks.js)
         if (want && !T.g.parent && T.fresh) {

@@ -45,6 +45,9 @@ const A = {
   reach: Infinity,
   pos: null,
   sorted: 0,
+  // (pieces still being made, each to come in once it is - a tile of the fronts' relief, built over frames: counted as
+  // waiting, so what waits for everything to be in waits for them too - facaderelief.js, makingArrival)
+  making: 0,
 };
 
 /** As the walk begins. scene: what everything is drawn in (the lights, the fog); camera, target and shadow: functions
@@ -350,7 +353,14 @@ export function arrive(objs, opts = {}) {
 }
 
 /** How many are waiting to come in or still rising (tests: everything in once this is 0). */
-export const arrivalsWaiting = () => A.queue.filter((a) => !beyond(a)).length + A.rising.length;
+export const arrivalsWaiting = () => A.queue.filter((a) => !beyond(a)).length + A.rising.length + A.making;
+/** One more piece being made, to come in (arrive) once it is: returns the function that says it is made (or no longer
+ *  wanted) - until then it counts as waiting. */
+export function makingArrival() {
+  A.making++;
+  let open = true;
+  return () => { if (open) { open = false; A.making--; } };
+}
 /** Whether `a` waits for the walker to come within its reach (arrive's `reach`, else A.reach). */
 const beyond = (a) => !!A.pos && a.stage === 0 && Math.hypot(a.x - A.pos.x, a.z - A.pos.z) > (a.reach ?? A.reach);
 
@@ -364,7 +374,7 @@ export function arrivalsState() {
     return { of: a.list[0]?.name || a.list[0]?.type, picture: t.name || t.uuid.slice(0, 8),
       image: im ? `${im.constructor?.name} ${im.width ?? '?'}x${im.height ?? '?'}${im.src ? ' ' + String(im.src).slice(-70) : ''}${im.complete === false ? ' (coming)' : ''}` : 'none yet' };
   });
-  return { open: A.open, waiting: A.queue.length, rising: A.rising.length, steps, held };
+  return { open: A.open, waiting: A.queue.length, rising: A.rising.length, making: A.making, steps, held };
 }
 
 /** What the last frame's turn let in, for the walk's own record of its heavy frames (walk.js `heavy`): ms spent here,

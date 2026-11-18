@@ -23,6 +23,7 @@ import { groundLoaded } from './world/terrain.js';
 import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
 import { makeBook } from './book.js';
+import { makeControls } from './controls.js';
 import * as report from './loadreport.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
@@ -165,8 +166,12 @@ export async function initWalk(container, opts = {}) {
     // loaded in bulk, nothing more under the picture. Before, the picture waited for a look all the way round, the
     // country places' models and the frames to settle - 5 to 19 s)
     if (!(settled && framesSince > 2 && (gfxChecked || !watched || now - settledAt > 1500))) return;
+    // (and the book made ready under the picture - its programs and pictures, book.prime - so nothing of it is made in the
+    // walk; a book still not in eight seconds after the view is, the walk opens without waiting for it)
+    if (book && !book.primed && now - settledAt < 8000) return;
     {
         veilUp = false; tl('veil lifted'); held.clear(); opened = true; openedAt = now;
+        controls?.show(!menuOpen);
         open();
         // (the rest - the cities, their landmarks, the bridges - asked for at once too, each rising as it comes)
         s.loadRestFar(); later();
@@ -352,6 +357,9 @@ export async function initWalk(container, opts = {}) {
     + 'font:500 15px/1.3 system-ui,sans-serif;color:#fff;background:rgba(20,24,28,.55);border-radius:6px;'
     + 'pointer-events:none;transition:opacity .25s;opacity:0;text-align:center';
   container.appendChild(hint);
+  // (the controls, told once: a pane at the foot of the view on the first visits, each marked as it is first done -
+  // controls.js; not on a touch screen, not in a still)
+  const controls = !still && matchMedia('(pointer: fine)').matches ? makeControls({ container, fresh: params.has('controls') }) : null;
   function mouseState() {
     const refused = refusals >= 2 && !locked();
     canvas.style.cursor = locked() || refused ? 'none' : 'default';
@@ -395,7 +403,7 @@ export async function initWalk(container, opts = {}) {
   function showMenu(on) {
     on = !!on && !still;
     if (on === menuOpen) return;
-    menuOpen = on; menu.hidden = !on;
+    menuOpen = on; menu.hidden = !on; controls?.show(!on && !veilUp);
     if (on) { held.clear(); resumeBtn.focus({ preventScroll: true }); } else canvas.focus({ preventScroll: true });
     mouseState();
   }
@@ -461,7 +469,7 @@ export async function initWalk(container, opts = {}) {
   // ---- the book: right click brings it up to the face and lowers it again (not under the loading picture, not while
   // flying free); the browser's own menu never shows on the walk
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  function bookToggle() { if (!book?.loaded || frozen() || s.freeCam?.on || menuOpen) return; book.toggle(); }
+  function bookToggle() { if (!book?.loaded || frozen() || s.freeCam?.on || menuOpen) return; book.toggle(); controls?.used('book'); }
   // (one finger on a touch screen looks round, two pinch; with the mouse, a press captures it, or drags where refused)
   const pts = new Map();
   let pinch = null, tap = null;
@@ -522,6 +530,7 @@ export async function initWalk(container, opts = {}) {
     startSound();
     const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
     zoomTo(s.look.zoomGoal * Math.min(2, Math.max(0.5, Math.exp(-px * (e.ctrlKey ? 0.01 : 0.0018)))));
+    if (!frozen()) controls?.used('zoom');
   }, { passive: false });
 
   // ---- walking: the keys held, a step easing up to speed and away, as far as the hill allows (countryside: walkTo)
@@ -530,7 +539,7 @@ export async function initWalk(container, opts = {}) {
     // FREE-CAM (dev only; remove with it): Z toggles flying; the second Z sets the walker down where the camera is.
     if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
       e.preventDefault();
-      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); } book?.show(!s.freeCam.on); }
+      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); controls?.used('fly'); } book?.show(!s.freeCam.on); }
       return;
     }
     // VIEW POSE (dev only; remove with the free-cam): P copies where the view is, to note a fault where it was seen.
@@ -548,6 +557,7 @@ export async function initWalk(container, opts = {}) {
       if (k === 'jump') { if (stance.now !== 'stand') stance.now = 'stand'; else if (stance.y === 0) stance.vy = JUMP.v; }
     }
     held.add(k);
+    if (k === 'fwd' || k === 'back' || k === 'left' || k === 'right') controls?.used('walk');
     startSound();
     if (!locked() && k !== 'jump') takeMouse();       // (a key is a gesture too: the mouse is taken, Esc lets it go)
   });
@@ -655,6 +665,9 @@ export async function initWalk(container, opts = {}) {
     clock += dt;
     if (s.ready) { if (s.freeCam.on) fly(dt); else { body(dt); walk(dt); } }
     book?.update(dt);
+    // (the controls' pane not over the book while it is up - its left page's foot is where the pane stands: shown again
+    // as the book is lowered)
+    controls?.show(!menuOpen && !veilUp && !book?.up);
     renderAt(clock);
   }
   renderAt(clock);
@@ -679,6 +692,7 @@ export async function initWalk(container, opts = {}) {
       onChoose: (id) => choose(id),
     });
     s.viewmodel = (r, dt) => book.render(r, dt);
+    book.ready.then(() => book.prime(renderer));
   }
   container.classList.add('is-live');
   // (a still: no picture to lift - the rest comes in at once, in its place)
@@ -781,7 +795,8 @@ export async function initWalk(container, opts = {}) {
     // waiting to come in or rising)
     get allIn() { return s.ready && !veilUp && laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0; },
     get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; },
-    get book() { return book; } };
+    get book() { return book; },
+    get controls() { return controls; } };
   window.__walk = api;
   window.__walkReady = true;
   return api;

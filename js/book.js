@@ -21,7 +21,9 @@ import { DEPTH, towardCamera } from './depthmode.js';
 import { loadFonts, drawPlaces, drawGraphics, drawText, TEXTS, PAGE, hit } from './bookpages.js';
 
 const RAISE = 0.45, LOWER = 0.40;                  // s: up to the face, back down
-const FLIP = { dur: 0.42, every: 0.075, min: 1.2, max: 12 };     // s: one leaf's turn, one after another, the least and most
+// (s: one leaf's turn, one after another, the least and the most they turn for - a second or two whatever is still coming
+// in at the place: the walk goes on bringing it in behind the book)
+const FLIP = { dur: 0.42, every: 0.075, min: 0.9, max: 1.4, settle: 0.2 };
 const VERST = 1066.8;
 const ease = (t) => t * t * (3 - 2 * t);
 const TIP = [0.99, 0.056];                           // (the manicule's fingertip in its picture, from its top left)
@@ -208,7 +210,7 @@ export function makeBook(o) {
     F.t += dt;
     const done = o.isIn?.() ?? true;
     if (!F.stop && F.t > FLIP.min && done) F.wait += dt; else if (!done) F.wait = 0;
-    if (!F.stop && (F.wait > 0.35 || F.t > FLIP.max)) F.stop = true;
+    if (!F.stop && (F.wait > FLIP.settle || F.t > FLIP.max)) F.stop = true;
     // (a new leaf every so often, until the last one has gone)
     while (!F.lastLaunched && F.t >= F.launched * FLIP.every) {
       const L = leaves.find((x) => !x.on); if (!L) break;
@@ -342,6 +344,32 @@ export function makeBook(o) {
   const api = {
     ready: load().catch((e) => { console.warn('[book]', e); }),
     get loaded() { return st.ready; },
+    /** whether its programs are made and its pictures on the card (prime): it is drawn only then */
+    get primed() { return !!st.primed; },
+    /** every program it will draw with made, without holding the page up (the browser's own parallel making), and
+     *  every picture it can show sent to the card - its pages, the guide's pages the leaves carry, the hand's - before
+     *  it is first drawn: made as it was first drawn, in the walk, they had held a frame up for a second and a half */
+    async prime(renderer) {
+      if (st.primed || st.priming || !st.ready || !s.base) return;
+      st.priming = true;
+      const shown = [];
+      scene.traverse((o) => { if ((o.isMesh || o.isGroup) && !o.visible) { shown.push(o); o.visible = true; } });
+      // (each leaf made ready as it turns, a page's picture on each side - made with none, its first turn had made both
+      // sides' programs anew, in the walk)
+      for (const L of leaves) {
+        L.front.material.map ??= parts['page-r']?.material.map ?? null;
+        if (P.l?.t) L.back.material.map ??= flipped(P.l.t);
+        L.front.material.needsUpdate = L.back.material.needsUpdate = true;
+      }
+      try { fitUp(); place(0); aim(); await renderer.compileAsync(scene, cam); } catch (e) { console.warn('[book] programs', e); }
+      for (const o of shown) o.visible = false;
+      const seen = new Set();
+      const up = (t) => { if (t?.isTexture && t.image && !seen.has(t)) { seen.add(t); renderer.initTexture(t); } };
+      scene.traverse((o) => { for (const m of [].concat(o.material ?? [])) for (const v of Object.values(m)) up(v); });
+      for (const c of P.text ?? []) { up(c.t); up(flipped(c.t)); }
+      up(P.r?.t); up(P.l?.t); if (P.l?.t) up(flipped(P.l.t));
+      st.primed = true; st.priming = false;
+    },
     get up() { return st.goal === 1; },
     get flipping() { return !!st.flip; },
     get state() { return { up: st.up, goal: st.goal, flipping: !!st.flip, hover: { ...st.hover }, cursor: st.cursor.toArray() }; },
@@ -409,6 +437,8 @@ export function makeBook(o) {
     /** drawn into the scene's picture, nearest of all: countryside.js prerender */
     render(renderer, dt = 0) {
       if (!st.ready || !st.shown || !s.base) return;
+      // (not drawn until it is made ready: made ready here if the walk has not asked - its first frames wait, not stall)
+      if (!st.primed) { api.prime(renderer); return; }
       fitUp(); place(dt); aim(); hover();
       const gl = renderer.getContext(), rev = DEPTH.reversed;
       gl.depthRange(rev ? 0.982 : 0.0, rev ? 1.0 : 0.018);
