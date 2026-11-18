@@ -958,6 +958,9 @@ export class CountrysideScene {
     }
     // (the parts of the land out of the view left out whole: world/landparts.js)
     timed('frame: the land drawn', () => { this.parts.hide(this.cam); renderer.render(this.land, this.cam); this.parts.show(); });
+    // (what the walker holds - the book, js/book.js - drawn last into the same picture, nearest of all, so the look's
+    // own finishing falls on it as on everything else)
+    if (this.viewmodel) timed('frame: the book', () => this.viewmodel(renderer, this.dt ?? 0));
     // (the picture brought up to the screen's size, where it was drawn smaller: upscale.js)
     if (this.up && this.upRT) this.upscaler.upscale(renderer, this.rt.texture, this.size, this.upRT);
     // (where the sun stands on the screen, for the shafts; faded as it leaves the view and when a cloud is over it)

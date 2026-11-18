@@ -2,6 +2,8 @@
 // A click takes the mouse (and starts the sound: a browser allows sound only after a click or a key); the mouse looks
 // round; W A S D or the arrow keys walk, Shift sprints, Space jumps, C crouches, X lies prone (C and X again stand up);
 // the wheel zooms in and out; Esc lets the mouse go. Where the browser will not take the mouse, moving it looks round.
+// The walker holds a book (book.js): right click brings it up to the face - the places to travel to on its right page,
+// the graphics on its left, a printer's hand moved over them with the mouse - and right click lowers it again.
 // While the mouse is not taken, "Click to look around" shows in the middle (the only thing drawn over the scene); on a touch
 // screen, one finger looks round and two pinch to zoom. The robot and God's arms (hero.js) are kept for later.
 //
@@ -9,6 +11,7 @@
 // Dev only (remove with the free-cam): P copies the view's pose, then a box dragged round the problem; __walk.pose()
 // reads the pose and __walk.goTo(pose) returns to it.
 import { chooseTier, guessTier, rememberTier, keepChoice, step, TIERS, ORDER, STYLES, CHOICES, choiceOf } from './hardware.js';
+const PAGE_W_PER_H = 212 / 270;                     // (a page of the book, its width to its height: bookpages.js)
 import { setTextureCap } from './texcap.js';
 import { useStyle } from './retro.js';
 import { initDepth } from './depthmode.js';
@@ -19,6 +22,7 @@ import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
 import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
 import { startLoading } from './loading.js';
+import { makeBook } from './book.js';
 import * as report from './loadreport.js';
 
 const LOOK = 0.0022;                                // radians the view turns for a pixel the mouse moves, zoomed out
@@ -341,7 +345,7 @@ export async function initWalk(container, opts = {}) {
   // (the note, the view-copy mark and the pose's units (below) are read by the keys, the mouse and the menu from the
   // first moment, the walk still loading: declared here, before any of them is listened for - declared further down,
   // an Esc while loading had stopped on them unread, and the menu never came up)
-  let note = null, marking = null;
+  let note = null, marking = null, book = null;
   const DEG = 180 / Math.PI, r2 = (v) => Math.round(v * 100) / 100;
   const hint = document.createElement('div');
   hint.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;padding:10px 18px;'
@@ -396,8 +400,9 @@ export async function initWalk(container, opts = {}) {
     mouseState();
   }
   resumeBtn.addEventListener('click', () => { startSound(); takeMouse(); if (refusals >= 2) showMenu(false); });
-  menu.addEventListener('change', (e) => {
-    const id = e.target?.value;
+  menu.addEventListener('change', (e) => choose(e.target?.value));
+  // (a choice of look, from the menu or from the book's left page)
+  function choose(id) {
     if (!id || (id === nowIs && !leaving)) return;
     // (kept for this browser; where the walker stands and looks kept for the page that loads next - unless the place
     // from the last change is still waiting to be put back, this page not yet in: that one; the address's own ?gfx=
@@ -414,7 +419,7 @@ export async function initWalk(container, opts = {}) {
     const go = () => { if (u.href === location.href) location.reload(); else location.replace(u.href); };
     if (still || noRise || !s.ready || veilUp) { setTimeout(go, 60); return; }
     leave(id).then(go, go);
-  });
+  }
   // (a change of look: the page's own loading picture - a fresh copy of the one it opened with, index.html, in the look
   // chosen - fades in over the walk, and the page loads again under the same picture, which goes on exactly as on a
   // first visit: the land and the things rising as their files come in, the bar moving)
@@ -450,29 +455,42 @@ export async function initWalk(container, opts = {}) {
   document.addEventListener('mousemove', (e) => {
     if (!locked()) return;
     if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
+    if (book?.up) { book.moveBy(e.movementX, e.movementY); return; }
     lookBy(e.movementX, e.movementY);
   });
+  // ---- the book: right click brings it up to the face and lowers it again (not under the loading picture, not while
+  // flying free); the browser's own menu never shows on the walk
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  function bookToggle() { if (!book?.loaded || frozen() || s.freeCam?.on || menuOpen) return; book.toggle(); }
   // (one finger on a touch screen looks round, two pinch; with the mouse, a press captures it, or drags where refused)
   const pts = new Map();
-  let pinch = null;
+  let pinch = null, tap = null;
   canvas.addEventListener('pointerdown', (e) => {
     startSound();
     canvas.focus({ preventScroll: true });
     if (e.pointerType === 'mouse') {
+      if (e.button === 2) { bookToggle(); return; }
+      // (the book up: a click chooses the line under its cursor - with the mouse held, or where the free mouse is)
+      if (e.button === 0 && book?.up) { if (!locked()) { book.pointAt(e.clientX, e.clientY); takeMouse(); } book.click(); return; }
       if (e.button !== 0 || locked()) return;
       takeMouse();
       mouseState();
       return;
     }
+    // (a finger: a tap is told from a drag when it lifts)
+    tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     canvas.setPointerCapture(e.pointerId);
     if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: s.look.zoomGoal }; }
   });
   canvas.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
+      if (book?.up && !locked()) { book.pointAt(e.clientX, e.clientY); return; }
       if (!locked() && refusals >= 2) lookBy(e.movementX || 0, e.movementY || 0);
       return;
     }
+    if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 12) tap = null;
+    if (book?.up) return;                                 // (the book up: a finger does not turn the view)
     const p = pts.get(e.pointerId);
     if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -485,6 +503,12 @@ export async function initWalk(container, opts = {}) {
   const lift = (e) => {
     if (e.pointerType === 'mouse') return;
     if (pts.delete(e.pointerId) && pts.size < 2) pinch = null;
+    // (a tap: on the book held low it comes up; up, a tap on a line chooses it, a tap off the book lowers it)
+    if (e.type === 'pointerup' && tap && tap.id === e.pointerId && performance.now() - tap.t < 400 && book?.loaded) {
+      if (book.up) { book.pointAt(e.clientX, e.clientY); if (!book.click() && !book.onBook(e.clientX, e.clientY)) bookToggle(); }
+      else if (book.onBook(e.clientX, e.clientY)) bookToggle();
+    }
+    tap = null;
   };
   canvas.addEventListener('pointerup', lift);
   canvas.addEventListener('pointercancel', lift);
@@ -506,7 +530,7 @@ export async function initWalk(container, opts = {}) {
     // FREE-CAM (dev only; remove with it): Z toggles flying; the second Z sets the walker down where the camera is.
     if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
       e.preventDefault();
-      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else s.enterFree(); }
+      if (s.ready && !veilUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); } book?.show(!s.freeCam.on); }
       return;
     }
     // VIEW POSE (dev only; remove with the free-cam): P copies where the view is, to note a fault where it was seen.
@@ -630,11 +654,32 @@ export async function initWalk(container, opts = {}) {
     if (warming) return;                 // (nothing drawn or moved while the shaders are made: prime)
     clock += dt;
     if (s.ready) { if (s.freeCam.on) fly(dt); else { body(dt); walk(dt); } }
+    book?.update(dt);
     renderAt(clock);
   }
   renderAt(clock);
   requestAnimationFrame(tick);
   await loaded;
+  // ---- the book, once the scene is in (none in a still: book.js; declared with the mouse's state, above)
+  if (!still && !params.has('nobook')) {
+    const lines = retro ? STYLES[GFX.style].lines : 1080;
+    book = makeBook({ s, base, canvas, coarse: lines <= 240, pageW: lines <= 240 ? Math.round(lines * 0.85 * PAGE_W_PER_H) : lines <= 480 ? 768 : lines <= 720 ? 1024 : 1536,
+      choices: CHOICES, now: nowIs, mine, touch: matchMedia('(pointer: coarse)').matches,
+      environment: () => s.environment(renderer),
+      speed: () => Math.hypot(vel.x, vel.z),
+      // (the place travelled to is in: its ground, everything waiting to come in come, no file being read)
+      isIn: () => groundLoaded() && arrivalsWaiting() === 0 && pending === 0 && !managerBusy,
+      onTravel: (p) => {
+        if (s.freeCam.on) s.exitFree();
+        held.clear(); vel.x = 0; vel.z = 0; stance.now = 'stand';
+        s.walkTo(p.at[0], p.at[1], true);
+        const L = s.look; L.anchor = null; L.yaw = p.yaw / DEG; L.pitch = p.pitch / DEG; L.goal = [L.yaw, L.pitch]; L.zoom = L.zoomGoal = 1; s._lens();
+        console.info('[book] to', p.id, p.at);
+      },
+      onChoose: (id) => choose(id),
+    });
+    s.viewmodel = (r, dt) => book.render(r, dt);
+  }
   container.classList.add('is-live');
   // (a still: no picture to lift - the rest comes in at once, in its place)
   if (still) { openArrivals(s.at); s.loadRest(); s.loadRestFar(); laterDone = true; }
@@ -735,7 +780,8 @@ export async function initWalk(container, opts = {}) {
     // (for tests: everything asked for is in, in its place and still - the cities loaded, no file being read, nothing
     // waiting to come in or rising)
     get allIn() { return s.ready && !veilUp && laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0; },
-    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; } };
+    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; },
+    get book() { return book; } };
   window.__walk = api;
   window.__walkReady = true;
   return api;
