@@ -372,7 +372,7 @@ export async function initWalk(container, opts = {}) {
     + 'font:500 15px/1.3 system-ui,sans-serif;color:#fff;background:rgba(20,24,28,.55);border-radius:6px;'
     + 'pointer-events:none;transition:opacity .25s;opacity:0;text-align:center';
   container.appendChild(hint);
-  // (the controls, told once: a pane at the foot of the view on the first visits, each marked as it is first done -
+  // (the controls, told at the start of every visit: a pane at the foot of the view, each marked as it is first done -
   // controls.js; not on a touch screen, not in a still)
   const controls = !still && matchMedia('(pointer: fine)').matches ? makeControls({ container, fresh: params.has('controls') }) : null;
   function mouseState() {
@@ -405,6 +405,9 @@ export async function initWalk(container, opts = {}) {
       if (!sessionStorage.getItem('career-pose')) sessionStorage.setItem('career-pose', JSON.stringify(pose()));
       sessionStorage.removeItem('career-gfx-tries');
     } catch { /* (none) */ }
+    // (and the pane of the controls as far as this visit has got with it: the page loaded under the new look goes on from
+    // there, not from the start - controls.js carry)
+    controls?.carry();
     if (leaving) return;
     leaving = true;
     const u = new URL(location.href); u.searchParams.delete('gfx');

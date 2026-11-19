@@ -1,5 +1,5 @@
 // The book's pages (js/book.js): each drawn on its own canvas, the way a page of the 1830s was printed - Bodoni Moda
-// (vendor/bodoni-moda, its licence beside it) in a warm black ink on the cream paper of the book's own tile, a red ink for
+// (vendor/bodoni-moda) in a warm black ink on the cream paper of the book's own tile, a red ink for
 // the line the cursor is on. The right page lists the places to travel to, grouped, each with how far it lies in
 // versts from where the walker stands; the left page, the graphics, the look in force ringed. The line under the
 // printer's hand is red on either page.
