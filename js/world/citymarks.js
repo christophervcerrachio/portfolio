@@ -60,6 +60,57 @@ export function planMarks(plans, shapes, group, list) {
   for (const b of list ?? []) plans.addShape(group + ':' + (b.name ?? stem(b.glb)), shapes[stem(b.glb)], b.x, b.z, b.yaw ?? 0, b.s ?? 1, { group });
 }
 
+// From afar a large model placed many times over is drawn as copies of one: each of its materials one draw for all its
+// copies FAR m and more from the walker, where it had been one for each copy - Moscow's forty churches had been 290 of
+// the 1,040 draws of the view the walk opens on, 7 km off (19 Nov 2026), 13 to 16 for each church. Nearer than FAR a
+// copy is its own piece, shown and hidden by itself, as before. The same model, materials and places: the picture is
+// the same. They throw no shadow from there: the sun's pictures reach a few hundred metres. Of the copies far off, only
+// those inside the view are drawn, as each was by itself: the copies together stand over a whole city, which the view
+// all but always meets, and drawn whole they had added 2.4 million triangles to a view of Petersburg 15 km off.
+const FAR = 1500;
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _m = new THREE.Matrix4(), _up = new THREE.Vector3(0, 1, 0);
+function batchFar(group, glb, copies) {
+  const batch = new THREE.Group(); batch.name = 'citymark-' + stem(glb) + '-far'; batch.visible = false; batch.matrixAutoUpdate = false;
+  const ims = copies.meshes.map((o) => {
+    const im = new THREE.InstancedMesh(o.geo, o.mat, copies.length);
+    im.count = 0; im.matrixAutoUpdate = false; im.userData.noCast = true; im.userData.node = o.node;
+    // (the copies drawn are those in the view already: three's own test of the whole is left out)
+    im.frustumCulled = false;
+    im.name = batch.name; im.renderOrder = o.order; batch.add(im);
+    return im;
+  });
+  const fr = new THREE.Frustum(), vp = new THREE.Matrix4(), sph = new THREE.Sphere();
+  group.add(batch);
+  let key = '';
+  const batches = (group.userData.farBatches ??= []);
+  batches.push((pos, reach, cam) => {
+    // (each copy in by now: near, its own piece within reach; far, in the batch within reach - and in the view)
+    if (cam) fr.setFromProjectionMatrix(vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    let k = '';
+    for (const it of copies) {
+      if (!it.ready) continue;
+      const d = Math.hypot(it.b.x - pos.x, it.b.z - pos.z) - it.r;
+      it.far = d >= FAR && d < reach && (!cam || fr.intersectsSphere(sph.set(sph.center.set(it.b.x, it.y + it.cy, it.b.z), it.r)));
+      it.m.visible = d < FAR && d < reach;
+      if (it.far) k += it.b.name + ',';
+    }
+    batch.visible = k !== '';                     // (every frame: a machine's reach for landmarks hides it otherwise - farcull.js)
+    if (k === key) return;
+    key = k;
+    const far = copies.filter((it) => it.far);
+    for (const im of ims) {
+      far.forEach((it, i) => {
+        _m.compose(_p.set(it.b.x, it.y, it.b.z), _q.setFromAxisAngle(_up, it.b.yaw), _s.setScalar(it.b.s ?? 1)).multiply(im.userData.node);
+        im.setMatrixAt(i, _m);
+      });
+      im.count = far.length; im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere(); im.computeBoundingBox?.();
+    }
+    batch.matrixWorldNeedsUpdate = true;          // (its part measured again: landparts.js)
+  });
+  group.userData.farBatch = (pos, reach, cam) => { for (const f of batches) f(pos, reach, cam); };
+}
+
 /** list: the file's buildings, already read (the walk reads every list as it loads); shapes: plans.json. */
 export function buildCityMarks(world, U, { base = '', file, light = false, list = null, shapes = {} } = {}) {
   const group = new THREE.Group(); group.name = 'citymarks-' + file;
@@ -121,14 +172,27 @@ export function buildCityMarks(world, U, { base = '', file, light = false, list 
           for (const list of byCell.values()) arrive(list, { parent: group });
           return;
         }
+        // (a large model placed many times over - Moscow's forty parish churches, two designs of twenty - each copy its
+        // own piece near the walker, and from afar every copy of it drawn together: farBatch)
+        const copies = list.length >= MANY ? [] : null;
+        if (copies) {
+          // (its parts where they stand in the model, taken now, while it stands at the origin)
+          const meshes = []; g.scene.traverse((o) => { if (o.isMesh) meshes.push({ geo: o.geometry, mat: o.material, node: o.matrixWorld.clone(), order: o.renderOrder }); });
+          const bs = new THREE.Box3().setFromObject(g.scene).getBoundingSphere(new THREE.Sphere());
+          // (its reach about a point over its base, however it is turned)
+          copies.meshes = meshes; copies.r = bs.radius + Math.hypot(bs.center.x, bs.center.z); copies.cy = bs.center.y;
+        }
         placed.forEach(({ b, y }, i) => {
           const m = i ? g.scene.clone(true) : g.scene;
           m.rotation.y = b.yaw;
           m.position.set(b.x, y, b.z);
           if (b.s !== undefined) m.scale.setScalar(b.s);
           m.name = 'citymark-' + b.name;
-          arrive(m, { parent: group });
+          const item = copies ? { b, y, m, r: copies.r * (b.s ?? 1), cy: copies.cy * (b.s ?? 1), ready: false, far: false } : null;
+          if (item) copies.push(item);
+          arrive(m, { parent: group }).then(() => { if (item) item.ready = true; });
         });
+        if (copies) batchFar(group, glb, copies);
       }).catch(() => {}));
     }
     return Promise.all(all);

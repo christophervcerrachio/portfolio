@@ -207,9 +207,9 @@ export class SunShadow {
     if (this.byPart.size > P.parts.length * 2 + 256) { const live = new Set(P.parts); for (const k of this.byPart.keys()) if (!live.has(k)) this.byPart.delete(k); }
     P.aim(this.cam);
     let total = 0;
-    for (const p of P.parts) {
-      const o = p.node;
-      if (!p.shown) continue;
+    const shown = P.shownList;
+    for (let i = 0, n = shown.length; i < n; i++) {
+      const p = shown[i], o = p.node;
       const c = this._castOf(p);
       total += c.length;
       if ((p.layers & mask) !== 0 && P.seen(p)) { for (let i = 0; i < c.length; i++) list.push(c[i]); }

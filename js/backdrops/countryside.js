@@ -414,6 +414,11 @@ export class CountrysideScene {
     const sun = new THREE.DirectionalLight(U.uSunColor.value.clone().convertLinearToSRGB(), 2.1);
     sun.position.copy(U.uSunDir.value).multiplyScalar(100);
     const hemi = new THREE.HemisphereLight(0xc2cdd8, 0x98a05e, 1.35);
+    // (on every layer: the sun's pictures draw the land through cameras of their own layers, and lights those cameras
+    // did not see made the land's lights another set for every picture - each change of set had every lit material
+    // look its program up again at its next draw, some hundreds a frame in a city: 1.9 ms of an RTX 5090's frame over
+    // the Kremlin, 19 Nov 2026. The sun's pictures draw depth alone, which no light changes)
+    sun.layers.enableAll(); hemi.layers.enableAll();
     this.land.add(sun, hemi);
     // (now and then the evening of the loading picture, and back: evening.js - ?sky=day or ?sky=evening holds one)
     this.evening = makeEvening({ U, show: this.showU, sun, hemi, fog: () => this.land.fog, hold: o.sky ?? null, still: !!o.still });
@@ -528,7 +533,10 @@ export class CountrysideScene {
     this._culls = [farCull(this.bridges, G.bridgesFar ?? Infinity), ...[this.kremlin, this.spbMarks, this.estateMarks, this.kmvMarks, this.mskMarks].map((g) => farCull(g, G.marksFar ?? Infinity)),
       // (and the country places - a village, the chapel, the post station - and the river's rocks: each had been drawn
       // from anywhere on the map, 33 to 65 draw calls and 100,000 triangles a frame in the middle of Petersburg)
-      farCull(this.pois, G.placesFar ?? Infinity), farCull(this.riverBits, G.placesFar ?? Infinity)];
+      farCull(this.pois, G.placesFar ?? Infinity), farCull(this.riverBits, G.placesFar ?? Infinity),
+      // (and a landmark placed many times over drawn from afar as copies of one - Moscow's churches: citymarks.js
+      // farBatch; after the reach above, which it keeps)
+      ...[this.spbMarks, this.estateMarks, this.kmvMarks, this.mskMarks].map((g) => (pos, cam) => g?.userData.farBatch?.(pos, G.marksFar ?? Infinity, cam))];
     // the cities' houses, their bridges, yards, pavements and furniture: loaded once the walk has begun (loadLater,
     // called by walk.js when the veil lifts) - 250 MB of models kilometres from where the walk starts, which the veil
     // had waited for. The same models, drawn the same; they join the scene when they are in and their shaders made.
@@ -898,8 +906,9 @@ export class CountrysideScene {
     this.groves.userData.update?.(this.cam.position, L.zoom, this.cam, this.shadow && this.light.sun > 0.03 ? this.shadow.cam : null);
     // (the far trees' pictures, drawn once the models are in: woods.js impostors)
     if (this.woods?.userData.bake && !this._woodsBaked) { this._woodsBaked = true; this.land.updateMatrixWorld(); this.woods.userData.bake(renderer, this.land.children.filter((o) => o.isLight), this.land.fog); }
-    this.woods?.userData.update(this.cam.position, this.cam);
-    if (this._culls) for (const c of this._culls) c(this.cam.position);
+    // (and the sun's near picture, where it is drawn: the woods' shadow copies drawn into it only within its reach)
+    this.woods?.userData.update(this.cam.position, this.cam, this.shadow && this.light.sun > 0.03 && (this.gfx.shadows ?? 'both') !== 'none' ? this.shadow.cam : null);
+    if (this._culls) for (const c of this._culls) c(this.cam.position, this.cam);
     timed('frame: furniture placed', () => this.cityProps?.userData.update(this.cam.position));
     timed('frame: blocks placed', () => this.cityBlocks?.userData.update?.(this.cam.position));
     this.chimneySmoke?.userData.update(this.cam.position);

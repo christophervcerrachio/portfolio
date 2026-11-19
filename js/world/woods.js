@@ -138,6 +138,32 @@ void main() {
   gl_FragColor = vec4(c.rgb / max(c.a, 1e-3) * vShade, 1.0);
 }`;
 
+// (the parts of one copy - its bark, its leaves - placed alike: one list of places among them, written and sent to the
+// card once a refill, not once a part)
+function share(g) {
+  const im = g.children[0]?.instanceMatrix;
+  for (const mesh of g.children) mesh.instanceMatrix = im;
+  return g;
+}
+// (how far a tree's copies reach from its root, at scale 1, as a sphere about a point of its trunk: the parts' own
+// bounds, widened a tenth for the wind's sway and the close leaves grown about their middles; cull)
+function reachOf(copies) {
+  let y0 = Infinity, y1 = -Infinity;
+  const spheres = [];
+  for (const parts of copies) for (const p of parts ?? []) {
+    const g = p.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const s = g.boundingSphere;
+    spheres.push(s);
+    y0 = Math.min(y0, s.center.y - s.radius); y1 = Math.max(y1, s.center.y + s.radius);
+  }
+  if (!spheres.length) return { cy: 0, r: 30 };
+  const cy = (Math.max(0, y0) + y1) / 2;
+  let r = 0;
+  for (const s of spheres) r = Math.max(r, Math.hypot(s.center.x, s.center.y - cy, s.center.z) + s.radius);
+  return { cy, r: r * 1.1 };
+}
+
 const fract = (v) => v - Math.floor(v);
 const hash = (x, y, s) => fract(Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453);
 const sstep = (a, b, t) => { const u = Math.min(1, Math.max(0, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
@@ -238,7 +264,7 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     if (near || !last) last = null;
     return n;
   };
-  const sets = {}, TONES = { '': [1, 1, 1], gold: [1.75, 1.1, 0.18] };
+  const sets = {}, reach = {}, TONES = { '': [1, 1, 1], gold: [1.75, 1.1, 0.18] };
   const allKinds = kinds.flatMap((k) => (k.startsWith('birch') ? [k, k + '|gold'] : [k]));
   const blanks = (n) => Array.from({ length: n }, () => ({ x: 0, y: -1e5, z: 0 }));
   // (a kind's copies for every band: made for the woods' own kinds now, and for a city's park trees when their models
@@ -257,12 +283,17 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     const midM = m.near && m.far ? { ...m, near: [...m.far.filter((p) => p.kind !== 'leaves'),
       ...m.near.filter((p) => p.kind === 'leaves').map((p) => ({ ...p, geometry: (p.geometry.userData.mid ??= thinCards(p.geometry, 3, Math.sqrt(3))) }))] } : m;
     const COPY = { full: [m, m.near ? 'near' : 'far'], mid: [midM, m.near ? 'near' : 'far'], light: [farM, farM.far ? 'far' : 'near'], lighter: [lighter, 'far'], card: [lighter, 'far'] };
+    // (how far any of its copies reaches from its root, at scale 1: a sphere about a point of its trunk - cull below)
+    reach[kk] = reachOf([m.near, m.far, farM.far, lighter.far, midM.near]);
     sets[kk] = BANDS.map((b) => {
       const [dm, dw] = COPY[b.draw], items = blanks(b.cap);
       // (the copies drawn: throwing their own shadow, or leaving it to the lighter copies drawn into the sun's pictures
       // alone, or throwing none)
-      const draw = placeCopies(dm, dw, items, U, { bough: 1.0, look, shadow: b.self });
+      const draw = share(placeCopies(dm, dw, items, U, { bough: 1.0, look, shadow: b.self }));
       draw.name = kk + '.' + b.draw + '-' + b.to;
+      // (a band whose copies throw their own shadow: drawn into the view only as far as the view reaches - the trees
+      // out of it, all round within 30 m, drawn into the sun's pictures alone; cull below)
+      if (b.self && b.draw !== 'card') for (const mesh of draw.children) mesh.onBeforeRender = selfCount;
       if (!b.self) for (const mesh of draw.children) mesh.userData.noCast = true;
       if (b.draw === 'mid') for (const mesh of draw.children) mesh.name = mesh.name.replace('.near.', '.mid.');
       // (far off, a leaf card's picture is shrunk until its alpha averages under the cut and the crown goes bare:
@@ -277,8 +308,10 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
       let cast = null;
       if (b.cast && !b.self) {
         const [cm, cw] = COPY[b.cast];
-        cast = placeCopies(cm, cw, items, U, { bough: 1.0, castOnly: true });
+        cast = share(placeCopies(cm, cw, items, U, { bough: 1.0, castOnly: true }));
         cast.name = kk + '.' + b.cast + '-' + b.to + '.sun';
+        // (into the sun's near picture only those inside its reach, into the far one every one - cullSun)
+        for (const mesh of cast.children) mesh.onBeforeRender = castCount;
         // (too far off to shade the ground round the walker: the far picture alone - sunshadow.js noCastNear)
         if (b.from >= SUN_NEAR) for (const mesh of cast.children) { mesh.layers.set(2); mesh.userData.noCastNear = true; }
       }
@@ -290,15 +323,20 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   // (Refilled when the walker has gone 4 m or the view has turned well away from where it last looked. It had refilled
   // on every frame the view turned at all - every frame the mouse moved - placing each tree once for each part of its
   // model, up to 900 m round: 200 ms at a time.)
+  // (the parts of a copy share one list of places - share: written and sent to the card once)
   const fill = (g, list, cap, more) => {
     const n0 = Math.min(cap, list.length), n = more ? Math.min(cap, n0 + more.length) : n0;
+    let im = null;
     g.children.forEach((mesh) => {
-      const A = mesh.instanceMatrix.array;
-      for (let i = 0; i < n0; i++) A.set(list[i].m, i * 16);
-      for (let i = n0; i < n; i++) A.set(more[i - n0].m, i * 16);
+      if (mesh.instanceMatrix !== im) {
+        im = mesh.instanceMatrix;
+        const A = im.array;
+        for (let i = 0; i < n0; i++) A.set(list[i].m, i * 16);
+        for (let i = n0; i < n; i++) A.set(more[i - n0].m, i * 16);
+        im.clearUpdateRanges?.(); im.addUpdateRange?.(0, Math.max(1, n) * 16); im.needsUpdate = true;
+      }
       mesh.count = n; mesh.visible = n > 0;
-      const im = mesh.instanceMatrix;
-      im.clearUpdateRanges?.(); im.addUpdateRange?.(0, Math.max(1, n) * 16); im.needsUpdate = true;
+      mesh.userData.nAll = n;
     });
   };
   // (two lists a band: the trees toward the view, drawn; and those close behind it, which are not seen but whose shadows
@@ -351,8 +389,9 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
   const fwd = new THREE.Vector3();
   let last = null, nearList = [];
   const SLACK = 0.6, CLOSE = 30;                       // (radians beyond the view's sides; trees this near always drawn)
-  group.userData.update = (pos, cam) => { const end = span('woods: lists made'); try { upd(pos, cam); } finally { end(); } };
-  const upd = (pos, cam) => {
+  // (cam: the view; sun: the camera of the sun's near picture, when it is drawn this frame)
+  group.userData.update = (pos, cam, sun = null) => { const end = span('woods: lists made'); try { upd(pos, cam, sun); cull(cam); cullSun(sun); } finally { end(); } };
+  const upd = (pos, cam, sun) => {
     let yaw = 0, half = Math.PI;
     if (cam) {
       cam.getWorldDirection(fwd); yaw = Math.atan2(fwd.x, -fwd.z);
@@ -390,10 +429,107 @@ export function buildWoods(world, models, U, { far, near, mid, ladder } = {}) {
     }
     for (const k of allKinds) for (let b = 0; b < NB; b++) {
       const s = sets[k][b];
-      fill(s.draw, lists[k][b], BANDS[b].cap);
-      if (s.cast) fill(s.cast, lists[k][b], BANDS[b].cap, behind[k][b]);
+      // (a band's own copies placed by cull, as far as the view reaches, where there is a view)
+      if (!cam || BANDS[b].draw === 'card') fill(s.draw, lists[k][b], BANDS[b].cap);
+      // (and the shadow copies by cullSun, those inside the sun's near picture first, where it is drawn)
+      if (s.cast && !sun) fill(s.cast, lists[k][b], BANDS[b].cap, behind[k][b]);
     }
+    listsMade++;
   };
+  // THE VIEW'S OWN REACH (19 Nov 2026). The lists are made again only when the walker has gone 4 m or turned a third of a
+  // radian, so they hold every tree in a wedge 0.6 radians wider than the view on either side - near half the circle -
+  // and each copy in them was drawn whole, every leaf of the full copies out to 220 m, though only those inside the view
+  // can show: in the thick woods by the pond 140 million triangles a frame, the card's whole frame (17.8 ms at 1080p),
+  // and more than half of them trees out of the view. Every frame the view moves, each band's trees are taken against
+  // the view's six sides (a sphere round each, as far as any of its copies reaches, wind and all) and only those inside
+  // it are drawn: the same trees in the picture, to the pixel. A band whose own copies throw its shadow keeps every
+  // tree of its list for the sun's two pictures (their order: those in the view first; selfCount).
+  const frustum = new THREE.Frustum(), vp = new THREE.Matrix4(), seenCam = new Float64Array(32);
+  let listsMade = 0, culledFor = -1, viewCam = null;
+  // (kind -> each band's trees drawn in the view as last placed, and a second list to make the next in; the trees out of
+  // it, for a band that throws its own shadow)
+  const shownIn = {}, nextIn = {}, outOf = [];
+  const cull = (cam) => {
+    if (!cam) { viewCam = null; return; }
+    viewCam = cam;
+    // (nothing to do while neither the lists nor the view have changed)
+    const W = cam.matrixWorld.elements, P = cam.projectionMatrix.elements;
+    let same = culledFor === listsMade;
+    for (let i = 0; i < 16; i++) {
+      if (seenCam[i] !== W[i]) { seenCam[i] = W[i]; same = false; }
+      if (seenCam[16 + i] !== P[i]) { seenCam[16 + i] = P[i]; same = false; }
+    }
+    if (same) return;
+    const fresh = culledFor !== listsMade;
+    culledFor = listsMade;
+    frustum.setFromProjectionMatrix(vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const pl = frustum.planes;
+    for (const k of allKinds) {
+      const R = reach[k], was = (shownIn[k] ??= BANDS.map(() => [])), next = (nextIn[k] ??= BANDS.map(() => []));
+      for (let b = 0; b < NB; b++) {
+        const B = BANDS[b];
+        if (B.draw === 'card') continue;
+        const L = lists[k][b], inV = next[b], outV = B.self ? outOf : null;
+        inV.length = 0; outOf.length = 0;
+        for (let q = 0; q < L.length; q++) {
+          const t = L[q], cy = t.y + R.cy * t.scale, r = -(R.r * t.scale + 2);
+          let ok = true;
+          for (let j = 0; j < 6; j++) { const n = pl[j].normal; if (n.x * t.x + n.y * cy + n.z * t.z + pl[j].constant < r) { ok = false; break; } }
+          if (ok) inV.push(t); else if (outV) outV.push(t);
+        }
+        // (the same trees as last placed: nothing sent again)
+        const prev = was[b];
+        if (!fresh && prev.length === inV.length) { let eq = true; for (let q = 0; q < inV.length; q++) if (prev[q] !== inV[q]) { eq = false; break; } if (eq) continue; }
+        was[b] = inV; next[b] = prev;
+        const s = sets[k][b];
+        fill(s.draw, inV, B.cap, outV);
+        for (const mesh of s.draw.children) mesh.userData.nIn = Math.min(inV.length, B.cap);
+      }
+    }
+    outOf.length = 0;
+  };
+  // (a band's own copies drawn into the view only as far as it reaches; into the sun's pictures, every one - cull)
+  function selfCount(renderer, scene, camera) { this.count = camera === viewCam && this.userData.nIn !== undefined ? this.userData.nIn : (this.userData.nAll ?? this.count); }
+  // THE SUN'S NEAR PICTURE (19 Nov 2026). A band whose shadow its lighter copies throw (60 to 220 m off on a desktop) has
+  // them drawn into both of the sun's pictures; the near one reaches some 30 m round the walker, and 30 m more toward
+  // the sun, and of the 1,700 trees whose copies went into it by the pond - 9 million triangles - hardly any stand in
+  // it. Their order now: those inside the near picture's reach first, and only those drawn into it; the far picture
+  // draws every one, as before. A tree out of a picture's reach draws nothing in it: the same shadows.
+  const sunFr = new THREE.Frustum(), sunVp = new THREE.Matrix4(), seenSun = new Float64Array(32);
+  let sunFor = -1, sunCam = null;
+  const nearOf = [], restOf = [];
+  const cullSun = (sun) => {
+    sunCam = sun;
+    if (!sun) { sunFor = -1; return; }
+    const W = sun.matrixWorld.elements, P = sun.projectionMatrix.elements;
+    let same = sunFor === listsMade;
+    for (let i = 0; i < 16; i++) {
+      if (seenSun[i] !== W[i]) { seenSun[i] = W[i]; same = false; }
+      if (seenSun[16 + i] !== P[i]) { seenSun[16 + i] = P[i]; same = false; }
+    }
+    if (same) return;
+    sunFor = listsMade;
+    sunFr.setFromProjectionMatrix(sunVp.multiplyMatrices(sun.projectionMatrix, sun.matrixWorldInverse));
+    const pl = sunFr.planes;
+    for (const k of allKinds) {
+      const R = reach[k];
+      for (let b = 0; b < NB; b++) {
+        const s = sets[k][b];
+        if (!s.cast) continue;
+        nearOf.length = 0; restOf.length = 0;
+        for (const L of [lists[k][b], behind[k][b]]) for (let q = 0; q < L.length; q++) {
+          const t = L[q], cy = t.y + R.cy * t.scale, r = -(R.r * t.scale + 2);
+          let ok = true;
+          for (let j = 0; j < 6; j++) { const n = pl[j].normal; if (n.x * t.x + n.y * cy + n.z * t.z + pl[j].constant < r) { ok = false; break; } }
+          (ok ? nearOf : restOf).push(t);
+        }
+        fill(s.cast, nearOf, BANDS[b].cap, restOf);
+        for (const mesh of s.cast.children) mesh.userData.nNear = Math.min(nearOf.length, BANDS[b].cap);
+      }
+    }
+    nearOf.length = 0; restOf.length = 0;
+  };
+  function castCount(renderer, scene, camera) { this.count = camera === sunCam && this.userData.nNear !== undefined ? this.userData.nNear : (this.userData.nAll ?? this.count); }
   // ---- the far trees as pictures (impostors): past MID m each tree is one card facing the camera, its picture drawn once
   // from the tree's own light copy, four ways round. The light copies there had been some 35 million triangles a frame,
   // most of the woods' cost (measured 8 Nov 2026 at the spawn: the woods 8-12 ms of a frame, vertex bound).

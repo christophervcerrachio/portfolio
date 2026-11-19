@@ -12,7 +12,9 @@ export function farCull(group, far) {
     for (const o of group.children) {
       let c = where.get(o);
       if (!c) {
-        if (o.isInstancedMesh && o.boundingSphere) s.copy(o.boundingSphere).applyMatrix4(o.matrixWorld);
+        // (its place worked out here, whether or not it has been shown yet: the land's places are kept up only for what is
+        // shown - landparts.js updateWorld)
+        if (o.isInstancedMesh && o.boundingSphere) { o.updateWorldMatrix(true, false); s.copy(o.boundingSphere).applyMatrix4(o.matrixWorld); }
         else { box.setFromObject(o); if (box.isEmpty()) continue; box.getBoundingSphere(s); }
         where.set(o, (c = { x: s.center.x, z: s.center.z, r: s.radius }));
       }

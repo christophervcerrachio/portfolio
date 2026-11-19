@@ -56,7 +56,9 @@ export async function initWalk(container, opts = {}) {
   initDepth(renderer);                                     // (the depth even to the horizon: depthmode.js)
   // (the machine's graphics settings: its chip, cores, memory and screen place it in a tier, which the first frames
   // check and the frame time keeps adjusting - hardware.js)
-  const gfxInfo = chooseTier(renderer.getContext()), GFX = TIERS[gfxInfo.tier];
+  // (?tune={"blocksMerge":0,...}: the tier's settings tried otherwise, for measuring them - a test's, never a visitor's)
+  let tune = {}; try { tune = JSON.parse(params.get('tune') || '{}'); } catch { /* (none) */ }
+  const gfxInfo = chooseTier(renderer.getContext()), GFX = { ...TIERS[gfxInfo.tier], ...tune };
   console.info('[gfx]', gfxInfo.tier, '-', gfxInfo.why, '-', gfxInfo.gpu);
   // (below the full look, an older machine's way of drawing - hardware.js STYLES, retro.js: its own number of lines
   // whatever the screen, its textures' filtering, its corners on the pixel grid; set before anything is made)

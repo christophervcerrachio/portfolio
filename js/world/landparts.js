@@ -42,6 +42,7 @@ export class LandParts {
     this.fresh = [];                   // (what came in straight under the land or a container since the last frame)
     this.k = 0;                        // (where the round of parts measured again in turn stands)
     this.hid = [];
+    this.shownList = [];               // (the parts shown this frame: what each picture goes through - update())
     this.moved = (o) => this._moved(o);
     root.__container = true;
   }
@@ -57,11 +58,14 @@ export class LandParts {
     // (the parts gone from the land let go, and whether each is shown this frame - it and everything above it visible;
     // and a few each frame measured again whatever moved or not - every part about once a second: the safety under
     // what is not marked, a flag or a picture changed in place)
+    // (and the list of those shown, which is all each picture then goes through: hide(), sunshadow.js - in a city two
+    // parts of three are hidden at any moment, and each picture had gone through all of them)
     let gone = 0;
+    const list = this.shownList; list.length = 0;
     for (const p of this.parts) {
       let shown = p.node.visible, inLand = false;
       for (let a = p.node.parent; a; a = a.parent) { if (a === this.root) { inLand = true; break; } if (!a.visible) shown = false; }
-      if (p.dead || p.node.__part !== p || !inLand) { p.dead = true; gone++; } else p.shown = shown;
+      if (p.dead || p.node.__part !== p || !inLand) { p.dead = true; p.shown = false; gone++; } else { p.shown = shown; if (shown) list.push(p); }
     }
     if (gone) this.parts = this.parts.filter((p) => !p.dead);
     const n = this.parts.length, every = Math.ceil(n / 60);
@@ -81,9 +85,10 @@ export class LandParts {
    *  its frustum (those not shown at all left as they are). What was hidden comes back with show(). */
   hide(cam) {
     this.aim(cam);
-    const out = this.hid, mask = cam.layers.mask;
-    for (const p of this.parts) {
-      if (!p.shown || p.always) continue;
+    const out = this.hid, mask = cam.layers.mask, list = this.shownList;
+    for (let i = 0, n = list.length; i < n; i++) {
+      const p = list[i];
+      if (p.always) continue;
       if ((p.layers & mask) === 0 || !this.seen(p)) { p.node.visible = false; out.push(p.node); }
     }
     return out;
@@ -133,14 +138,21 @@ export class LandParts {
   _measure(p) {
     const box = p.box.makeEmpty();
     let always = false, layers = 0;
-    p.node.traverse((c) => {
+    // (what is hidden left out: nothing of it is drawn, and its places are not kept up while it is hidden - updateWorld;
+    // shown again, it is placed again and its part measured again)
+    const go = (c) => {
       if (c.__part !== p) c.__part = p;
-      if (c.isLight) { always = true; return; }
-      if (!drawn(c)) return;
-      layers |= c.layers.mask;
-      if (c.frustumCulled === false || c.isSprite || c.isSkinnedMesh) always = true;
-      else sphereBox(c, box);
-    });
+      if (c !== p.node && c.visible === false) return;
+      if (c.isLight) always = true;
+      else if (drawn(c)) {
+        layers |= c.layers.mask;
+        if (c.frustumCulled === false || c.isSprite || c.isSkinnedMesh) always = true;
+        else sphereBox(c, box);
+      }
+      const ch = c.children;
+      for (let i = 0, n = ch.length; i < n; i++) go(ch[i]);
+    };
+    go(p.node);
     p.always = always; p.layers = layers; p.dirty = false; p.gen++;
   }
 }
@@ -157,15 +169,21 @@ function sphereBox(o, box) {
 }
 
 /**
- * The world matrices of everything under `root` brought up to date, as root.updateMatrixWorld() would leave them - but
- * each object's own matrix composed again only when its position, quaternion or scale changed, and its world matrix
+ * The world matrices of everything shown under `root` brought up to date, as root.updateMatrixWorld() would leave them -
+ * but each object's own matrix composed again only when its position, quaternion or scale changed, and its world matrix
  * made again only when that changed, it was given another parent, it was marked (matrixWorldNeedsUpdate), or its
- * parent's was made again. `moved(o)`: told of each object whose world matrix was made again. An object with an
- * updateMatrixWorld of its own (a camera, a skinned mesh, a sound) is left to it, as three.js would.
+ * parent's was made again. What is hidden (visible false), and everything under it, is passed by: nothing of it is drawn
+ * (19 Nov 2026: in a city four objects of the land's five are hidden at any moment - the tiles of houses and furniture
+ * not near, their stand-ins, the smoke - and going through them every frame was most of 2.8 ms an RTX 5090's frame
+ * spent here over the Kremlin); shown again, it and all under it are placed afresh. `moved(o)`: told of each object
+ * whose world matrix was made again. An object with an updateMatrixWorld of its own (a camera, a skinned mesh, a sound)
+ * is left to it, as three.js would.
  */
 export function updateWorld(root, moved = null) { step(root, false, moved, true); }
 function step(o, force, moved, top) {
   if (!top && o.updateMatrixWorld !== BASE) { o.updateMatrixWorld(force); if (moved !== null) moved(o); return; }
+  if (!top && o.visible === false) { o.__hid = true; return; }
+  if (o.__hid === true) { o.__hid = false; force = true; }
   if (o.matrixAutoUpdate) {
     const p = o.position, q = o.quaternion, s = o.scale;
     let c = o.__trs;
