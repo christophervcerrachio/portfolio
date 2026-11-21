@@ -19,7 +19,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsState, lastPump } from './world/arrive.js';
+import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsNear, arrivalsState, lastPump, arrive } from './world/arrive.js';
 import { startLoading, makeLoading } from './loading.js';
 import { makeBook } from './book.js';
 import { makeBookOver } from './bookover.js';
@@ -70,6 +70,33 @@ export async function initWalk(container, opts = {}) {
   if (overLow) canvas.style.imageRendering = 'auto';
   renderer.setPixelRatio(retro && !overLow ? 1 : Math.min(devicePixelRatio || 1, retro ? 2 : GFX.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // (a graphics card thrown out, reset, or run out of memory: the walk's pictures, its programs and its buffers are
+  // gone with the context and never come back on their own - it showed as a dead, black, silent page. The loss is
+  // held (nothing drawn on the dead one), the walker stopped, the visitor told plainly; on the restored context the
+  // page begins again, which is the one thing known to leave the picture whole. With this much of the card's memory
+  // in use it is the fault a visitor is most likely to meet, and until now the site never spoke of it - the walk
+  // simply went on drawing into a dead context)
+  let gpuLost = false;
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();                      // (held, so webglcontextrestored is asked for at all)
+    if (gpuLost) return;
+    gpuLost = true; live = false; last = null;
+    try { book?.lower(); } catch { /* (the book's own pictures went with the context: nothing to lower) */ }
+    try { controls?.show(false); } catch { /* (as above) */ }
+    console.warn('[webgl] the graphics context was lost');
+    if (document.getElementById('walk-gpu-lost')) return;
+    const d = document.createElement('div');
+    d.id = 'walk-gpu-lost';
+    d.style.cssText = 'position:absolute;inset:0;z-index:99;display:grid;place-items:center;'
+      + 'background:rgba(10,12,14,.92);color:#fff;text-align:center;padding:8vw;'
+      + 'font:16px/1.6 system-ui,sans-serif;pointer-events:none';
+    d.textContent = 'The graphics card was interrupted. The walk begins again in a moment.';
+    container.appendChild(d);
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('[webgl] the graphics context came back: the walk begins again');
+    setTimeout(() => location.reload(), 900);
+  });
   // (a 360's picture finished with the film-like curve of its years - retro.js tone - the rest with the neutral one)
   renderer.toneMapping = retro?.tone === 'filmic' ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -98,7 +125,11 @@ export async function initWalk(container, opts = {}) {
   const over = makeBookOver({ renderer, scene: s, low: overLow, smooth: overLow && STYLES[GFX.style].scaleUp === 'smooth' });
   // (what comes in once the walk has begun - world/arrive.js: made for the scene's own picture, rising into place)
   setupArrivals({ renderer, scene: s.land, camera: () => s.cam, target: () => s.rt, shadow: () => s.shadow, still: still || noRise,
-    budget: GFX.style ? { ms: 4, tex: 8e6, geo: 5e6, compiles: 2 } : null });
+    budget: GFX.style ? { ms: 4, tex: 8e6, geo: 5e6, compiles: 2 } : null,
+    // (21 Nov 2026: the load radius capped. A visitor's world grows in within this of him and rises out of the ground
+    //  as he comes to the rest; ?dev keeps the whole world in, because from high above the free-cam every house has to
+    //  be there to judge a layout.)
+    reach: new URLSearchParams(location.search).has('dev') ? Infinity : (GFX.reachNear ?? 3000) });
   // ---- the loading picture (index.html .walk-load, loading.js): the walk's own evening, its woods and landmarks rising
   // out of the ground as the first view's files come in. It lifts once that first view is in - the land and its
   // pictures, the woods, the sky - with its shaders made and a second of its frames run (and measured: below). The rest
@@ -182,12 +213,20 @@ export async function initWalk(container, opts = {}) {
     // (and the book made ready under the picture - its programs and pictures, book.prime - so nothing of it is made in the
     // walk; a book still not in eight seconds after the view is, the walk opens without waiting for it)
     if (book && !book.primed && now - settledAt < 8000) return;
+    // (the cities, their landmarks, their shaders: made here, under the picture, and the picture waits for them up to
+    // CITY_WAIT ms - see CITY_WAIT above for why they moved out of the seconds after the lift)
+    if (!cityWarm && now - settledAt < CITY_WAIT) {
+      if (!cityWarmStarted) {
+        cityWarmStarted = true; tl('cities: under the picture');
+        s.loadRestFar();
+        later().then(() => { cityWarm = true; }, () => { cityWarm = true; });
+      }
+      return;
+    }
     {
         veilUp = false; tl('veil lifted'); held.clear(); opened = true; openedAt = now;
         controls?.show(true);
         open();
-        // (the rest - the cities, their landmarks, the bridges - asked for at once too, each rising as it comes)
-        s.loadRestFar(); later();
         // (the walk shown looking where it was meant to - the windmill, or where the walker looked before a change of
         // graphics - whatever reached the view meanwhile; and still nothing turns it until the picture has faded away
         // (loading.js: 1.3 s): the mouse moved while the picture was still going had turned the view before it was seen)
@@ -199,7 +238,10 @@ export async function initWalk(container, opts = {}) {
         stillUntil = performance.now() + 1400;
         // (the load's report kept: loadreport.js)
         const I = renderer.info;
-        report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles } });
+        report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles },
+          // (the load's own frames by the percentiles, beside the card's book: medians hid the stalls - stats(), the
+          // performance research of 19 Nov 2026, item 1)
+          frameStats: (() => { const S = stats(); return { frames: S.frames, p50: S.p50, p95: S.p95, p99: S.p99, max: S.max, over50: S.over50, over100: S.over100 }; })() });
         loading?.done();
     }
   }
@@ -258,6 +300,13 @@ export async function initWalk(container, opts = {}) {
   // (the cities, once the walk has begun: loaded, their shaders made in the background, then into the scene -
   // countryside.js loadLater; what comes in of them rises in its place: world/arrive.js)
   let laterDone = false;
+  // (the cities made and their shaders compiled before the picture lifts, not after it: a change of graphics in the
+  // book loads the walk again, and since v0.0.141 the ~50 programs the cities need were made in the seconds after the
+  // picture went away - frames of 70-160 ms, 30 of them over 100 ms in the first 3 s, measured 2026-11-21 (Full to
+  // PS1). Their making is the same work either way; here the picture hides it. CITY_WAIT is the most it may hold the
+  // picture past the first view being in; after that the walk opens and they stream as before.)
+  let cityWarmStarted = false, cityWarm = false;
+  const CITY_WAIT = 6000;
   async function later() {
     const groups = s.loadLater();
     if (!groups.length) { laterDone = true; return; }
@@ -272,8 +321,26 @@ export async function initWalk(container, opts = {}) {
       for (const t of spare) tmp.add(t);
       tmp.updateMatrixWorld(true);
       // (their programs, and their sun-shadow copies', made in the background: arrive.js. The cities' pieces then come
-      // in a few MB a frame, each rising in its place)
-      await Promise.all([compileView(tmp), compileShadow(tmp)]);
+      // in a few MB a frame, each rising in its place.
+      // Asked for a thing at a time, one frame each. The card is told about every program the things it is handed need
+      // in the frame it is handed them (three's compileAsync waits for what renderer.compile already made), and the
+      // card's own work is about 50 ms a program: asking for the whole city group at once made a frame of 2.1 seconds
+      // in which the card was told about 42 programs, and asked for 19 at a time later, a frame of 177 ms. One thing
+      // per frame makes the same programs, from the same shaders, with no frame standing between two of them for more
+      // than one program's worth.)
+      const items = groups.flatMap((g) => (g.children.length > 1 ? g.children.slice() : [g])).concat(spare);
+      // (where each one belongs: a thing taken into the scene below has to be put back where it came from, or the
+      //  group that owns it goes into the walk empty)
+      const homes = items.map((it) => it.parent);
+      const step = items.length > 28 ? Math.ceil(items.length / 28) : 1;
+      for (let i = 0; i < items.length; i += step) {
+        const one = new THREE.Scene();
+        for (const it of items.slice(i, i + step)) { one.add(it); it.updateMatrixWorld(true); }
+        try { await Promise.all([compileView(one), compileShadow(one)]); } catch (e) { console.warn('city programs', e); }
+        for (const it of one.children.slice()) one.remove(it);
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      items.forEach((it, i) => { if (homes[i]) homes[i].add(it); });
       for (const t of spare) tmp.remove(t);
       for (const o of groups) tmp.remove(o);
     } catch (e) { console.warn('cities', e); }
@@ -437,9 +504,12 @@ export async function initWalk(container, opts = {}) {
   // it the book is lowered and the walker carried there, and it lifts once the place is in - its ground, everything
   // waiting to come in come, no file being read - or after TRAVEL.most s, the rest rising as it comes (18 Nov 2026: the
   // book's leaves had turned while he was carried there, the place coming in behind the book)
-  const TRAVEL = { fade: 0.5, most: 10 };
+  const TRAVEL = { fade: 0.5, most: 10, near: 1500 };
   let trip = null;
-  const placeIn = () => groundLoaded() && arrivalsWaiting() === 0 && pending === 0 && !managerBusy;
+  // (what the loading picture waits under: the ground, the arrivals that stand near the place - not the whole world's
+  // queue, which held a travel for tiles on the far side of the map - no file being read)
+  const nearWaiting = () => arrivalsNear(s.at.x, s.at.z, TRAVEL.near);
+  const placeIn = () => groundLoaded() && nearWaiting() === 0 && pending === 0 && !managerBusy;
   function travel(p) {
     if (travelUp || leaving || !p) return;
     travelUp = true; held.clear(); vel.x = 0; vel.z = 0;
@@ -456,7 +526,7 @@ export async function initWalk(container, opts = {}) {
       el.style.opacity = '1';
       pic = makeLoading(el, { style: look, base });
     }
-    trip = { p, el, pic, at: 0, most: 0 };
+    trip = { p, el, pic, at: 0, most: 0, near: 0 };
     // (carried there once the picture covers the walk - its fade ended, or a moment after it should have: the jump not
     // seen, however slow the frames)
     let carried = false;
@@ -480,7 +550,7 @@ export async function initWalk(container, opts = {}) {
   function travelCheck(now) {
     if (!trip?.at) return;
     // (how far the place has come in: its ground first, then what waits to come in, against the most that waited)
-    const w = arrivalsWaiting(); trip.most = Math.max(trip.most, w);
+    const w = nearWaiting(); trip.near = w; trip.most = Math.max(trip.most, w);
     trip.pic?.progress(groundLoaded() ? 0.5 + 0.45 * (1 - w / Math.max(1, trip.most)) : 0.3 * Math.min(1, (now - trip.at) / 3000));
     if (!placeIn() && now - trip.at < TRAVEL.most * 1000) return;
     // (lifted as the first picture lifts: faded over the walk, nothing turning the view until it has gone - loading.js)
@@ -583,12 +653,9 @@ export async function initWalk(container, opts = {}) {
   // ---- walking: the keys held, a step easing up to speed and away, as far as the hill allows (countryside: walkTo)
   const held = new Set();
   document.addEventListener('keydown', (e) => {
-    // FREE-CAM (dev only; remove with it): Z toggles flying; the second Z sets the walker down where the camera is.
-    if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
-      e.preventDefault();
-      if (s.ready && !veilUp && !travelUp) { if (s.freeCam.on) { s.exitFree(); vel.x = 0; vel.z = 0; } else { s.enterFree(); book?.lower(); controls?.used('fly'); } book?.show(!s.freeCam.on); }
-      return;
-    }
+    // (the free-cam has no key of its own since 21 Nov 2026: it is a dev tool, reached only by __walk.free or by a pose
+    //  that says fly - the visitor's ways are walk, look, the book and the scroll. The old Z toggle came out, and its
+    //  line came out of the "Getting about" pane with it.)
     // VIEW POSE (dev only; remove with the free-cam): P copies where the view is, to note a fault where it was seen.
     if (e.code === 'KeyP' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { e.preventDefault(); copyPose(); return; }
     if (e.code === 'Escape' && marking) { endMark(); showNote('View copied, without a box.', 3000); return; }
@@ -659,24 +726,61 @@ export async function initWalk(container, opts = {}) {
 
   // ---- the clock and the frames
   let clock = frozenT ?? 0, last = null, live = !still;
+  // (every frame's length, kept to the last 20,000, and the most draws one frame ever made: __walk.stats() gives their
+  // percentiles beside the card's own book (draws, triangles, programs, pictures, geometries), and the load's report
+  // keeps them with it. The walk judged its frames by a running median alone, which cannot see the several second
+  // freezes the complaint was about - a median of 9 ms and a 2 s stall read the same. The performance research of
+  // 19 Nov 2026, item 1: measure before speeding up)
+  const FPS = []; let maxCalls = 0;
+  // (the card's book gathered over a whole frame: the walk draws its passes one after another (sky, the far land, the
+  // sun's two, the land, its own last pass, the book), and the book counts only what the last of them drew - read
+  // as it was it reported one draw and two triangles for a frame of a hundred thousand)
+  renderer.info.autoReset = false;
+  function stats(last) {
+    const raw = (last && last < FPS.length) ? FPS.slice(FPS.length - last) : FPS;
+    const T = raw.slice().sort((a, b) => a - b), at = (q) => (T.length ? +T[Math.min(T.length - 1, Math.floor(T.length * q))].toFixed(2) : null);
+    const I = renderer.info;
+    return { frames: T.length, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: T.length ? +T[T.length - 1].toFixed(1) : null,
+      over33: T.filter((x) => x > 33).length, over50: T.filter((x) => x > 50).length, over100: T.filter((x) => x > 100).length,
+      card: { draws: I.render.calls, mostDraws: maxCalls, triangles: I.render.triangles, programs: I.programs?.length ?? null,
+        textures: I.memory.textures, geometries: I.memory.geometries },
+      arrivals: { waiting: arrivalsWaiting(), near: arrivalsNear(s.at.x, s.at.z, TRAVEL.near), ...arrivalsState() } };
+  }
   // (the frames that took long, for a look at what they carried - __walk.heavy: when (ms since the page began), the
   // whole frame, the scene's update, its own pictures (sky, sun, the land), the show pass, and what came in: arrive.js)
   const HEAVY = [];
+  // (and the twenty slowest frames of the whole walk, however late they come: HEAVY stops at its first eighty, so a
+  //  walk that stalls often keeps only its first eighty stalls - the several-second ones that come later, and the
+  //  worst of all, were the ones nobody could read (19 Nov 2026: pcfreezetest.mjs could not see a 2.9 s frame))
+  const WORST = [];
+  function noteWorst(rec) {
+    if (WORST.length < 20) { WORST.push(rec); WORST.sort((x, y) => y.ms - x.ms); return; }
+    if (rec.ms > WORST[WORST.length - 1].ms) { WORST[WORST.length - 1] = rec; WORST.sort((x, y) => y.ms - x.ms); }
+  }
+  const frameRec = (a, b, c, d) => ({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1),
+    pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1),
+    came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
   function renderAt(t) {
     const a = performance.now();
+    renderer.info.reset();                             // (the frame's draws gathered over every pass it makes - autoReset is off, above)
     s.update(t);
     const b = performance.now();
     s.prerender(renderer);
     const c = performance.now();
     if (over.low) over.showLow(() => renderer.render(stage, camera)); else renderer.render(stage, camera);
     over.book(book);
+    if (renderer.info.render.calls > maxCalls) maxCalls = renderer.info.render.calls;   // (the busiest frame's draws, for __walk.stats)
     const d = performance.now();
     if (veilUp) report.frame(b - a, c - b, d - c, lastPump); else report.frameAfter(b - a, c - b, d - c, lastPump);
-    if (d - a > 24 && s.ready && HEAVY.length < 80) HEAVY.push({ at: Math.round(a), ms: +(d - a).toFixed(1), update: +(b - a).toFixed(1), pictures: +(c - b).toFixed(1), show: +(d - c).toFixed(1), came: { ...lastPump, ms: +lastPump.ms.toFixed(1), texMs: +lastPump.texMs.toFixed(1) } });
+    if (s.ready && d - a > 24) {
+      if (HEAVY.length < 80) HEAVY.push(frameRec(a, b, c, d));
+      if (d - a > 100) noteWorst(frameRec(a, b, c, d));       // (the twenty slowest of the whole walk, whenever they come)
+    }
   }
   function tick(now) {
     requestAnimationFrame(tick);
     if (!live || document.hidden) { last = null; return; }
+    if (last !== null) { FPS.push(now - last); if (FPS.length > 20000) FPS.shift(); }   // (the frame's whole length, the walk's work and the wait alike)
     const dt = last === null ? 0 : Math.min(0.1, (now - last) / 1000);
     // (once loaded: if two seconds of frames come, as a rule, slower than about 45 a second, draw the scene's picture
     // smaller; and back up to full size once a few such spells keep up with 60 again. By the median, so a load's
@@ -690,9 +794,18 @@ export async function initWalk(container, opts = {}) {
         // a minute a step; the step as big as the frame time asks, down to the tier's floor - hardware.js)
         if (quality.times.length >= 120 || (now - quality.t0 > 1500 && quality.times.length >= 6)) {
           const T = quality.times.sort((a, b) => a - b), med = T[T.length >> 1];
+          // (the tail of a spell matters as much as its middle: walking forward the middle of the frames can be a
+          //  comfortable 13 ms while one frame in ten takes sixty, and a spell judged by its middle alone says nothing
+          //  is wrong. So a spell with many frames over 33 ms, and its ninety-fifth percentile beyond 45,
+          //  shrinks the picture too - a smaller step than a slow middle asks for, and held longer before climbing
+          //  back, so the two sizes do not flicker against each other every few seconds)
+          const p95 = T[Math.min(T.length - 1, Math.floor(0.95 * T.length))];
+          const manySlow = T.filter((v) => v > 33).length >= Math.max(6, T.length * 0.07);
           quality.times.length = 0; quality.t0 = now;
           if (med > 22 && quality.scale > GFX.minScale) {
             quality.scale = Math.max(GFX.minScale, quality.scale * Math.max(0.6, Math.min(0.9, Math.sqrt(18 / med)))); quality.good = 0; frame();
+          } else if (manySlow && p95 > 45 && quality.scale > GFX.minScale) {
+            quality.scale = Math.max(GFX.minScale, quality.scale * 0.92); quality.good = -9; frame();
           } else if (med < 17.5 && quality.scale < GFX.scale && ++quality.good >= 3) { quality.scale = Math.min(GFX.scale, quality.scale / 0.85); quality.good = 0; frame(); }
           else if (med >= 17.5) quality.good = 0;
           // (at the floor and still under 25 a second for a while: the next visit starts a tier lower)
@@ -835,7 +948,10 @@ export async function initWalk(container, opts = {}) {
     // (for tests: everything asked for is in, in its place and still - the cities loaded, no file being read, nothing
     // waiting to come in or rising)
     get allIn() { return s.ready && !veilUp && laterDone && pending === 0 && !managerBusy && arrivalsWaiting() === 0; },
-    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; },
+    get arriving() { return arrivalsWaiting(); }, get arrivals() { return arrivalsState(); }, get heavy() { return HEAVY; }, get worst() { return WORST; },
+    // (the frames' percentiles and the card's book: stats; a place's own arrivals: nearWaiting; and a test's way of
+    //  asking for one arrival far off, to see whether a travel waits for it - the whole point of backlog item 3)
+    stats, arrive, get nearWaiting() { return nearWaiting(); }, get travelUp() { return travelUp; },
     get book() { return book; },
     get controls() { return controls; } };
   window.__walk = api;

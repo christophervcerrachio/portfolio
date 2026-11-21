@@ -108,7 +108,7 @@ export async function buildCity(base, specPath, opts = {}) {
       c.setRGB(b[9], b[10], b[11], THREE.SRGBColorSpace); roofCol.set([c.r, c.g, c.b], j * 3);
     });
     g.setAttribute('aRoofCol', new THREE.InstancedBufferAttribute(roofCol, 3));
-    mesh.castShadow = cast; mesh.receiveShadow = cast; mesh.frustumCulled = false; world.add(mesh);
+    mesh.castShadow = cast; mesh.receiveShadow = cast; cullWorld(mesh); world.add(mesh);
     }
   }
 
@@ -139,7 +139,7 @@ export async function buildCity(base, specPath, opts = {}) {
         o.position.set(x, b[5], z); o.rotation.set(0, b[6], 0); o.scale.set(b[2], b[4], b[3]); o.updateMatrix();
         mesh.setMatrixAt(j, o.matrix); mesh.setColorAt(j, c.setRGB(b[8], b[9], b[10], THREE.SRGBColorSpace));
       });
-      mesh.castShadow = cast; mesh.receiveShadow = cast; mesh.frustumCulled = false; world.add(mesh);
+      mesh.castShadow = cast; mesh.receiveShadow = cast; cullWorld(mesh); world.add(mesh);
     }
   }
 
@@ -157,6 +157,7 @@ export async function buildCity(base, specPath, opts = {}) {
       o.rotation.set(0, k * 2.399, 0); o.updateMatrix();
       meshes[i].setMatrixAt(used[i], o.matrix); meshes[i].setColorAt(used[i], c.setRGB(t[4], t[5], t[6], THREE.SRGBColorSpace)); used[i]++;
     }
+    meshes.forEach((m) => cullWorld(m));
   }
   // the landmarks: shapes by kind, at map px, sizes in metres (a cathedral's dome, a fortress tower, a palace box)
   const prism = (len, span, rise, eave = 0) => { const sh = new THREE.Shape(); sh.moveTo(-span / 2 - eave, 0); sh.lineTo(span / 2 + eave, 0); sh.lineTo(0, rise); sh.lineTo(-span / 2 - eave, 0); return new THREE.ExtrudeGeometry(sh, { depth: len + 2 * eave, bevelEnabled: false }).translate(0, 0, -(len + 2 * eave) / 2).rotateY(Math.PI / 2); };
@@ -197,6 +198,15 @@ export async function buildCity(base, specPath, opts = {}) {
 // and its far one - and which of the two a copy wears is settled by how far the eye is and redone whenever the
 // walker has moved sixty-odd paces, because fifteen thousand copies cannot all wear their near picture and a
 // city seen from the hill does not ask them to.
+// (a batch of copies can be left to the card's own culling once it knows how far its copies reach: three computes an
+// instanced batch's sphere from its copy matrices, and culls only a batch whose sphere lies wholly outside the view -
+// so nothing that can be seen is ever dropped. Measured 20 Nov 2026 at the Kremlin: hiding the batches outside the view
+// took p95 from 13.0-13.7 ms to 11.4-11.6 ms and the worst frame from 390 ms to 32-95 ms, six runs.)
+function cullWorld(m) {
+  if (!m.computeBoundingSphere || !('boundingSphere' in m)) { m.frustumCulled = false; return m; }
+  m.computeBoundingSphere(); m.frustumCulled = true; return m;
+}
+
 async function buildKit(S, dir, world, at, cast, lambert) {
   const K = await (await fetch(dir + S.kit)).json();
   const kdir = dir + S.kit.replace(/[^/]*$/, '');     // the kit's own folder, beside its json
@@ -257,6 +267,7 @@ async function buildKit(S, dir, world, at, cast, lambert) {
       }
       g.near.count = n; g.far.count = f;
       g.near.instanceMatrix.needsUpdate = true; g.far.instanceMatrix.needsUpdate = true;
+      cullWorld(g.near); cullWorld(g.far);
     }
   };
   const last = new THREE.Vector3(1e9, 0, 0);

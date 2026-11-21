@@ -13,9 +13,11 @@
 // (assets/book/places.json: dev\book\places.py; places that stand close together are one line), the left the graphics;
 // a printer's hand moves over both pages with the mouse from the moment the book comes up, and the line under it is
 // red - a place as a look (18 Nov 2026: the hand had stood in the margin before a place, and shown only once the book
-// was all the way up). A click on a place carries the walker there under the walk's own loading picture, in the look in
-// force (walk.js travel); the book is lowered under it. Right click again lowers it. On a touch screen a tap on the
-// book raises it, a tap on a line chooses it, a tap off the book lowers it.
+// was all the way up). The hand is ink on the page it lies on: moved freely with the mouse, it is never drawn past that
+// page's edges - off the page it goes under the edge, and farther off it is gone (19 Nov 2026: it had been drawn whole
+// out over the book's edge and the land). A click on a place carries the walker there under the walk's own loading
+// picture, in the look in force (walk.js travel); the book is lowered under it. Right click again lowers it. On a touch
+// screen a tap on the book raises it, a tap on a line chooses it, a tap off the book lowers it.
 import * as THREE from 'three';
 import { gltfLoader } from './gltf.js';
 import { unstyled } from './retro.js';
@@ -46,6 +48,10 @@ export function makeBook(o) {
   const T = {};                                     // the pictures
   const P = {};                                     // the pages: canvases, textures, boxes
   let J = null, places = [], parts = {}, cursor = null, vignette = null, env = null;
+  // (the hand bound by the page it lies on: each page's edges in the book's frame - x across, z toward the tail; the page
+  // carried on past its edges, unseen, where the hand goes on lying when the mouse leaves the page; and the edges of the
+  // page it lies on, that nothing of it is drawn beyond, as its program reads them: hover, pageBound)
+  const rect = {}, skirts = [], CLIP = { uBookInv: { value: new THREE.Matrix4() }, uPageRect: { value: new THREE.Vector4(-1, 1, -1, 1) } };
   const cuff = [];                                   // (the cuff's end: fitUp keeps it below the window's foot)
 
   // ---- the pictures: each tile at its real size (the model's coordinates are in tiles already)
@@ -137,8 +143,60 @@ export function makeBook(o) {
       const g = new THREE.PlaneGeometry(w, h); g.translate(-w / 2 + w * (1 - TIP[0]), -h / 2 + h * TIP[1], 0);
       cursor = new THREE.Mesh(g, std({ map: T.cursor, transparent: true, alphaTest: 0.02, roughness: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: towardCamera(-2), polygonOffsetUnits: towardCamera(-4) }));
       cursor.frustumCulled = false; cursor.renderOrder = 5; cursor.visible = false; scene.add(cursor);
+      pageBound(cursor.material);
+    }
+    for (const side of ['l', 'r']) {
+      const m = parts['page-' + side];
+      if (!m) continue;
+      m.geometry.computeBoundingBox();
+      const b = m.geometry.boundingBox;
+      rect[side] = [b.min.x, b.max.x, b.min.z, b.max.z];
+      skirts.push(skirt(side, rect[side], b.max.y));
     }
     st.ready = true;
+  }
+
+  // (the hand's program: each point of it taken into the book's frame, and nothing of it drawn past the edges of the
+  // page it lies on - its own test, in the program the book makes ready before it is first drawn: three's clipping planes
+  // would have it made again at its first draw)
+  function pageBound(m) {
+    const prev = m.onBeforeCompile, key = m.customProgramCacheKey.bind(m);
+    m.onBeforeCompile = (sh, r) => {
+      prev?.call(m, sh, r);
+      Object.assign(sh.uniforms, CLIP);
+      sh.vertexShader = sh.vertexShader.replace('void main() {', 'uniform mat4 uBookInv;\nvarying vec3 vBookPos;\nvoid main() {\n  vBookPos = (uBookInv * modelMatrix * vec4(position, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'uniform vec4 uPageRect;\nvarying vec3 vBookPos;\nvoid main() {\n  if (vBookPos.x < uPageRect.x || vBookPos.x > uPageRect.y || vBookPos.z < uPageRect.z || vBookPos.z > uPageRect.w) discard;');
+    };
+    m.customProgramCacheKey = () => key() + '-page';
+    m.needsUpdate = true;
+  }
+  // (a page carried on past its outer edge and its head and tail, unseen - its own curve from the fold (book.json profile),
+  // straight on past the edge - for where the hand lies when the mouse is off the page: a mesh of its own, never drawn,
+  // placed with the book when the cursor is looked for)
+  function skirt(side, [x0, x1, z0, z1], top) {
+    const OUT = 0.07, sg = side === 'r' ? 1 : -1, edge = Math.max(Math.abs(x0), Math.abs(x1));
+    const prof = J?.profile?.length > 1 ? J.profile : [[0, top, 0], [edge, top, edge]];
+    const yAt = (a) => {                              // (the leaf's height a metres out from the fold)
+      for (let i = 1; i < prof.length; i++) if (a <= prof[i][0] || i === prof.length - 1) {
+        const [ax, ay] = prof[i - 1], [bx, by] = prof[i], t = (a - ax) / ((bx - ax) || 1);
+        return ay + (by - ay) * t;
+      }
+      return top;
+    };
+    const NX = 48, NZ = 6, pos = [], idx = [];
+    for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
+      const a = (edge + OUT) * i / NX, z = (z0 - OUT) + (z1 - z0 + 2 * OUT) * j / NZ;
+      pos.push(sg * a, yAt(a), z);
+    }
+    for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+      const k = j * (NX + 1) + i, a = k, b = k + 1, c = k + NX + 1, d = c + 1;
+      if (sg > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const k = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    k.matrixAutoUpdate = false; k.userData.side = side;
+    return k;
   }
 
   function stripes() {
@@ -259,17 +317,35 @@ export function makeBook(o) {
     if (r !== st.hover.r) { st.hover.r = r; drawRight(); }
     if (l !== st.hover.l) { st.hover.l = l; drawLeft(); }
     if (cursor) {
-      cursor.visible = !!u && !o.touch;                  // (on a place as on a look: never snapped to the line)
-      if (u) {
-        const n = u.h.face.normal.clone().transformDirection(u.h.object.matrixWorld);
+      // (on the page: where the mouse points; off it, on the page carried on past its edge - where only the part of it
+      // still over the page shows)
+      let at = u ? { h: u.h, side: u.side } : null;
+      if (!at && st.goal === 1 && skirts.length) {
+        for (const k of skirts) k.matrixWorld.copy(book.matrixWorld);
+        const h = ray.intersectObjects(skirts, false)[0];
+        if (h) at = { h, side: h.object.userData.side };
+      }
+      cursor.visible = !!at && !o.touch;                 // (on a place as on a look: never snapped to the line)
+      if (at) {
+        const n = at.h.face.normal.clone().transformDirection(at.h.object.matrixWorld);
+        if (n.dot(ray.ray.direction) > 0) n.negate();
         const across = new THREE.Vector3(1, 0, 0).transformDirection(book.matrixWorld);
         across.addScaledVector(n, -across.dot(n)).normalize();
         const upv = new THREE.Vector3().crossVectors(n, across);
-        cursor.matrix.makeBasis(across, upv, n).setPosition(u.h.point.clone().addScaledVector(n, 0.0003));
+        cursor.matrix.makeBasis(across, upv, n).setPosition(at.h.point.clone().addScaledVector(n, 0.0003));
         cursor.matrixAutoUpdate = false; cursor.matrixWorldNeedsUpdate = true;
+        clipTo(at.side);
       }
     }
     return u;
+  }
+
+  // (the page it lies on: its edges, and the book's frame the hand's every point is taken into to be held to them)
+  function clipTo(side) {
+    const r = rect[side];
+    if (!r) return;
+    CLIP.uPageRect.value.set(r[0], r[1], r[2], r[3]);
+    CLIP.uBookInv.value.copy(book.matrixWorld).invert();
   }
 
   // ---- what the walk calls
@@ -313,6 +389,10 @@ export function makeBook(o) {
     get state() { return { up: st.up, goal: st.goal, hover: { ...st.hover }, cursor: st.cursor.toArray() }; },
     /** (dev: whether the free cursor is drawn - off the list - or not: on a place its hand is in the page's margin) */
     get cursorShown() { return !!cursor?.visible; },
+    /** (dev: where a point of the book's own frame - x across, y off the pages, z toward the tail - stands in the window,
+     *  in pixels; and each page's edges in that frame, [x0, x1, z0, z1]: the tests of the hand) */
+    screenOf(x, y, z) { const v = new THREE.Vector3(x, y, z).applyMatrix4(book.matrixWorld).project(cam), r = o.canvas.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; },
+    get pages() { return { l: rect.l, r: rect.r }; },
     toggle() { if (!st.ready) return; st.goal = st.goal ? 0 : 1; if (st.goal) { st.cursor.set(0.25, -0.2); drawRight(); } else if (cursor) cursor.visible = false; },
     raise() { if (st.goal !== 1) api.toggle(); },
     lower() { if (st.goal !== 0) api.toggle(); },

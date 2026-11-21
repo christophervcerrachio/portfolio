@@ -11,7 +11,6 @@ export const CONTROLS = [
   ['walk', ['W', 'A', 'S', 'D'], 'Walk'],
   ['book', ['Right click'], 'Open the book of places'],
   ['zoom', ['Scroll'], 'Look closer'],
-  ['fly', ['Z'], 'Fly free, and Z again to land'],
   ['esc', ['Esc'], 'Release the cursor'],
 ];
 

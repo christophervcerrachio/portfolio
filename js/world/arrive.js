@@ -33,7 +33,12 @@ const A = {
   // allowance that fills frame by frame and is drawn on: a picture or a model larger than a frame's share still goes,
   // whole, and the frames after it send nothing until its bytes are paid for - so a large one is followed by frames
   // with time to spare, not by another)
-  budget: { ms: 3, tex: 12e6, geo: 6e6, compiles: 3 },
+  budget: { ms: 3, tex: 12e6, geo: 6e6, compiles: 3, perSec: 6 },
+  // (21 Nov 2026, since the load radius was capped: pieces now cross into reach continuously while the walker
+  //  moves, so what is let in is metered per second as well as per frame. `perSec` is programs begun a second while
+  //  the walk runs: this engine costs about 50 ms of the card's own work per program, so three a frame - what the
+  //  frame rule alone allowed - is a stutter with extra steps, whatever the frame's time budget says.)
+  compileAllow: 0,
   last: 0, texAllow: 0, geoAllow: 0,
   // the opening wave: what waits for the walk to be shown rises from the walker outward at this speed (m/s), the last
   // of it at most this long after the first (s)
@@ -53,9 +58,14 @@ const A = {
 /** As the walk begins. scene: what everything is drawn in (the lights, the fog); camera, target and shadow: functions
  *  giving the view's camera, the picture the scene is drawn into and the sun's near picture (a SunShadow: its depth
  *  programs), each once it exists; still: a still or a test - nothing rises. */
-export function setupArrivals({ renderer, scene, camera, target, shadow = () => null, still = false, budget = null }) {
+export function setupArrivals({ renderer, scene, camera, target, shadow = () => null, still = false, budget = null, reach = null }) {
   Object.assign(A, { renderer, scene, cam: camera, target, shadow, still });
   if (budget) Object.assign(A.budget, budget);
+  // (metres: how far from the walker a thing may be to come in at all - beyond it a piece stays unmade until he
+  //  approaches, and then rises through the ground as it does after any travel. null leaves the module's own, which is
+  //  the whole world in. The queue, arrivalsWaiting and arrivalsNear already ignore what is out of reach, so nothing
+  //  waits for a piece deliberately left out.)
+  if (reach != null && Number.isFinite(reach)) A.reach = reach;
 }
 
 /** Under the loading picture (v0.0.92: the whole world comes in there): a frame's share many times the walk's own,
@@ -354,6 +364,18 @@ export function arrive(objs, opts = {}) {
 
 /** How many are waiting to come in or still rising (tests: everything in once this is 0). */
 export const arrivalsWaiting = () => A.queue.filter((a) => !beyond(a)).length + A.rising.length + A.making;
+/** How many of those stand within `r` metres of (x, z): what a place travelled to waits for. The whole world's queue
+ *  (arrivalsWaiting) made every travel wait for tiles on the far side of the map - the world is 40 km across, a
+ *  place's own arrivals are a few hundred metres off (the performance research of 19 Nov 2026, item 3). A piece being
+ *  made counts as near: the queue is worked nearest first, so what is being made is what the walker stands by. */
+export function arrivalsNear(x, z, r = 1500) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return arrivalsWaiting();
+  const d2 = (px, pz) => { const dx = px - x, dz = pz - z; return dx * dx + dz * dz <= r * r; };
+  let n = A.making;
+  for (const a of A.queue) if (!beyond(a) && d2(a.x, a.z)) n++;
+  for (const rec of A.rising) { const a = rec.a; if (!a || d2(a.x, a.z)) n++; }   // (a thing going down has no `a`: it leaves, it does not arrive)
+  return n;
+}
 /** One more piece being made, to come in (arrive) once it is: returns the function that says it is made (or no longer
  *  wanted) - until then it counts as waiting. */
 export function makingArrival() {
@@ -387,7 +409,13 @@ export function pumpArrivals(pos, now = performance.now()) {
   standDown();
   lastPump.ms = lastPump.began = lastPump.tex = lastPump.texBytes = lastPump.texMs = lastPump.shown = lastPump.geo = 0; lastPump.big = '';
   // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's, one of 30 a second 2)
-  const k = Math.min(2.5, Math.max(0.3, (A.last ? now - A.last : 16.7) / 16.7));
+  const dt = A.last ? now - A.last : 16.7;
+  // (the frame's share by the clock: a frame of a 144 a second screen takes 0.4 of a sixtieth's. It used to grow on a
+  //  slow frame, up to 2.5 - so a 40 ms frame was answered with two and a half frames' worth of loading, which is the
+  //  stutter feeding itself. While the walk runs the share is now never more than one frame's, whatever the last frame
+  //  took: a stream, not a catch-up. Only the loading picture's own bulk mode (bulkArrivals, which nothing calls in
+  //  this build) may still take more than a frame's share.)
+  const k = Math.min(A.bulk ? 2.5 : 1, Math.max(0.3, dt / 16.7));
   A.last = now;
   if (pos) A.pos = { x: pos.x, z: pos.z };
   if (!A.open || A.leaving || !A.queue.length || !A.renderer) return;
@@ -397,6 +425,9 @@ export function pumpArrivals(pos, now = performance.now()) {
   if (++A.sorted % (A.bulk ? 60 : 8) === 1) A.queue.sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
   let geo = 0, tex = 0, began = 0;
   const t0 = performance.now(), B = A.budget;
+  // (programs begun fill a bucket by the second and are drawn on one at a time - never a burst of them in one frame,
+  //  and none at all in a frame that follows one that already ran long)
+  A.compileAllow = Math.min(B.perSec * 0.5, A.compileAllow + dt * B.perSec / 1000);
   A.texAllow = Math.min(B.tex * 2, A.texAllow + B.tex * k); A.geoAllow = Math.min(B.geo * 2, A.geoAllow + B.geo * k);
   for (const a of A.queue) {
     if (a.cancel?.()) {
@@ -409,8 +440,9 @@ export function pumpArrivals(pos, now = performance.now()) {
       if (beyond(a)) continue;           // (not yet within the walker's reach)
       // (a program's making is begun here and goes on in the background, but the beginning is the page's own work -
       // each material's shader written out: no more begun once this frame's time is spent)
-      if (began >= Math.max(1, Math.round(B.compiles * k)) || (began > 0 && performance.now() - t0 > B.ms)) continue;
-      began++; a.stage = 1;
+      const cap = A.bulk ? Math.max(1, Math.round(B.compiles * k)) : Math.min(1, Math.floor(A.compileAllow));
+      if (cap < 1 || (!A.bulk && dt > 33) || began >= cap || (began > 0 && performance.now() - t0 > B.ms)) continue;
+      began++; A.compileAllow -= 1; a.stage = 1;
       Promise.all(a.list.flatMap((o) => [compileView(o), compileShadow(o)])).then(() => { a.stage = 2; }, () => { a.stage = 2; });
       continue;
     }
