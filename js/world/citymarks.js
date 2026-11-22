@@ -8,6 +8,7 @@
 // it has a plinth to run into the ground, on the lowest when it has none, so none hangs in the air and no door is under
 // the ground; and the walker is kept out of the outline itself, not out of circles along its box.
 import * as THREE from 'three';
+import { firstSight } from './firstsight.js';
 import { arrive } from './arrive.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
@@ -91,7 +92,7 @@ function batchFar(group, glb, copies) {
       if (!it.ready) continue;
       const d = Math.hypot(it.b.x - pos.x, it.b.z - pos.z) - it.r;
       it.far = d >= FAR && d < reach && (!cam || fr.intersectsSphere(sph.set(sph.center.set(it.b.x, it.y + it.cy, it.b.z), it.r)));
-      it.m.visible = d < FAR && d < reach;
+      it.m.visible = firstSight(it.m, d < FAR && d < reach);   // (firstSight: spread the first draws - firstsight.js)
       if (it.far) k += it.b.name + ',';
     }
     batch.visible = k !== '';                     // (every frame: a machine's reach for landmarks hides it otherwise - farcull.js)

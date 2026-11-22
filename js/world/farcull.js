@@ -4,6 +4,7 @@
 // million, from anywhere. farCull(group, far) gives a function to call once a frame with the camera's place: each of
 // the group's own children is shown only while its nearest edge is within `far` m (Infinity: always, as before).
 import * as THREE from 'three';
+import { firstSight } from './firstsight.js';
 
 export function farCull(group, far) {
   const where = new WeakMap(), box = new THREE.Box3(), s = new THREE.Sphere();
@@ -21,7 +22,9 @@ export function farCull(group, far) {
       // (a thing may give its own nearer bounds - userData.drawTo: not drawn from this far; drawFrom: only from this
       // far - so a light stand-in can take a heavy part's place: the bridges' crib stones, bridges.js)
       const d = Math.hypot(c.x - pos.x, c.z - pos.z) - c.r;
-      o.visible = d < far && !(d >= o.userData.drawTo) && !(d < o.userData.drawFrom);
+      // (firstSight: its buffers are not on the card until it has been drawn once, so the frames of a turn take a
+      //  frame's worth of these, not every one at once - world/firstsight.js)
+      o.visible = firstSight(o, d < far && !(d >= o.userData.drawTo) && !(d < o.userData.drawFrom));
     }
   };
 }

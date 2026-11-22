@@ -10,6 +10,7 @@
 // lamps, never all at once. Every tile is made under the loading picture (v0.0.92), and the yards' and pavements'
 // tiles all read then: nothing of the cities is made or read once the walk is shown.
 import * as THREE from 'three';
+import { firstSight } from './firstsight.js';
 import { gltfLoader } from '../gltf.js';
 import { timed } from '../loadreport.js';
 import { tileStream } from './citytiles.js';
@@ -321,7 +322,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
       if (want && t.lesser) for (const m of t.g.children) {
         const r = m.userData.reach, l = m.userData.lod;
         if (r === undefined) continue;
-        m.visible = (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full));
+        m.visible = firstSight(m, (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full)));
       }
       if (d < Math.max(near, TREE_NEAR * near / NEAR) && !t.trees && t.treeItems.length) {
         t.trees = new THREE.Group();
@@ -342,7 +343,7 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
         timed('furniture: built', () => build(t));
         if (t.lesser) for (const m of t.g.children) {
           const r = m.userData.reach, l = m.userData.lod;
-          if (r !== undefined) m.visible = (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full));
+          if (r !== undefined) m.visible = firstSight(m, (r >= 1 || d < near * r + TILE * 0.5) && (l === undefined || (l === 0) === (d < full)));
         }
         // (the tile's furniture comes in together and rises out of the ground in its place: arrive.js. While it comes in
         // the tile is the arrival's, not the frame's to add or take away)
