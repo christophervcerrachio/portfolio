@@ -142,40 +142,34 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
 /** The left page: the graphics. data: { choices: [{id, name, about}], now (the id in force), mine (this machine's),
  *  hover }. Returns its boxes. */
 export function drawGraphics(g, W, H, data, { tile = null, coarse = false } = {}) {
-  // (the page that used to hold the menu: nothing to choose here now - the drawing follows the machine, hardware.js)
+  // (the plate page: as a 1830s book carries its plate on its own leaf - the drawing, its title, and one line of
+  //  letterpress under it. Nothing on it is a control; nothing here is to be chosen - the drawing follows the machine)
   const k = W / PAGE.w, side = 'verso', [x0, x1] = BLOCK[side].map((v) => v * k);
   paper(g, W, H, tile, k);
   g.textBaseline = 'alphabetic';
   runningHead(g, k, side, 'Graphics', 'vi', coarse);
   let y = title(g, k, side, 'Graphics', 'how the walk is drawn', BLOCK.top + 18, coarse) + (coarse ? 8 : 11);
-  const T = coarse ? 7.4 : 5.8, S = coarse ? 4.6 : 3.9;
-  // (three short paragraphs, set as the printers set a page of plain text: a measured line, the next one clean under it)
-  const words = [
-    'The walk draws itself for the machine it is opened on. The graphics chip, the cores, the memory and the bigness of the screen are read once, and the drawing is settled by what they say - then watched, and settled again if the frames ask for it.',
-    'A strong machine is given every line at the screen\u2019s own size: the farther fields, the woods leaf by leaf, the streets stone by stone. A humbler one is shown the same world with fewer of those leaves, stones and windows, and is drawn within a smaller frame and brought up to the screen\u2019s size - the same drawing, held to what the machine can carry.',
-    'There is nothing here to choose, and nothing to change: what suits the machine is what the walk is drawn in.',
-  ];
-  g.fillStyle = INK;
-  for (const w of words) {
-    g.font = face(T * k, { weight: coarse ? 600 : 400 });
-    const room = (x1 - x0) - 6 * k; let line = '';
-    for (const word of w.split(' ')) {
-      const tryLine = line ? line + ' ' + word : word;
-      if (g.measureText(tryLine).width > room && line) { g.fillText(line, x0 + 2 * k, y * k); y += T * 1.35; line = word; }
-      else line = tryLine;
+  const S = coarse ? 4.6 : 3.9;
+  const foot = BLOCK.bottom - 4;                      // (the letterpress line's baseline)
+  const room = foot - 14 - y;                         // (what the plate has between the title's rule and the letterpress)
+  const im = data.plate || data.vignette;
+  if (im && im.width) {
+    // (the plate set into the middle of the page as large as the leaf allows, its own edges fading into the paper, and
+    //  multiplied in so the paper's grain and warm white come through the ink as they do through a printed page)
+    const wMax = (x1 - x0) / k - 2, hMax = room;
+    let w = Math.min(wMax, hMax * im.width / im.height), h = w * im.height / im.width;
+    const cx = (x0 + x1) / 2, top = y + (room - h) / 2;
+    g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, cx - w * k / 2, top * k, w * k, h * k); g.restore();
+    // (a plate of a place carries its name under it, as a 1830s plate does - only when the leaf has room for it.
+    //  top/h/foot are mm on the page: fillText wants device pixels, so they go through k)
+    if (data.plate && im === data.plate && top + h + 7 <= foot - S) {
+      g.fillStyle = INK; g.font = face((S - 0.7) * k, { italic: true }); g.textAlign = 'center';
+      g.fillText('Yalta, the quay.', cx, (top + h + 5.6) * k); g.textAlign = 'left';
     }
-    if (line) { g.fillText(line, x0 + 2 * k, y * k); y += T * 1.35; }
-    y += T * 0.7;
-  }
-  if (data.vignette) {
-    // (a tailpiece, as the printers closed a chapter: the engraving multiplied into the paper, as large as the room left
-    //  allows - it stood under the list, and stands under the prose the same)
-    const im = data.vignette, room = BLOCK.bottom - 16 - (y + 8), w = Math.min(70, room * im.width / im.height), h = w * im.height / im.width;
-    if (h > 10) { g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, (x0 + x1) / 2 - w * k / 2, (y + 8 + (room - h) / 2) * k, w * k, h * k); g.restore(); }
   }
   g.fillStyle = INK; g.font = face(S * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'center';
-  g.fillText('The drawing follows the machine.', (x0 + x1) / 2, (BLOCK.bottom - 4) * k); g.textAlign = 'left';
-  return [];                                            // (no line of this page is a control: nothing under the hand to pick)
+  g.fillText('The drawing follows the machine.', (x0 + x1) / 2, foot * k); g.textAlign = 'left';
+  return [];                                          // (no line of this page is a control: nothing under the hand to pick)
 }
 /** The line under page point (x, y mm), from a page's boxes: its id, or null. */
 export function hit(boxes, x, y) {

@@ -47,7 +47,7 @@ export function makeBook(o) {
     bob: 0, swayY: 0, swayP: 0, lastYaw: null, lastPitch: null, shown: true, distAt: null };
   const T = {};                                     // the pictures
   const P = {};                                     // the pages: canvases, textures, boxes
-  let J = null, places = [], parts = {}, cursor = null, vignette = null, env = null;
+  let J = null, places = [], parts = {}, cursor = null, vignette = null, plate = null, env = null;
   // (the hand bound by the page it lies on: each page's edges in the book's frame - x across, z toward the tail; the page
   // carried on past its edges, unseen, where the hand goes on lying when the mouse leaves the page; and the edges of the
   // page it lies on, that nothing of it is drawn beyond, as its program reads them: hover, pageBound)
@@ -77,11 +77,11 @@ export function makeBook(o) {
       fetch(base + 'assets/book/places.json').then((r) => r.json()).catch(() => ({ places: [] })),
       tex('morocco.jpg'), tex('morocco_n.jpg', false), tex('gilt-edge.jpg'), tex('gilt-edge_n.jpg', false), tex('paper.jpg'), tex('paper_n.jpg', false),
       tex('silk.jpg'),
-      tex('cursor.png'), new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = base + 'assets/book/vignette.png'; }),
+      tex('cursor.png'), new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = base + 'assets/book/vignette.png'; }), new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = base + 'assets/book/plate.png'; }),
       fetch(base + 'assets/book/book.json').then((r) => r.json()).catch(() => null),
       loadFonts(base),
     ]);
-    [T.morocco, T.moroccoN, T.gilt, T.giltN, T.paper, T.paperN, T.silk, T.cursor, vignette, J] = pics;
+    [T.morocco, T.moroccoN, T.gilt, T.giltN, T.paper, T.paperN, T.silk, T.cursor, vignette, plate, J] = pics;
     places = places_.places || [];
     env = o.environment?.() ?? null;
     // the materials, by the parts' names (book_kit.py): the book's drawn as the full look draws them, the glove's as the
@@ -228,7 +228,7 @@ export function makeBook(o) {
   }
   function drawLeft() {
     if (!P.l) return;
-    P.boxL = drawGraphics(P.l.g, pageW, pageH, { vignette }, { tile: T.paper?.image, coarse });
+    P.boxL = drawGraphics(P.l.g, pageW, pageH, { vignette, plate }, { tile: T.paper?.image, coarse });
     P.l.t.needsUpdate = true;
   }
 
