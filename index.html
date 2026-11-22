@@ -154,16 +154,10 @@
       <div class="walk-load-say"><p class="walk-load-words">Loading the walk</p><div class="walk-load-bar"><i></i></div></div>
     </div>
     <script>
-      // (the loading picture in the look chosen before anything is drawn: the address's ?gfx=, or the look this browser
-      // keeps - hardware.js; on a first visit the machine's own look follows once it is known, below)
-      // (the picture as the page has it, before anything dresses it: walk.js fades a copy of it in over the walk when the
-      // look is changed in the menu)
+      // (the loading picture, as the page has it before anything dresses it. It is no longer dressed in a chosen look:
+      //  there is none to choose - the machine's class, which hardware.js reads off its own parts, decides the drawing,
+      //  and the picture the walk opens under is the same one on every machine.)
       window.__walkLoadHTML = document.querySelector('.walk-load').outerHTML;
-      try {
-        const t = new URLSearchParams(location.search).get('gfx') || (JSON.parse(localStorage.getItem('career-gfx-v3') || 'null') || {}).tier;
-        const st = { xbox360: 'xbox360', gamecube: 'gamecube', dreamcast: 'dreamcast', n64: 'n64', ps1: 'ps1', gba: 'gba', gameboy: 'gba' }[t];
-        if (st) document.querySelector('.walk-load').dataset.style = st;
-      } catch { /* (no storage) */ }
     </script>
   </main>
   <script>
@@ -189,23 +183,19 @@
     // software on purpose; ?software too.)
     import './js/again.js';
     import './js/unpack.js';
-    import { chooseTier, TIERS } from './js/hardware.js';
     import { startLoading } from './js/loading.js';
     const params = new URLSearchParams(location.search);
-    let style = 'full';
     const gl = (() => {
       try {
         const c = document.createElement('canvas'), g = c.getContext('webgl2') || c.getContext('webgl');
         if (!g) return 'none';
         const d = g.getExtension('WEBGL_debug_renderer_info'), name = String(d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER));
-        // (the look the walk will start in - the same choice walk.js makes - so the picture is drawn in it from now on)
-        try { style = TIERS[chooseTier(g).tier]?.style ?? 'full'; } catch { /* (the full look) */ }
         g.getExtension('WEBGL_lose_context')?.loseContext();
         const soft = /SwiftShader|Basic Render|llvmpipe|softpipe|software/i.test(name) && !navigator.webdriver;
         return soft || params.has('software') ? 'software' : 'gpu';
       } catch { return 'none'; }
     })();
-    startLoading(document.querySelector('.walk-load'), { style, still: params.has('still'), idle: gl !== 'gpu' });
+    startLoading(document.querySelector('.walk-load'), { still: params.has('still'), idle: gl !== 'gpu' });
     if (gl === 'gpu') {
       import('./js/walk.js')
         .then(({ initWalk }) => initWalk(document.getElementById('walk')))

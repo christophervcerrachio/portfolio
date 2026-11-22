@@ -62,15 +62,15 @@ export const TIERS = {
   // (the six below: `style` names the older machine whose way of drawing the tier takes - STYLES; scale, minScale and
   // pixelRatio are not used by them: the picture has the style's own number of lines whatever the screen)
   // (a 360's: 720 lines, near the full look's world but a little less of it - the step between Full and the GameCube)
-  xbox360:   { style: 'xbox360', pixelRatio: 1, scale: 1, minScale: 1, msaa: 2, scene: 'high', texMax: 1024, aniso: 8, woods: [[12, 'full', 'mid'], [45, 'mid', 'light'], [110, 'light', 'lighter'], [220, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 90, propsNear: 380, footNear: 600, yardNear: 850, shadows: 'both', shadowSize: 1024, marksFar: 5000, bridgesFar: 3000, cribStones: 250, tilesNear: 1200, reliefNear: 250, blocksFar: 5500, smokeNear: 260, grass: { per: 240, reach: 260, rows: 4, wide: 2.5, floor: 0.04 }, flowers: { reach: 120, far: 400, near: 60, thin: 0.75 }, landN: 96, placesFar: 4000 },
-  gamecube:  { style: 'gamecube', pixelRatio: 1, scale: 1, minScale: 1, msaa: 2, scene: 'low', texMax: 512, aniso: 4, woods: [[14, 'mid', 'lighter'], [45, 'light', 'lighter'], [110, 'lighter']], shadowFarEvery: 1, woodsFar: 1500, canopyAt: 1350, propsFull: 50, propsNear: 220, footNear: 450, yardNear: 620, shadows: 'near', shadowSize: 1024, marks: 'light', marksFar: 4000, bridgesFar: 2000, cribStones: 160, tilesNear: 700, reliefNear: 120, blocksFar: 4000, smokeNear: 220, grass: { per: 110, reach: 90, rows: 3, wide: 4.5, floor: 0.05 }, flowers: { reach: 60, far: 200, near: 30, thin: 0.5 }, landN: 96, placesFar: 2500 },
-  dreamcast: { style: 'dreamcast', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 256, aniso: 2, woods: [[10, 'light'], [45, 'lighter']], shadowFarEvery: 1, woodsFar: 1100, canopyAt: 950, propsFull: 0, propsNear: 180, footNear: 300, yardNear: 420, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 2600, bridgesFar: 1200, cribStones: 90, tilesNear: 420, reliefNear: 60, blocksFar: 2600, smokeNear: 150, grass: { per: 50, reach: 90, rows: 2, wide: 7, floor: 0.13 }, flowers: { reach: 45, far: 120, near: 0, thin: 0.3 }, landN: 64, placesFar: 1600 },
-  n64:       { style: 'n64', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 96, aniso: 1, woods: [[16, 'lighter']], shadowFarEvery: 1, woodsFar: 800, canopyAt: 680, propsFull: 0, propsNear: 110, footNear: 170, yardNear: 230, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1500, bridgesFar: 600, cribStones: 60, tilesNear: 240, reliefNear: 0, blocksFar: 1500, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 900 },
-  ps1:       { style: 'ps1', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 128, aniso: 1, woods: [[12, 'lighter']], shadowFarEvery: 1, woodsFar: 700, canopyAt: 600, propsFull: 0, propsNear: 95, footNear: 140, yardNear: 190, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1300, bridgesFar: 500, cribStones: 50, tilesNear: 200, reliefNear: 0, blocksFar: 1300, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 800 },
+  xbox360:   { pixelRatio: 1, scale: 0.9, minScale: 0.7, msaa: 2, scene: 'high', texMax: 1024, aniso: 8, woods: [[12, 'full', 'mid'], [45, 'mid', 'light'], [110, 'light', 'lighter'], [220, 'lighter']], shadowFarEvery: 2, woodsFar: 1500, canopyAt: 1350, propsFull: 90, propsNear: 380, footNear: 600, yardNear: 850, shadows: 'both', shadowSize: 1024, marksFar: 5000, bridgesFar: 3000, cribStones: 250, tilesNear: 1200, reliefNear: 250, blocksFar: 5500, smokeNear: 260, grass: { per: 240, reach: 260, rows: 4, wide: 2.5, floor: 0.04 }, flowers: { reach: 120, far: 400, near: 60, thin: 0.75 }, landN: 96, placesFar: 4000 },
+  gamecube:  { pixelRatio: 0.9, scale: 0.8, minScale: 0.6, msaa: 2, scene: 'low', texMax: 512, aniso: 4, woods: [[14, 'mid', 'lighter'], [45, 'light', 'lighter'], [110, 'lighter']], shadowFarEvery: 1, woodsFar: 1500, canopyAt: 1350, propsFull: 50, propsNear: 220, footNear: 450, yardNear: 620, shadows: 'near', shadowSize: 1024, marks: 'light', marksFar: 4000, bridgesFar: 2000, cribStones: 160, tilesNear: 700, reliefNear: 120, blocksFar: 4000, smokeNear: 220, grass: { per: 110, reach: 90, rows: 3, wide: 4.5, floor: 0.05 }, flowers: { reach: 60, far: 200, near: 30, thin: 0.5 }, landN: 96, placesFar: 2500 },
+  dreamcast: { pixelRatio: 0.8, scale: 0.7, minScale: 0.55, msaa: 0, scene: 'low', texMax: 256, aniso: 2, woods: [[10, 'light'], [45, 'lighter']], shadowFarEvery: 1, woodsFar: 1100, canopyAt: 950, propsFull: 0, propsNear: 180, footNear: 300, yardNear: 420, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 2600, bridgesFar: 1200, cribStones: 90, tilesNear: 420, reliefNear: 60, blocksFar: 2600, smokeNear: 150, grass: { per: 50, reach: 90, rows: 2, wide: 7, floor: 0.13 }, flowers: { reach: 45, far: 120, near: 0, thin: 0.3 }, landN: 64, placesFar: 1600 },
+  n64:       { pixelRatio: 0.7, scale: 0.6, minScale: 0.5, msaa: 0, scene: 'low', texMax: 96, aniso: 1, woods: [[16, 'lighter']], shadowFarEvery: 1, woodsFar: 800, canopyAt: 680, propsFull: 0, propsNear: 110, footNear: 170, yardNear: 230, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1500, bridgesFar: 600, cribStones: 60, tilesNear: 240, reliefNear: 0, blocksFar: 1500, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 900 },
+  ps1:       { pixelRatio: 0.65, scale: 0.55, minScale: 0.45, msaa: 0, scene: 'low', texMax: 128, aniso: 1, woods: [[12, 'lighter']], shadowFarEvery: 1, woodsFar: 700, canopyAt: 600, propsFull: 0, propsNear: 95, footNear: 140, yardNear: 190, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1300, bridgesFar: 500, cribStones: 50, tilesNear: 200, reliefNear: 0, blocksFar: 1300, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 800 },
   // (a Game Boy Advance's: 160 lines in its bright 15-bit colour - the least the walk is drawn with, for the weakest
   // machine. Until 12 Nov 2026 a Game Boy's, 144 lines in four greens, with this same world: too few lines and colours
   // to tell what stood in the view)
-  gba:       { style: 'gba', pixelRatio: 1, scale: 1, minScale: 1, msaa: 0, scene: 'low', texMax: 64, aniso: 1, woods: [[10, 'lighter']], shadowFarEvery: 1, woodsFar: 600, canopyAt: 500, propsFull: 0, propsNear: 80, footNear: 120, yardNear: 160, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1100, bridgesFar: 400, cribStones: 40, tilesNear: 160, reliefNear: 0, blocksFar: 1100, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 700 },
+  gba:       { pixelRatio: 0.5, scale: 0.5, minScale: 0.4, msaa: 0, scene: 'low', texMax: 64, aniso: 1, woods: [[10, 'lighter']], shadowFarEvery: 1, woodsFar: 600, canopyAt: 500, propsFull: 0, propsNear: 80, footNear: 120, yardNear: 160, shadows: 'none', shadowSize: 512, marks: 'light', marksFar: 1100, bridgesFar: 400, cribStones: 40, tilesNear: 160, reliefNear: 0, blocksFar: 1100, smokeNear: 0, grass: null, flowers: null, landN: 48, placesFar: 700 },
 };
 // (the tiers these took the place of - medium, low and minimum on 11 Nov 2026, the Game Boy's on 12 Nov: an address or a
 // remembered setting that names one gets its heir)
@@ -108,16 +108,12 @@ export const STYLES = {
   gba:       { name: 'Game Boy Advance', about: '160 lines, bright 15-bit colour', lines: 160, scaleUp: 'pixel', bits: 5, dither: 'none', snap: false, affine: 0, filter: 'nearest-mip', sat: 1.2, gamma: 0.85 },
 };
 /** What the menu offers, top to bottom: the full look, then each older machine's. */
-export const CHOICES = [
-  { id: 'full', name: 'Full', about: 'everything, as it was made: needs a graphics card' },
-  ...['xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gba'].map((id) => ({ id, name: STYLES[id].name, about: STYLES[id].about })),
-];
-/** The menu's name for a tier. */
-export const choiceOf = (tier) => (TIERS[tier]?.style ? TIERS[tier].style : 'full');
+// (what the menu offered is gone with the menu: no list of looks, nothing to pick, here or on the page)
 export const ORDER = ['ultra', 'high', 'xbox360', 'gamecube', 'dreamcast', 'n64', 'ps1', 'gba'];
 // (v2: the tiers v1 remembered are dropped - a desktop card had been held low by them)
-// (v3, 11 Nov 2026: the lower tiers took their older machines' names, and a choice made in the menu is kept as a choice)
-const KEY = 'career-gfx-v3';
+// (v4, 21 Nov 2026: nothing is chosen any more - the store keeps only what this machine settled on, by its parts and
+//  by the frames it measured. A new key, so a look chosen in the old menu years ago can never decide what is shown.)
+const KEY = 'career-gfx-v4';
 
 /** What the browser says of the graphics chip: { vendor, renderer } (the unmasked names where allowed). */
 export function gpuInfo(gl) {
@@ -167,14 +163,10 @@ export const step = (tier, by) => ORDER[Math.min(ORDER.length - 1, Math.max(0, O
  * (unless the chip changed), else the guess. `chosen`: someone picked it - it is never stepped down behind their back. */
 export function chooseTier(gl) {
   const g = guessTier(gl);
-  let forced = new URLSearchParams(location.search).get('gfx');
-  if (forced === 'full') forced = fullTier(g);
-  if (forced && TIERS[forced]) return { ...g, tier: HEIR[forced] ?? forced, why: 'chosen in the address', forced: true, locked: forced === 'ultra' || g.locked };
+  if (g.locked) return g;                                  // (a desktop card: ultra, whatever was remembered)
   try {
     const kept = JSON.parse(localStorage.getItem(KEY) || 'null');
-    const was = kept && (HEIR[kept.tier] ?? kept.tier);   // (a look since replaced: its heir)
-    if (kept && kept.chosen && TIERS[was]) return { ...g, tier: was, why: 'chosen in the menu', forced: true, chosen: true, locked: was === 'ultra' };
-    if (g.locked) return g;                                // (a desktop card: ultra, whatever was remembered)
+    const was = kept && (HEIR[kept.tier] ?? kept.tier);    // (a class since replaced: its heir)
     if (kept && kept.gpu === g.gpu && TIERS[was]) return { ...g, tier: was, why: kept.why };
   } catch { /* (no storage) */ }
   return g;

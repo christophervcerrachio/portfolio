@@ -10,7 +10,7 @@
 // For tests and stills: ?t=<seconds> shows that moment, ?still holds it; window.__walk is the scene and its controls.
 // Dev only (remove with the free-cam): P copies the view's pose, then a box dragged round the problem; __walk.pose()
 // reads the pose and __walk.goTo(pose) returns to it.
-import { chooseTier, guessTier, rememberTier, keepChoice, step, TIERS, ORDER, STYLES, CHOICES, choiceOf } from './hardware.js';
+import { chooseTier, guessTier, rememberTier, step, TIERS, ORDER, STYLES } from './hardware.js';
 import { setTextureCap } from './texcap.js';
 import { useStyle } from './retro.js';
 import { initDepth } from './depthmode.js';
@@ -459,46 +459,8 @@ export async function initWalk(container, opts = {}) {
     hint.style.opacity = locked() || still || !s.ready || travelUp ? '0' : '1';
   }
 
-  // ---- a change of look, from the book's left page: kept for this browser, and the walk loads again where the walker
-  // stands. It is made while the walk is still loading too (over the loading picture), and the newest choice is the
-  // one kept: a heavy look's load is not waited out to choose another
-  const mine = choiceOf(guessTier(renderer.getContext()).tier), nowIs = choiceOf(gfxInfo.tier);
-  let leaving = false;
-  function choose(id) {
-    if (!id || (id === nowIs && !leaving)) return;
-    // (kept for this browser; where the walker stands and looks kept for the page that loads next - unless the place
-    // from the last change is still waiting to be put back, this page not yet in: that one; the address's own ?gfx=
-    // dropped, so the choice is what the next page reads)
-    keepChoice(id, renderer.getContext());
-    try {
-      if (!sessionStorage.getItem('career-pose')) sessionStorage.setItem('career-pose', JSON.stringify(pose()));
-      sessionStorage.removeItem('career-gfx-tries');
-    } catch { /* (none) */ }
-    // (and the pane of the controls as far as this visit has got with it: the page loaded under the new look goes on from
-    // there, not from the start - controls.js carry)
-    controls?.carry();
-    if (leaving) return;
-    leaving = true;
-    const u = new URL(location.href); u.searchParams.delete('gfx');
-    const go = () => { if (u.href === location.href) location.reload(); else location.replace(u.href); };
-    if (still || noRise || !s.ready || veilUp) { setTimeout(go, 60); return; }
-    leave(id).then(go, go);
-  }
-  // (a change of look: the page's own loading picture - a fresh copy of the one it opened with, index.html, in the look
-  // chosen - fades in over the walk, and the page loads again under the same picture, which goes on exactly as on a
-  // first visit: the land and the things rising as their files come in, the bar moving)
-  async function leave(look) {
-    const html = window.__walkLoadHTML;
-    if (!html) return;
-    const box = document.createElement('div'); box.innerHTML = html;
-    const el = box.firstElementChild;
-    if (look && look !== 'full') el.dataset.style = look; else delete el.dataset.style;
-    el.style.opacity = '0'; el.style.transition = 'opacity 0.5s ease';
-    container.appendChild(el);
-    el.getBoundingClientRect();
-    el.style.opacity = '1';
-    await new Promise((r) => setTimeout(r, 550));
-  }
+  // (there is nothing to choose any more, and so nothing to leave and reload for: the drawing follows the machine -
+  //  hardware.js chooseTier. The loading picture and the walk's rise are the same on every machine's class.)
 
   // ---- a place chosen in the book: the walk's own loading picture, in the look in force, comes up over the walk; under
   // it the book is lowered and the walker carried there, and it lifts once the place is in - its ground, everything
@@ -837,11 +799,10 @@ export async function initWalk(container, opts = {}) {
   if (!still && !params.has('nobook')) {
     // (its pages at the full look's size in every look: the book is drawn at the screen's resolution - bookover.js)
     book = makeBook({ s, base, canvas, coarse: false, pageW: 1536, aniso: cardAniso,
-      choices: CHOICES, now: nowIs, mine, touch: matchMedia('(pointer: coarse)').matches,
+      touch: matchMedia('(pointer: coarse)').matches,
       environment: () => s.environment(renderer),
       speed: () => Math.hypot(vel.x, vel.z),
       onTravel: (p) => travel(p),
-      onChoose: (id) => choose(id),
     });
     // (in the scene's picture: the book in colour, or its depth alone where it is drawn again over the picture at the
     // screen's resolution - an older machine's look; the glove's cover kept wherever it is laid over the picture)
@@ -941,7 +902,6 @@ export async function initWalk(container, opts = {}) {
     play() { live = true; }, pause() { live = false; }, lookBy, zoomTo,
     // (the leaving as a change of look does it, without the change: the choice kept in this browser is not touched -
     // a test then loads the page with ?gfx=)
-    leave: (look) => leave(look),
     walkTo: (x, z, jump = true) => s.walkTo(x, z, jump), look: (yaw, pitch) => { s.look.anchor = null; s.look.yaw = yaw; s.look.pitch = pitch; s.look.goal = [yaw, pitch]; },
     free: () => (s.freeCam.on ? (s.exitFree(), false) : (s.enterFree(), true)), get freeCam() { return s.freeCam.on; },   // (dev free-cam)
     sound: startSound, get quality() { return quality.scale; }, gfx: { ...gfxInfo, settings: GFX },

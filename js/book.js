@@ -228,7 +228,7 @@ export function makeBook(o) {
   }
   function drawLeft() {
     if (!P.l) return;
-    P.boxL = drawGraphics(P.l.g, pageW, pageH, { choices: o.choices, now: o.now, mine: o.mine, hover: st.hover.l, vignette }, { tile: T.paper?.image, coarse });
+    P.boxL = drawGraphics(P.l.g, pageW, pageH, { vignette }, { tile: T.paper?.image, coarse });
     P.l.t.needsUpdate = true;
   }
 
@@ -418,8 +418,7 @@ export function makeBook(o) {
         if (!p) return null;
         o.onTravel?.(p); return { place: id };
       }
-      const id = hit(P.boxL, u.x, u.y);
-      if (id && id !== o.now) { o.onChoose?.(id); return { look: id }; }
+      // (the left page is plain text now: a click on it chooses nothing - drawGraphics returns no boxes)
       return null;
     },
     /** (tests) travel there now, as a click on its line does */

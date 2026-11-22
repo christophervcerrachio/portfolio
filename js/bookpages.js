@@ -142,39 +142,41 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
 /** The left page: the graphics. data: { choices: [{id, name, about}], now (the id in force), mine (this machine's),
  *  hover }. Returns its boxes. */
 export function drawGraphics(g, W, H, data, { tile = null, coarse = false } = {}) {
-  const k = W / PAGE.w, side = 'verso', [x0, x1] = BLOCK[side].map((v) => v * k), boxes = [];
+  // (the page that used to hold the menu: nothing to choose here now - the drawing follows the machine, hardware.js)
+  const k = W / PAGE.w, side = 'verso', [x0, x1] = BLOCK[side].map((v) => v * k);
   paper(g, W, H, tile, k);
   g.textBaseline = 'alphabetic';
   runningHead(g, k, side, 'Graphics', 'vi', coarse);
-  let y = title(g, k, side, 'Graphics', 'how the walk is drawn', BLOCK.top + 18, coarse) + (coarse ? 6 : 8);
-  const T = coarse ? 7.4 : 5.8, S = 4.0;
-  for (const c of data.choices) {
-    y += coarse ? 13 : 12.5;
-    const on = data.hover === c.id, now = data.now === c.id, top = y - T * 0.85;
-    g.fillStyle = on ? RED : INK;
-    // (the one in force a filled ring, the others an empty one, as the menu's)
-    const rx = x0 + 2.2 * k, ry = (y - T * 0.3) * k, rr = (coarse ? 2.0 : 1.55) * k;
-    g.beginPath(); g.arc(rx, ry, rr, 0, Math.PI * 2); g.lineWidth = Math.max(1, 0.32 * k); g.strokeStyle = g.fillStyle; g.stroke();
-    if (now) { g.beginPath(); g.arc(rx, ry, rr * 0.55, 0, Math.PI * 2); g.fill(); }
-    g.font = face(T * k, { weight: coarse ? 700 : (on ? 500 : 400) });
-    g.fillText(c.name, x0 + 7 * k, y * k);
-    if (c.id === data.mine && !coarse) {
-      const w = g.measureText(c.name).width; g.font = face(S * k, { italic: true }); g.fillText('this computer’s', x0 + 7 * k + w + 2.4 * k, y * k);
+  let y = title(g, k, side, 'Graphics', 'how the walk is drawn', BLOCK.top + 18, coarse) + (coarse ? 8 : 11);
+  const T = coarse ? 7.4 : 5.8, S = coarse ? 4.6 : 3.9;
+  // (three short paragraphs, set as the printers set a page of plain text: a measured line, the next one clean under it)
+  const words = [
+    'The walk draws itself for the machine it is opened on. The graphics chip, the cores, the memory and the bigness of the screen are read once, and the drawing is settled by what they say - then watched, and settled again if the frames ask for it.',
+    'A strong machine is given every line at the screen\u2019s own size: the farther fields, the woods leaf by leaf, the streets stone by stone. A humbler one is shown the same world with fewer of those leaves, stones and windows, and is drawn within a smaller frame and brought up to the screen\u2019s size - the same drawing, held to what the machine can carry.',
+    'There is nothing here to choose, and nothing to change: what suits the machine is what the walk is drawn in.',
+  ];
+  g.fillStyle = INK;
+  for (const w of words) {
+    g.font = face(T * k, { weight: coarse ? 600 : 400 });
+    const room = (x1 - x0) - 6 * k; let line = '';
+    for (const word of w.split(' ')) {
+      const tryLine = line ? line + ' ' + word : word;
+      if (g.measureText(tryLine).width > room && line) { g.fillText(line, x0 + 2 * k, y * k); y += T * 1.35; line = word; }
+      else line = tryLine;
     }
-    if (!coarse) { y += 5.2; g.font = face(S * k, { italic: true }); g.fillStyle = on ? RED : INK; g.fillText(c.about, x0 + 7 * k, y * k); }
-    boxes.push({ id: c.id, box: [BLOCK[side][0] - 2, top - 1.2, BLOCK[side][1] + 2, y + 1.8] });
+    if (line) { g.fillText(line, x0 + 2 * k, y * k); y += T * 1.35; }
+    y += T * 0.7;
   }
   if (data.vignette) {
-    // (a tailpiece, as the printers closed a chapter: the engraving multiplied into the paper, between the list and the
-    // note, as large as the room left allows)
+    // (a tailpiece, as the printers closed a chapter: the engraving multiplied into the paper, as large as the room left
+    //  allows - it stood under the list, and stands under the prose the same)
     const im = data.vignette, room = BLOCK.bottom - 16 - (y + 8), w = Math.min(70, room * im.width / im.height), h = w * im.height / im.width;
-    if (h > 18) { g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, (x0 + x1) / 2 - w * k / 2, (y + 8 + (room - h) / 2) * k, w * k, h * k); g.restore(); }
+    if (h > 10) { g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, (x0 + x1) / 2 - w * k / 2, (y + 8 + (room - h) / 2) * k, w * k, h * k); g.restore(); }
   }
-  g.fillStyle = INK; g.font = face((coarse ? 4.6 : 3.9) * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'center';
-  g.fillText('A change loads the walk again, where you stand.', (x0 + x1) / 2, (BLOCK.bottom - 4) * k); g.textAlign = 'left';
-  return boxes;
+  g.fillStyle = INK; g.font = face(S * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'center';
+  g.fillText('The drawing follows the machine.', (x0 + x1) / 2, (BLOCK.bottom - 4) * k); g.textAlign = 'left';
+  return [];                                            // (no line of this page is a control: nothing under the hand to pick)
 }
-
 /** The line under page point (x, y mm), from a page's boxes: its id, or null. */
 export function hit(boxes, x, y) {
   for (const b of boxes || []) if (x >= b.box[0] && x <= b.box[2] && y >= b.box[1] && y <= b.box[3]) return b.id;
