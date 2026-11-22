@@ -46,6 +46,37 @@ float treeShade(vec3 p) {
   }
   return mix(farShade(p, 4.0), nearLit, w);
 }
+// (the same two pictures, read with a wide footprint that grows as the sun gets low: for a thing held in the hands,
+//  whose whole surface is only a few texels of these pictures wide. The argument "low" is 0 with the sun high and 1 at
+//  the horizon - the caller knows it; the other places this file's pictures are read from do not declare the sun's
+//  direction, so this function may not either.
+//  A shadow crossing a leaf then arrives as a ramp instead of a block: the picture's texel grid is stretched by
+//  1/sin(elevation) where it lands on a near-flat page, so the near picture's 3.8 cm texels at a 10-degree sun are
+//  ~22 cm steps across a 30 cm leaf, which is what reads as blocky shadow on the pages (his, 21 Nov))
+float treeShadeWide(vec3 p, float low) {
+  if (uSunShadowOn < 0.5 && uSunShadowOn2 < 0.5) return 1.0;
+  vec4 c = sunPic(uSunShadowM, p);
+  float w = uSunShadowOn > 0.5 ? c.w : 0.0, nearLit = 1.0;
+  if (w > 0.0) {
+    float z = c.z - uSunShadowB.x, r = uSunShadowTexel * (3.0 + 26.0 * low), lit = 0.0;
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2(-0.94, -0.34) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2( 0.94,  0.34) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2(-0.34,  0.94) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2( 0.34, -0.94) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2(-0.62,  0.62) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2( 0.62, -0.62) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2( 0.00,  0.70) * r).r);
+    lit += step(z, texture2D(uSunShadow, c.xy + vec2( 0.00, -0.70) * r).r);
+    nearLit = lit / 8.0;
+    if (w >= 1.0) return nearLit;
+  }
+  vec4 d = sunPic(uSunShadowM2, p);
+  if (d.w <= 0.0) return mix(1.0, nearLit, w);
+  float z2 = d.z - uSunShadowB.y, r2 = uSunShadowTexel2 * (1.4 + 9.0 * low);
+  float f = 0.25 * (step(z2, texture2D(uSunShadow2, d.xy + vec2(-0.9, -0.4) * r2).r) + step(z2, texture2D(uSunShadow2, d.xy + vec2( 0.9,  0.4) * r2).r)
+    + step(z2, texture2D(uSunShadow2, d.xy + vec2(-0.4,  0.9) * r2).r) + step(z2, texture2D(uSunShadow2, d.xy + vec2( 0.4, -0.9) * r2).r));
+  return mix(mix(1.0, f, d.w), nearLit, w);
+}
 // (the same, in four taps: for vertex shaders, run for every blade of grass)
 float treeShade4(vec3 p) {
   if (uSunShadowOn < 0.5 && uSunShadowOn2 < 0.5) return 1.0;
@@ -260,7 +291,7 @@ export class SunShadow {
  *  the head of every window's opening, the underside of every ledge and awning came out olive. With `street` the more
  *  a face looks down the more that light is drawn to a warm grey of its own brightness, and a little dimmed - the
  *  ledge's own shade; a wall, which looks at the horizon, is lit as it was. */
-export function receiveSun(mat, U, { street = false } = {}) {
+export function receiveSun(mat, U, { street = false, wide = false } = {}) {
   if (!mat || mat.userData.sunRecv || mat.isShaderMaterial) return mat;
   mat.userData.sunRecv = true;
   const prev = mat.onBeforeCompile, own = Object.prototype.hasOwnProperty.call(mat, 'customProgramCacheKey') ? mat.customProgramCacheKey.bind(mat) : null;
@@ -276,9 +307,12 @@ export function receiveSun(mat, U, { street = false } = {}) {
     shw = instanceMatrix * shw;
 #endif
     vShW = (modelMatrix * shw).xyz; }`);
+    // (wide: a thing held in the hands, whose whole surface is a few texels of these pictures wide - read the pictures
+    //  with a footprint that grows as the sun gets low, so a shadow crosses it as a ramp rather than in blocks)
+    const shad = wide ? 'treeShadeWide(vShW + uSunDir * 0.15, 1.0 - clamp(abs(uSunDir.y) * 2.2, 0.0, 1.0))' : 'treeShade(vShW + uSunDir * 0.15)';
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vShW;\n#ifndef SUN_DIR_DECL\nuniform vec3 uSunDir;\n#endif\n${SHADOW_GLSL}`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-  { float shS = treeShade(vShW + uSunDir * 0.15); reflectedLight.directDiffuse *= shS; reflectedLight.directSpecular *= shS; }`);
+  { float shS = ${shad}; reflectedLight.directDiffuse *= shS; reflectedLight.directSpecular *= shS; }`);
     if (street) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_pars_begin>', `#include <lights_pars_begin>
 #if ( NUM_HEMI_LIGHTS > 0 )
 vec3 streetHemi( in HemisphereLight hemiLight, in vec3 normal ) {

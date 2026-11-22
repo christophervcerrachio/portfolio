@@ -86,7 +86,9 @@ export function makeBook(o) {
     env = o.environment?.() ?? null;
     // the materials, by the parts' names (book_kit.py): the book's drawn as the full look draws them, the glove's as the
     // look draws everything (retro.js unstyled)
-    const lit = (p) => receiveSun(new THREE.MeshStandardMaterial(p), s.U), std = (p) => unstyled(lit(p));
+    // (wide: the book is held in the hands, so its whole surface is a few texels of the sun's pictures wide - a shadow
+    //  crossing the paper then arrives as a ramp, not as metre-scaled blocks stretched by the low sun)
+    const lit = (p) => receiveSun(new THREE.MeshStandardMaterial(p), s.U, { wide: true }), std = (p) => unstyled(lit(p));
     const M = {
       leather: std({ map: T.morocco, normalMap: T.moroccoN, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.46, color: '#ffffff' }),
       gilt: std({ color: '#e0b062', metalness: 1, roughness: 0.3, envMap: env, envMapIntensity: 1.1 }),
