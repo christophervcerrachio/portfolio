@@ -11,6 +11,12 @@ export const PAGE = { w: 212, h: 270 };
 // (the text block: the left page's inner margin and the right's are over the fold, where 43 mm of the leaf dives into
 // the gutter - book_geom.py)
 const BLOCK = { verso: [20, 150], recto: [62, 192], top: 22, bottom: 248 };
+// (the plate measure on the left leaf: the drawing's own field, and it bleeds. It runs to 0 at the fore-edge and to the
+//  foot trim, and stops 3 mm short of where the leaf dives into the fold (PAGE.w - 43 = 169) because a press cannot
+//  print into the gutter and the binding swallows what tries. 166 x 257 mm against the plate's 2:3 costs the drawing
+//  5 mm of width and nothing at all of its height, so the quay, the town frontage and the ridges all stay whole. The
+//  name and the folio therefore stand in the head band above it - a plate that bleeds has no margin beneath it)
+const PLATE = { x: 0, y: 13, w: 166, h: 257 };
 export const INK = '#211b17', RED = '#a8291f';
 const FAMILY = 'BookBodoni', FALLBACK = 'Georgia, "Times New Roman", serif';
 let fontsIn = false;
@@ -141,29 +147,41 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
 
 /** The left page: the plate leaf. data: { vignette, plate }. Returns no boxes: nothing on the leaf is a control. */
 export function drawGraphics(g, W, H, data, { tile = null, coarse = false } = {}) {
-  // (the plate leaf, as an 1830s book carries a plate on its own leaf: the drawing, its name under it, its folio at
-  //  the foot. No running head, no title, no sentence - the leaf is centred on the drawing: the plate as large as the
-  //  block allows, and drawing and name set as one group in the middle of it)
-  const k = W / PAGE.w, side = 'verso', [x0, x1] = BLOCK[side].map((v) => v * k);
+  // (the plate leaf, as an 1830s book carries a plate on its own leaf - and this one bleeds: the drawing runs over the
+  //  whole of its measure off the fore-edge and the foot, with its name and its folio in the band above. No running
+  //  head, no title, no sentence)
+  const k = W / PAGE.w;                                   // (mm on the page -> device pixels)
   paper(g, W, H, tile, k);
   g.textBaseline = 'alphabetic';
   const im = data.plate || data.vignette;
-  const name = im && im === data.plate ? 'Yalta, the quay.' : 'The road and the verst post.';
-  const cap = (coarse ? 5.6 : 4.6) * k, capH = coarse ? 7 : 8;    // (the name's size, and the room it holds in mm)
-  const blockH = BLOCK.bottom - BLOCK.top;
+  const plate = !!im && im === data.plate;
+  const name = plate ? 'Yalta, the quay.' : 'The road and the verst post.';
+  const cap = (coarse ? 5.6 : 4.6) * k;
   if (im && im.width) {
-    // (multiplied in so the paper's grain and warm white come through the ink, as they do through a printed page)
-    const wMax = (x1 - x0) / k - 2, hMax = blockH - capH;
-    let w = Math.min(wMax, hMax * im.width / im.height), h = w * im.height / im.width;
-    const cx = (x0 + x1) / 2, ty = BLOCK.top + (blockH - (h + capH)) / 2;
-    g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, cx - w * k / 2, ty * k, w * k, h * k); g.restore();
-    // (its name under the plate, centred with it. mm on the page: fillText wants device pixels, so it goes through k)
+    // (the plate covers the plate measure. Cover means: scale the drawing until it fills the measure both ways, and cut
+    //  the overhang off the longer sides - which is nothing at all when the drawing is cut to the measure's own shape,
+    //  as plate.png is. The woodcut tailpiece is a small picture and not a plate, so it keeps all of itself and is
+    //  centred in the measure instead. Both multiplied in, so the paper's grain and warm white come through the ink)
+    const bx = PLATE.x * k, by = PLATE.y * k, bw = PLATE.w * k, bh = PLATE.h * k;
+    const a = im.width / im.height, ab = PLATE.w / PLATE.h;
+    let sx = 0, sy = 0, sw = im.width, sh = im.height, dx = bx, dy = by, dw = bw, dh = bh;
+    if (plate) {
+      if (a > ab) { sw = im.height * ab; sx = (im.width - sw) / 2; }
+      else { sh = im.width / ab; sy = (im.height - sh) / 2; }
+    } else if (a > ab) { dh = bw / a; dy = by + (bh - dh) / 2; }
+    else { dw = bh * a; dx = bx + (bw - dw) / 2; }
+    g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, sx, sy, sw, sh, dx, dy, dw, dh); g.restore();
+    // (its name in the head band above it - a plate that bleeds has no margin below it to hold one. mm on the page:
+    //  fillText wants device pixels, so the height goes through k like everything else here)
     g.fillStyle = INK; g.font = face(cap, { italic: true }); g.textAlign = 'center';
-    g.fillText(name, cx, (ty + h + 5.4) * k); g.textAlign = 'left';
+    g.fillText(name, bx + bw / 2, (PLATE.y - 5) * k);
+    // (and the folio at the outend of the same band, where a plate leaf carries its number)
+    g.font = face((coarse ? 5.2 : 3.8) * k, { weight: coarse ? 700 : 400 }); g.textAlign = 'left';
+    g.fillText('vi', 8 * k, (PLATE.y - 5.4) * k);
+  } else {
+    g.fillStyle = INK; g.font = face((coarse ? 5.2 : 3.8) * k, { weight: coarse ? 700 : 400 });
+    g.fillText('vi', 8 * k, (PLATE.y - 5.4) * k);
   }
-  // (the folio at the foot: a plate leaf carries its number there, not in the head)
-  g.fillStyle = INK; g.font = face((coarse ? 5.2 : 3.8) * k, { weight: coarse ? 700 : 400 }); g.textAlign = 'center';
-  g.fillText('vi', (x0 + x1) / 2, BLOCK.bottom * k); g.textAlign = 'left';
   return [];                                          // (no line of this page is a control: nothing under the hand to pick)
 }
 /** The line under page point (x, y mm), from a page's boxes: its id, or null. */
