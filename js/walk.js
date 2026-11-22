@@ -3,7 +3,7 @@
 // round; W A S D or the arrow keys walk, Shift sprints, Space jumps, C crouches, X lies prone (C and X again stand up);
 // the wheel zooms in and out; Esc lets the mouse go. Where the browser will not take the mouse, moving it looks round.
 // The walker holds a book (book.js): right click brings it up to the face - the places to travel to on its right page,
-// the graphics on its left, a printer's hand moved over them with the mouse - and right click lowers it again.
+// the plate leaf on its left, a printer's hand moved over them with the mouse - and right click lowers it again.
 // While the mouse is not taken, "Click to look around" shows in the middle (the only thing drawn over the scene); on a touch
 // screen, one finger looks round and two pinch to zoom. The robot and God's arms (hero.js) are kept for later.
 //
@@ -420,8 +420,9 @@ export async function initWalk(container, opts = {}) {
   }
   // ---- the mouse. Three states, always one of them:
   //   captured  - the browser has given the page the mouse (pointer lock): moving it turns the view, no cursor, no edge;
-  //               Esc lets it go (and nothing comes up: the graphics are on the book's left page - 18 Nov 2026, the
-  //               menu Esc had brought up taken away; the pane of the controls names Esc, marked once it is used).
+  //               Esc lets it go (and nothing comes up: the menu Esc had brought up was taken away on 18 Nov 2026, and
+  //               since v0.0.145 there are no graphics settings to show at all; the pane of the controls names Esc,
+  //               marked once it is used).
   //   free      - not captured yet, or let go: the cursor shows, and a small "Click to look around" asks for a click (or any
   //               walking key) to capture it.
   //   refused   - this browser will not give the page the mouse (an embedded pane, a page that is not the focused

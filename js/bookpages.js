@@ -1,7 +1,7 @@
 // The book's pages (js/book.js): each drawn on its own canvas, the way a page of the 1830s was printed - Bodoni Moda
 // (vendor/bodoni-moda) in a warm black ink on the cream paper of the book's own tile, a red ink for
 // the line the cursor is on. The right page lists the places to travel to, grouped, each with how far it lies in
-// versts from where the walker stands; the left page, the graphics, the look in force ringed. The line under the
+// versts from where the walker stands; the left page, the plate leaf, its drawing and its name. The line under the
 // printer's hand is red on either page.
 // A page is measured in millimetres from its top left as the reader sees it, the leaf's own size (PAGE); its canvas
 // is drawn at whatever size the look needs (book.js: finer for the full look, coarse and heavier for a picture of
@@ -139,36 +139,31 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
   return boxes;
 }
 
-/** The left page: the graphics. data: { choices: [{id, name, about}], now (the id in force), mine (this machine's),
- *  hover }. Returns its boxes. */
+/** The left page: the plate leaf. data: { vignette, plate }. Returns no boxes: nothing on the leaf is a control. */
 export function drawGraphics(g, W, H, data, { tile = null, coarse = false } = {}) {
-  // (the plate page: as a 1830s book carries its plate on its own leaf - the drawing, its title, and one line of
-  //  letterpress under it. Nothing on it is a control; nothing here is to be chosen - the drawing follows the machine)
+  // (the plate leaf, as an 1830s book carries a plate on its own leaf: the drawing, its name under it, its folio at
+  //  the foot. No running head, no title, no sentence - the leaf is centred on the drawing: the plate as large as the
+  //  block allows, and drawing and name set as one group in the middle of it)
   const k = W / PAGE.w, side = 'verso', [x0, x1] = BLOCK[side].map((v) => v * k);
   paper(g, W, H, tile, k);
   g.textBaseline = 'alphabetic';
-  runningHead(g, k, side, 'Graphics', 'vi', coarse);
-  let y = title(g, k, side, 'Graphics', 'how the walk is drawn', BLOCK.top + 18, coarse) + (coarse ? 8 : 11);
-  const S = coarse ? 4.6 : 3.9;
-  const foot = BLOCK.bottom - 4;                      // (the letterpress line's baseline)
-  const room = foot - 14 - y;                         // (what the plate has between the title's rule and the letterpress)
   const im = data.plate || data.vignette;
+  const name = im && im === data.plate ? 'Yalta, the quay.' : 'The road and the verst post.';
+  const cap = (coarse ? 5.6 : 4.6) * k, capH = coarse ? 7 : 8;    // (the name's size, and the room it holds in mm)
+  const blockH = BLOCK.bottom - BLOCK.top;
   if (im && im.width) {
-    // (the plate set into the middle of the page as large as the leaf allows, its own edges fading into the paper, and
-    //  multiplied in so the paper's grain and warm white come through the ink as they do through a printed page)
-    const wMax = (x1 - x0) / k - 2, hMax = room;
+    // (multiplied in so the paper's grain and warm white come through the ink, as they do through a printed page)
+    const wMax = (x1 - x0) / k - 2, hMax = blockH - capH;
     let w = Math.min(wMax, hMax * im.width / im.height), h = w * im.height / im.width;
-    const cx = (x0 + x1) / 2, top = y + (room - h) / 2;
-    g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, cx - w * k / 2, top * k, w * k, h * k); g.restore();
-    // (a plate of a place carries its name under it, as a 1830s plate does - only when the leaf has room for it.
-    //  top/h/foot are mm on the page: fillText wants device pixels, so they go through k)
-    if (data.plate && im === data.plate && top + h + 7 <= foot - S) {
-      g.fillStyle = INK; g.font = face((S - 0.7) * k, { italic: true }); g.textAlign = 'center';
-      g.fillText('Yalta, the quay.', cx, (top + h + 5.6) * k); g.textAlign = 'left';
-    }
+    const cx = (x0 + x1) / 2, ty = BLOCK.top + (blockH - (h + capH)) / 2;
+    g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(im, cx - w * k / 2, ty * k, w * k, h * k); g.restore();
+    // (its name under the plate, centred with it. mm on the page: fillText wants device pixels, so it goes through k)
+    g.fillStyle = INK; g.font = face(cap, { italic: true }); g.textAlign = 'center';
+    g.fillText(name, cx, (ty + h + 5.4) * k); g.textAlign = 'left';
   }
-  g.fillStyle = INK; g.font = face(S * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'center';
-  g.fillText('The drawing follows the machine.', (x0 + x1) / 2, foot * k); g.textAlign = 'left';
+  // (the folio at the foot: a plate leaf carries its number there, not in the head)
+  g.fillStyle = INK; g.font = face((coarse ? 5.2 : 3.8) * k, { weight: coarse ? 700 : 400 }); g.textAlign = 'center';
+  g.fillText('vi', (x0 + x1) / 2, BLOCK.bottom * k); g.textAlign = 'left';
   return [];                                          // (no line of this page is a control: nothing under the hand to pick)
 }
 /** The line under page point (x, y mm), from a page's boxes: its id, or null. */

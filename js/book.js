@@ -10,7 +10,7 @@
 // picture is smaller than the screen - drawn again over it at the screen's size (renderFull, bookover.js); the glove
 // stays the look's own, drawn in the picture with everything else.
 // Held low at the right as the walker goes; right click brings it up before the face, the right page the places
-// (assets/book/places.json: dev\book\places.py; places that stand close together are one line), the left the graphics;
+// (assets/book/places.json: dev\book\places.py; places that stand close together are one line), the left the plate leaf;
 // a printer's hand moves over both pages with the mouse from the moment the book comes up, and the line under it is
 // red - a place as a look (18 Nov 2026: the hand had stood in the margin before a place, and shown only once the book
 // was all the way up). The hand is ink on the page it lies on: moved freely with the mouse, it is never drawn past that
