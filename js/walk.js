@@ -45,7 +45,10 @@ export async function initWalk(container, opts = {}) {
   const still = params.has('still');
   // (?norise: everything in its place the moment it is in - for tests that measure where things stand)
   const noRise = params.has('norise') || frozenT !== null;
-  const small = Math.min(innerWidth, innerHeight) < 640;
+  // (the walk's look is the machine's alone - its tier, from its parts: hardware.js - and never the window's size, 22 Nov
+  // 2026. Until v0.0.155 a window under 640 px on a side as the page opened drew the whole visit in the small screen's
+  // look, its clouds marched 32 steps where they take 56 and drawn at 1,025 px a radian where they take 1,751, on a
+  // desktop with an RTX 5090: a window just opened or just uncovered is small for a moment)
   const base = opts.base ?? '';
 
   const canvas = document.createElement('canvas');
@@ -115,7 +118,7 @@ export async function initWalk(container, opts = {}) {
   const camera = new THREE.PerspectiveCamera();        // (the scene draws through its own camera; this one only shows it)
 
   // (the sky: ?sky=day or ?sky=evening holds one - evening.js; a still stays in the day unless asked)
-  const s = new CountrysideScene({ id: 'countryside', name: 'Russian summer', quality: small ? 'low' : GFX.scene, gfx: GFX, retro, sound: windSound,
+  const s = new CountrysideScene({ id: 'countryside', name: 'Russian summer', quality: GFX.scene, gfx: GFX, retro, sound: windSound,
     sky: ['day', 'evening'].includes(params.get('sky')) ? params.get('sky') : null, still: frozenT !== null,
     horizon: '#c9d1d6', anchor: [0.5, 0.56], pitch: PITCH });
   stage.background = s.horizon;
@@ -214,19 +217,31 @@ export async function initWalk(container, opts = {}) {
     // walk; a book still not in eight seconds after the view is, the walk opens without waiting for it)
     if (book && !book.primed && now - settledAt < 8000) return;
     // (the cities, their landmarks, their shaders: made here, under the picture, and the picture waits for them up to
-    // CITY_WAIT ms - see CITY_WAIT above for why they moved out of the seconds after the lift)
-    if (!cityWarm && now - settledAt < CITY_WAIT) {
+    // CITY_WAIT ms - see CITY_WAIT below for why they moved out of the seconds after the lift - when their files come
+    // from this browser's own store of the site's: a change of graphics, a visit again soon after. When they come over
+    // the network - a first visit, or the first since the site was published again - the walk opens now and they come
+    // in behind it: firstVisit, below)
+    if (!cityWarm && !cityBehind && now - settledAt < CITY_WAIT) {
       if (!cityWarmStarted) {
-        cityWarmStarted = true; tl('cities: under the picture');
-        s.loadRestFar();
-        later().then(() => { cityWarm = true; }, () => { cityWarm = true; });
+        cityWarmStarted = true; cityFrom = performance.now(); cityLooked = now;
+        if (firstVisit()) { cityBehind = cityFirst = true; tl('cities: behind the walk'); }
+        else { tl('cities: under the picture'); askCities(); return; }
+      } else {
+        // (and should they turn out to come over the network after all - the first view's files in the store, theirs
+        // not - the walk opens then, and they go on coming in behind it)
+        if (now - cityLooked < 250) return;
+        cityLooked = now;
+        if (fetched(cityFrom).net < CITY_NET) return;
+        cityBehind = true; tl('cities: behind the walk');
       }
-      return;
     }
     {
         veilUp = false; tl('veil lifted'); held.clear(); opened = true; openedAt = now;
         controls?.show(true);
         open();
+        // (a first visit's cities asked for once the places round the walker are in, so that what he sees first comes
+        // first: asked for together, the cities' 190 MB and the places' models had shared the line)
+        if (!citiesAsked) (s.restNear ?? Promise.resolve()).then(askCities, askCities);
         // (the walk shown looking where it was meant to - the windmill, or where the walker looked before a change of
         // graphics - whatever reached the view meanwhile; and still nothing turns it until the picture has faded away
         // (loading.js: 1.3 s): the mouse moved while the picture was still going had turned the view before it was seen)
@@ -238,7 +253,7 @@ export async function initWalk(container, opts = {}) {
         stillUntil = performance.now() + 1400;
         // (the load's report kept: loadreport.js)
         const I = renderer.info;
-        report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles },
+        report.finish({ tier: gfxInfo.tier, busyS: +(busy / 1000).toFixed(1), firstVisit: cityFirst, citiesBehind: cityBehind, card: { programs: I.programs?.length ?? null, textures: I.memory.textures, geometries: I.memory.geometries, draws: I.render.calls, triangles: I.render.triangles },
           // (the load's own frames by the percentiles, beside the card's book: medians hid the stalls - stats(), the
           // performance research of 19 Nov 2026, item 1)
           frameStats: (() => { const S = stats(); return { frames: S.frames, p50: S.p50, p95: S.p95, p99: S.p99, max: S.max, over50: S.over50, over100: S.over100 }; })() });
@@ -305,8 +320,39 @@ export async function initWalk(container, opts = {}) {
   // picture went away - frames of 70-160 ms, 30 of them over 100 ms in the first 3 s, measured 2026-11-21 (Full to
   // PS1). Their making is the same work either way; here the picture hides it. CITY_WAIT is the most it may hold the
   // picture past the first view being in; after that the walk opens and they stream as before.)
-  let cityWarmStarted = false, cityWarm = false;
-  const CITY_WAIT = 6000;
+  // (v0.0.155: only when their files are in this browser's store. Over the network the wait was the whole of CITY_WAIT
+  // and bought nothing: on a first visit to v0.0.154 on this PC the first view was in at 4.7 s, the picture lifted at
+  // 10.7 s with the cities' 503 files - 188 MB - still coming, and their programs were made after the lift all the same,
+  // 1.5 s into the walk. CITY_NET: what of theirs may come over the network before the picture stops waiting)
+  let cityWarmStarted = false, cityWarm = false, cityBehind = false, cityFirst = false, citiesAsked = false;
+  let cityFrom = 0, cityLooked = 0;
+  const CITY_WAIT = 6000, CITY_NET = 16e6;
+  function askCities() {
+    if (citiesAsked) return;
+    citiesAsked = true;
+    s.loadRestFar();
+    later().then(() => { cityWarm = true; }, () => { cityWarm = true; });
+  }
+  // (the bytes of the models and pictures asked for since `from`: all of them, and those that came over the network - a
+  // file the browser had already is answered from its store with no body, or with its headers alone)
+  function fetched(from = 0) {
+    let body = 0, net = 0;
+    for (const e of performance.getEntriesByType('resource')) {
+      if (e.startTime < from || !/\.(glb|png|jpe?g|webp|ktx2)(\?|$)/i.test(e.name)) continue;
+      const b = e.encodedBodySize || 0;
+      body += b;
+      if (e.transferSize > b / 2) net += b;
+    }
+    return { body, net };
+  }
+  // (a first visit, or the first since the site was published again: most of the first view's models and pictures came
+  // over the network. A browser that does not say (no transferSize) is taken to have had them, and the picture waits
+  // for the cities as before. ?firstvisit: a test's way of having the walk take any load for a first visit)
+  function firstVisit() {
+    if (params.has('firstvisit')) return true;
+    const { body, net } = fetched(0);
+    return body > 0 && net > body / 2;
+  }
   async function later() {
     const groups = s.loadLater();
     if (!groups.length) { laterDone = true; return; }

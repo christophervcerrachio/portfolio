@@ -44,7 +44,10 @@ export function makeBook(o) {
   const DEPTH_ONLY = unstyled(new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
   const clearTo = new THREE.Color();
   const st = { up: 0, goal: 0, cursor: new THREE.Vector2(0.25, -0.15), hover: { l: null, r: null }, ready: false,
-    bob: 0, swayY: 0, swayP: 0, lastYaw: null, lastPitch: null, shown: true, distAt: null };
+    bob: 0, swayY: 0, swayP: 0, lastYaw: null, lastPitch: null, shown: true, distAt: null,
+    // (where on the paper the hand lies, in the book's own frame; whether it rides there - the held mouse - or stays
+    // under a free mouse's own pointer; and where it stood on the screen at the last frame: ride, below)
+    anchor: null, ride: true, last: new THREE.Vector2(0.25, -0.15) };
   const T = {};                                     // the pictures
   const P = {};                                     // the pages: canvases, textures, boxes
   let J = null, places = [], parts = {}, cursor = null, vignette = null, plate = null, env = null;
@@ -301,6 +304,17 @@ export function makeBook(o) {
   }
 
   // ---- the cursor: where it points on the screen (-1..1 each way), the page and the line under it
+  // (the hand rides on the paper while the book is up: the point of the page it lay on at the last frame is seen again
+  // where the page is now - each stride's bob, the turn's sway - and what the held mouse has moved since is added on.
+  // Held to the screen, it had stood still while the page bobbed under it at every stride, 8 px across and 6 down in a
+  // 1710 x 1226 window, and read as lagging behind the walk. A free mouse's own pointer is on the screen, and the hand
+  // stays under that: pointAt)
+  const riding = new THREE.Vector3();
+  function ride() {
+    if (!st.ride || !st.anchor || st.up < 1 || st.goal !== 1) return;
+    const v = riding.copy(st.anchor).applyMatrix4(book.matrixWorld).project(cam);
+    st.cursor.set(THREE.MathUtils.clamp(v.x + st.cursor.x - st.last.x, -0.98, 0.98), THREE.MathUtils.clamp(v.y + st.cursor.y - st.last.y, -0.98, 0.98));
+  }
   const ray = new THREE.Raycaster();
   ray.layers.enableAll();   // (the glove on a layer of its own is still the book's to a tap: onBook)
   function underCursor() {
@@ -314,6 +328,9 @@ export function makeBook(o) {
   // (from the moment it is asked up - the hand on the page as soon as a page is under it, riding up with it - until it is
   // asked down: it had shown only once the book was all the way up)
   function hover() {
+    // (the book's every part where place() has just put it, before anything is looked for on it)
+    root.updateMatrixWorld(true);
+    ride();
     const u = st.goal === 1 ? underCursor() : null;
     const r = u?.side === 'r' ? hit(P.boxR, u.x, u.y) : null, l = u?.side === 'l' ? hit(P.boxL, u.x, u.y) : null;
     if (r !== st.hover.r) { st.hover.r = r; drawRight(); }
@@ -338,7 +355,9 @@ export function makeBook(o) {
         cursor.matrixAutoUpdate = false; cursor.matrixWorldNeedsUpdate = true;
         clipTo(at.side);
       }
+      st.anchor = at ? book.worldToLocal(at.h.point.clone()) : null;
     }
+    st.last.copy(st.cursor);
     return u;
   }
 
@@ -395,12 +414,13 @@ export function makeBook(o) {
      *  in pixels; and each page's edges in that frame, [x0, x1, z0, z1]: the tests of the hand) */
     screenOf(x, y, z) { const v = new THREE.Vector3(x, y, z).applyMatrix4(book.matrixWorld).project(cam), r = o.canvas.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; },
     get pages() { return { l: rect.l, r: rect.r }; },
-    toggle() { if (!st.ready) return; st.goal = st.goal ? 0 : 1; if (st.goal) { st.cursor.set(0.25, -0.2); drawRight(); } else if (cursor) cursor.visible = false; },
+    toggle() { if (!st.ready) return; st.goal = st.goal ? 0 : 1; if (st.goal) { st.cursor.set(0.25, -0.2); st.last.copy(st.cursor); st.anchor = null; drawRight(); } else if (cursor) cursor.visible = false; },
     raise() { if (st.goal !== 1) api.toggle(); },
     lower() { if (st.goal !== 0) api.toggle(); },
     /** the mouse moved while held (pixels): the cursor moves over the pages */
     moveBy(dx, dy) {
       if (st.goal !== 1) return;
+      st.ride = true;
       const w = o.canvas.clientWidth || innerWidth, h = o.canvas.clientHeight || innerHeight;
       st.cursor.x = THREE.MathUtils.clamp(st.cursor.x + dx * 2 / w, -0.98, 0.98); st.cursor.y = THREE.MathUtils.clamp(st.cursor.y - dy * 2 / h, -0.98, 0.98);
     },
@@ -408,6 +428,7 @@ export function makeBook(o) {
     pointAt(cx, cy) {
       const r = o.canvas.getBoundingClientRect();
       st.cursor.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+      st.last.copy(st.cursor); st.ride = false;
     },
     /** a click: the line under the cursor chosen. Returns what was chosen, or null */
     click() {

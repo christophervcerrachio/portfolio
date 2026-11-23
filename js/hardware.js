@@ -1,7 +1,10 @@
 // The graphics settings chosen for the machine the walk runs on. Three steps:
-//  1. guess: the graphics chip's own name (WEBGL_debug_renderer_info), the processor's threads, the memory and the
-//     screen's pixels place the machine in a tier - a software renderer or a phone's chip at the bottom, a laptop's
-//     built-in Intel or AMD graphics in the middle-low, a separate NVIDIA RTX or Radeon RX card at the top;
+//  1. guess: the graphics chip's own name (WEBGL_debug_renderer_info), the processor's threads and the memory place
+//     the machine in a tier - a software renderer or a phone's chip at the bottom, a laptop's built-in Intel or AMD
+//     graphics in the middle-low, a separate NVIDIA RTX or Radeon RX card at the top. The machine's parts alone, never
+//     the screen's size or what the browser calls the device (22 Nov 2026: until v0.0.155 a screen of more than 8.5
+//     million pixels took a card a step lower, and a browser that called itself a phone's or a tablet's took the
+//     phone's tier whatever its chip);
 //  2. measure: the first second and a half of frames under the loading veil (walk.js) - if they come far too slowly
 //     for the tier guessed, it steps down at once, before anyone sees a frame;
 //  3. keep watching: the resolution scale follows the frame time while walking (walk.js), and if it sits at its
@@ -134,11 +137,9 @@ export function guessTier(gl) {
   const { renderer: r } = gpuInfo(gl);
   const s = r.toLowerCase();
   const threads = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 8;
-  const px = (screen.width || innerWidth) * (screen.height || innerHeight) * Math.min(devicePixelRatio || 1, 2) ** 2;
-  const mobile = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
   let tier, why, locked = false;
   if (/swiftshader|llvmpipe|softpipe|basic render|microsoft basic|software/.test(s)) { tier = 'n64'; why = 'software renderer'; }
-  else if (mobile || /mali|adreno|powervr|apple gpu/.test(s)) { tier = 'dreamcast'; why = 'phone or tablet graphics'; }
+  else if (/mali|adreno|powervr|apple gpu/.test(s)) { tier = 'dreamcast'; why = 'phone or tablet graphics'; }
   // (a separate card: NVIDIA's GeForce RTX / GTX 16 and up, Radeon RX 5000 and up, Arc; the laptop versions of these
   // a step lower)
   else if (/rtx|gtx 1[6-9]\d\d|radeon rx [5-9]\d\d\d|rx [6-9]\d\d\d|arc(\(tm\))? a[3-7]/.test(s)) {
@@ -155,9 +156,8 @@ export function guessTier(gl) {
   else if (/iris(\(r\))? xe|radeon 7\d0m|radeon 8\d0m|780m|680m/.test(s)) { tier = 'gamecube'; why = 'recent built-in graphics'; }
   else if (/intel|uhd|iris|hd graphics|radeon\(tm\) graphics|radeon graphics|vega/.test(s)) { tier = 'dreamcast'; why = 'built-in graphics'; }
   else { tier = 'gamecube'; why = 'unknown graphics (' + (r || 'hidden') + ')'; }
-  // (a weak processor or little memory: a step lower; a very large screen on a middling card: a step lower)
+  // (a weak processor or little memory: a step lower)
   if (!locked && (threads <= 4 || mem <= 4)) { tier = step(tier, 1); why += ', few cores or little memory'; }
-  if (!locked && px > 8.5e6 && ORDER.indexOf(tier) >= 1) { tier = step(tier, 1); why += ', a very large screen'; }
   return { tier, why, gpu: r, locked };
 }
 

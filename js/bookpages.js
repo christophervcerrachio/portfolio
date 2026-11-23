@@ -70,18 +70,6 @@ function smallCaps(g, str, x, y, size, { align = 'left', track = 0.08, weight = 
 
 function rule(g, x0, x1, y, t) { g.fillRect(x0, y - t / 2, x1 - x0, t); }
 
-/** The running head: its words in small capitals in the middle, the folio at the outer corner, a rule under. */
-function runningHead(g, k, side, words, folio, coarse) {
-  const [x0, x1] = BLOCK[side].map((v) => v * k), y = BLOCK.top * k;
-  g.fillStyle = INK;
-  smallCaps(g, words, (x0 + x1) / 2, y, (coarse ? 5.2 : 3.6) * k, { align: 'center', track: 0.14, weight: coarse ? 700 : 500 });
-  if (folio) {
-    g.font = face((coarse ? 5.2 : 3.8) * k, { weight: coarse ? 700 : 400 }); g.textAlign = side === 'verso' ? 'left' : 'right';
-    g.fillText(folio, side === 'verso' ? x0 : x1, y); g.textAlign = 'left';
-  }
-  rule(g, x0, x1, y + 2.6 * k, Math.max(1, 0.28 * k));
-}
-
 /** A title in the 1830s manner: large spaced capitals, an italic line under it, a thick and thin rule. */
 function title(g, k, side, big, under, y, coarse) {
   const [x0, x1] = BLOCK[side].map((v) => v * k), cx = (x0 + x1) / 2;
@@ -115,7 +103,8 @@ export function drawPlaces(g, W, H, data, { tile = null, coarse = false } = {}) 
   const k = W / PAGE.w, side = 'recto', [x0, x1] = BLOCK[side].map((v) => v * k), boxes = [];
   paper(g, W, H, tile, k);
   g.textBaseline = 'alphabetic';
-  runningHead(g, k, side, 'Places', '', coarse);      // (no folio in the corner: it stands centred at the foot below)
+  // (no running head over the title, 22 Nov 2026: the page's name stands once, as its title; the folio stands centred
+  // at the foot, below)
   let y = title(g, k, side, 'Places', 'and how far each lies from where you stand', BLOCK.top + 18, coarse) + (coarse ? 8 : 9);
   g.fillStyle = INK; g.font = face((coarse ? 4.6 : 3.6) * k, { italic: true, weight: coarse ? 600 : 400 }); g.textAlign = 'right';
   g.fillText('Versts', x1, y * k); g.textAlign = 'left';
