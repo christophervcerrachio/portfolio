@@ -966,7 +966,10 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
 
 // ---- the rusalka pond: mist lying on black water, lights like fairies drifting over it, lilies on it ----
 function rusalkaPond(P, world, U, animate) {
-  const g = new THREE.Group(), [x0, z0] = P.at, lvl = P.level, R = P.r;
+  // (on the water as the world draws it: its picture holds a surface to half a metre (height.png's blue), and the pond's
+  // own level, 0.15 m over the water drawn, had stood its lilies off the water and its mist over the banks round it)
+  const g = new THREE.Group(), [x0, z0] = P.at, R = P.r, lvl = world.waterAt?.(x0, z0) ?? P.level;
+  const wet = (x, z) => { const s = world.waterAt?.(x, z); return s != null && s - world.landAt(x, z) > 0.1; };
   // the fairies: soft glowing motes, each wandering its own loop over the water, pulsing
   const N = 28, pos = new Float32Array(N * 3), seed = new Float32Array(N);
   for (let i = 0; i < N; i++) { seed[i] = i / N; pos.set([x0, lvl + 1, z0], i * 3); }
@@ -996,33 +999,42 @@ function rusalkaPond(P, world, U, animate) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const pts = new THREE.Points(pg, fairy); pts.frustumCulled = false; g.add(pts);
-  // the mist: soft sheets lying low over the water, drifting
+  // the mist: soft sheets lying low on the water, drifting. Its four sheets had stood 0.45 to 1.8 m over the water and
+  // reached a third of the pond's width past its shore (23 Nov 2026): from the shore they lay as one flat grey slab over
+  // the far bank and its reeds to the trees. Now from a hand to 0.65 m over the water, thinner the higher, and gone at
+  // the pond's own width (uReach, in its radii), so the banks and the reeds stand out of it
   const mistMat = new THREE.ShaderMaterial({
-    uniforms: { ...U, uT: fairy.uniforms.uT, uC: fairy.uniforms.uC, uR: fairy.uniforms.uR },
+    uniforms: { ...U, uT: fairy.uniforms.uT, uC: fairy.uniforms.uC, uR: fairy.uniforms.uR, uReach: { value: 1.0 } },
     vertexShader: `varying vec3 vW2; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW2 = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: `uniform float uT; uniform vec3 uC; uniform float uR; varying vec3 vW2;
+    fragmentShader: `uniform float uT; uniform vec3 uC; uniform float uR; uniform float uReach; varying vec3 vW2;
       float h(vec2 p){return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453);}
       float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
       void main() {
         vec2 q = (vW2.xz - uC.xz) / uR;
         float m = n(vW2.xz * 0.12 + uT * 0.05) * 0.6 + n(vW2.xz * 0.35 - uT * 0.08) * 0.4;
-        float a = smoothstep(1.35, 0.6, length(q)) * smoothstep(0.25, 0.75, m) * 0.32;
+        float a = smoothstep(uReach, uReach * 0.55, length(q)) * smoothstep(0.25, 0.75, m) * 0.32;
+        a *= 1.0 - 0.45 * smoothstep(0.0, 0.7, vW2.y - uC.y);
         gl_FragColor = vec4(vec3(0.82, 0.86, 0.88) * a, a);
       }`,
     transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
   for (let k = 0; k < 4; k++) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(R * 3, R * 3).rotateX(-Math.PI / 2), mistMat);
-    m.position.set(x0, lvl + 0.3 + k * 0.45, z0); m.renderOrder = 3; g.add(m);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(R * 2.2, R * 2.2).rotateX(-Math.PI / 2), mistMat);
+    m.position.set(x0, lvl + 0.05 + k * 0.2, z0); m.renderOrder = 3; m.name = 'rusalka-mist'; g.add(m);
   }
-  // water lilies
+  // water lilies, on the water: each where the pond is a hand deep or more (the shore comes in to 30 m of its middle in
+  // places, and a pad had lain at its very edge, in 5 cm of water)
   const lily = new THREE.InstancedMesh(paint(new THREE.CircleGeometry(0.35, 9, 0.3, Math.PI * 1.85).rotateX(-Math.PI / 2), '#3f5a2e'), MAT, 40);
+  lily.name = 'rusalka-lilies';
   const m4 = new THREE.Matrix4(), rr = rnd(77);
-  for (let i = 0; i < 40; i++) {
-    const a = rr() * 6.283, d = Math.sqrt(rr()) * R * 0.85;
-    m4.makeRotationY(rr() * 6.28); m4.setPosition(x0 + Math.cos(a) * d, lvl + 0.03, z0 + Math.sin(a) * d);
-    lily.setMatrixAt(i, m4);
+  let placed = 0;
+  for (let tries = 0; placed < 40 && tries < 400; tries++) {
+    const a = rr() * 6.283, d = Math.sqrt(rr()) * R * 0.85, yaw = rr() * 6.28, x = x0 + Math.cos(a) * d, z = z0 + Math.sin(a) * d;
+    if (!wet(x, z)) continue;
+    m4.makeRotationY(yaw); m4.setPosition(x, lvl + 0.01, z);
+    lily.setMatrixAt(placed++, m4);
   }
+  lily.count = placed;
   g.add(lily);
   animate.push({ update: (cam, t) => { fairy.uniforms.uT.value = t; } });
   return g;
