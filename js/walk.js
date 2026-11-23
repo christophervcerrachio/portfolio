@@ -367,7 +367,7 @@ export async function initWalk(container, opts = {}) {
   });
 
   // ---- size: the scene's picture at the screen's own resolution, less if the frames come too slowly (below)
-  const quality = { scale: GFX.scale, n: 0, sum: 0, skip: 120, good: 0, times: [], slow: 0, t0: 0 };
+  const quality = { scale: GFX.scale, n: 0, sum: 0, skip: 120, good: 0, times: [], slow: 0, t0: 0, tried: 0, med: 0, wait: 2, rest: 2 };
   function frame() {
     const w = container.clientWidth || innerWidth, h = container.clientHeight || innerHeight;
     if (retro) {
@@ -522,6 +522,7 @@ export async function initWalk(container, opts = {}) {
     if (trip.el) { trip.el.style.opacity = ''; trip.el.style.transition = ''; }
     trip.pic?.done();
     trip = null; travelUp = false; held.clear(); stillUntil = now + 1400;
+    quality.tried = 0; quality.wait = quality.rest = 2;     // (a new place: its own frames decide, the old waits forgotten)
     controls?.show(!book?.up); mouseState();
   }
 
@@ -750,8 +751,12 @@ export async function initWalk(container, opts = {}) {
     // (once loaded: if two seconds of frames come, as a rule, slower than about 45 a second, draw the scene's picture
     // smaller; and back up to full size once a few such spells keep up with 60 again. By the median, so a load's
     // hitch never shrinks it for good: it had, and the picture stayed soft for the rest of the walk)
+    // (22 Nov 2026: and no frame is judged while the travel's picture covers the walk, the first veil is up, or the
+    //  walk stands still after either: those frames are the place coming in, not the walk - by the rusalka pond such
+    //  spells, 24 ms a frame, had taken the picture to 74% of the screen's size)
     if (last !== null && s.ready && document.hasFocus()) {
-      if (quality.skip > 0) quality.skip--;
+      if (frozen()) { quality.times.length = 0; quality.t0 = 0; }
+      else if (quality.skip > 0) quality.skip--;
       else {
         (quality.times ??= []).push(now - last);
         quality.t0 ||= now;
@@ -767,11 +772,26 @@ export async function initWalk(container, opts = {}) {
           const p95 = T[Math.min(T.length - 1, Math.floor(0.95 * T.length))];
           const manySlow = T.filter((v) => v > 33).length >= Math.max(6, T.length * 0.07);
           quality.times.length = 0; quality.t0 = now;
-          if (med > 22 && quality.scale > GFX.minScale) {
-            quality.scale = Math.max(GFX.minScale, quality.scale * Math.max(0.6, Math.min(0.9, Math.sqrt(18 / med)))); quality.good = 0; frame();
+          const tried = quality.tried, worse = tried && (med > quality.med + 1 || (manySlow && p95 > 45));
+          quality.tried = 0;
+          if (tried && !worse) quality.rest = 2;          // (the step up held: the next may come as soon)
+          if (worse) {
+            // (a step back up that cost frames: back to the size it came from, and the next try twice as long in
+            //  coming - two spells, four, eight, up to forty, about a minute - so the two sizes do not flicker)
+            quality.scale = tried; quality.rest = Math.min(40, quality.rest * 2); quality.wait = quality.rest; quality.good = 0; frame();
+          } else if (med > 22 && quality.scale > GFX.minScale) {
+            quality.scale = Math.max(GFX.minScale, quality.scale * Math.max(0.6, Math.min(0.9, Math.sqrt(18 / med)))); quality.good = 0; quality.wait = quality.rest; frame();
           } else if (manySlow && p95 > 45 && quality.scale > GFX.minScale) {
-            quality.scale = Math.max(GFX.minScale, quality.scale * 0.92); quality.good = -9; frame();
+            quality.scale = Math.max(GFX.minScale, quality.scale * 0.92); quality.good = -9; quality.wait = Math.max(9, quality.rest); frame();
           } else if (med < 17.5 && quality.scale < GFX.scale && ++quality.good >= 3) { quality.scale = Math.min(GFX.scale, quality.scale / 0.85); quality.good = 0; frame(); }
+          else if (med >= 17.5 && med <= 22 && quality.scale < GFX.scale && --quality.wait <= 0) {
+            // (22 Nov 2026: between the two - frames neither slow enough to shrink the picture nor quick enough to grow
+            //  it - the smaller picture may be buying nothing. A browser shows frames in steps of its screen's refresh:
+            //  on a 165 Hz screen 12.1, 18.2 or 24.2 ms, and by the pond the frame was 18.2 ms at 74% of the size and at
+            //  full size alike, never the 17.5 that grows it back. So a step up is tried, and kept if the next spell's
+            //  middle frame is no slower than this one's)
+            quality.tried = quality.scale; quality.med = med; quality.good = 0; quality.scale = Math.min(GFX.scale, quality.scale / 0.85); frame();
+          }
           else if (med >= 17.5) quality.good = 0;
           // (at the floor and still under 25 a second for a while: the next visit starts a tier lower)
           if (med > 40 && quality.scale <= GFX.minScale + 1e-3) {
