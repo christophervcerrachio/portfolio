@@ -34,6 +34,38 @@ MAT.onBeforeCompile = (sh) => {        // (a little grain on everything, so no f
     .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb *= 0.86 + 0.16 * gr(vWp2 * 9.0) + 0.06 * gr(vWp2 * 1.7);');
 };
 
+// ---- the churches' glass: the sky in it ----
+// (the village church's and the chapel's glass - their models' material 'glass' - had come out black: dark glass lit
+// by the sun alone, with no picture of the sky for it to mirror. It mirrors the scene's own sky now, its colours at
+// the horizon and overhead (backdrops/clouds.js), as the city fronts' windows do (world/interiors.js): looked at square
+// a fifth of it - old glass is uneven, and the sky far brighter than the church inside - and nearly all of it looked
+// along; each pane its own share of it (its colour's red, from the model: dev\world\country-churches pane_tint).)
+const GLASS_F0 = 0.22;
+function skyGlass(mat, U) {
+  if (!mat || mat.userData.skyGlass || !mat.isMeshStandardMaterial) return mat;
+  mat.userData.skyGlass = true;
+  const prev = mat.onBeforeCompile, own = Object.prototype.hasOwnProperty.call(mat, 'customProgramCacheKey') ? mat.customProgramCacheKey.bind(mat) : null;
+  const keyBase = own ? own() : String(prev ?? '');
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    sh.uniforms.uGlHorizon = U.uHorizon; sh.uniforms.uGlZenith = U.uZenith;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uGlHorizon; uniform vec3 uGlZenith;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  { vec3 gV = normalize( vViewPosition );
+    float fr = ${GLASS_F0.toFixed(2)} + ${(1 - GLASS_F0).toFixed(2)} * pow( 1.0 - clamp( abs( dot( normal, gV ) ), 0.0, 1.0 ), 5.0 );
+#ifdef USE_COLOR
+    fr *= vColor.r;
+#endif
+    vec3 rW = inverseTransformDirection( reflect( -gV, normal ), viewMatrix );
+    vec3 skyR = rW.y > 0.0 ? mix( uGlHorizon, uGlZenith, 1.0 - exp( -rW.y * 4.2 ) ) : uGlHorizon * 0.3;
+    totalEmissiveRadiance += skyR * fr;
+    diffuseColor.rgb *= 1.0 - fr; }`);
+  };
+  mat.customProgramCacheKey = () => keyBase + '-skyglass';
+  mat.needsUpdate = true;
+  return mat;
+}
+
 function paint(geo, color) {
   const c = lin(color), n = geo.attributes.position.count, a = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
@@ -921,6 +953,7 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
           // (metal and glass keep their shine, the rest is matt; the sky's light picture is the scene's environment)
           if (!(mat.metalness > 0.3 || mat.roughness < 0.3)) { mat.metalness = 0; mat.roughness = Math.max(0.8, mat.roughness ?? 0.8); }
           receiveSun(mat, U);
+          if (mat.name === 'glass') skyGlass(mat, U);
           const geo = c.geometry.clone().applyMatrix4(c.matrixWorld);
           for (const [place, l] of byPlace(mine)) {
             const inst = new THREE.InstancedMesh(geo, mat, l.length);
