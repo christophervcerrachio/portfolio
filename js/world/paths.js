@@ -3,7 +3,8 @@
 // round the camera into a picture a quarter metre a pixel, 512 m across, which follows the camera. The land's shader
 // lays its ground tiles by it (beaten earth, cobbles, the ruts of the cart wheels), the grass leaves it bare, the woods
 // stand back from it. Far off, the land's own road cover (8 m a texel) carries them.
-//   R  beaten earth (a road, a track, a footpath, an earth street); faintly, its verge
+//   R  beaten earth (a road, a track, a footpath, an earth street); faintly, its verge; and the ground people walk
+//      on round the country's houses, as worn as each is (addAreas: the yards, the paths to their doors)
 //   G  cobbles (a city's paved street)
 //   B  wheel ruts (in the roads and tracks, two to a way)
 import * as THREE from 'three';
@@ -145,6 +146,9 @@ export function buildPaths(world, extra = []) {
     const m = w.w / 2 + 6;
     w.box = [x0 - m, z0 - m, x1 + m, z1 + m];
   }
+  // (the ground people walk on round the country's houses - pois.js lays it out with the places, after the ways: each
+  // a fill { ring, r }, a patch { at, rad, r } or a path { pts, w, r, ruts }, r as worn as its earth)
+  const areas = [];
   // two pictures round the camera: the near one sharp (4 px a metre, 512 m), the far one (1 px a metre, 2 km) so the
   // ways stay smooth and whole out to a kilometre and more, not the land's coarse road cover's 8 m steps.
   // Each follows the camera in steps (96 m, 384 m). Drawn whole the moment the camera crossed into the next step, a
@@ -186,6 +190,9 @@ export function buildPaths(world, extra = []) {
         if (w.earth) L.push([w.w, `rgb(${Math.round(255 * w.earth)},0,0)`, w, 0, fw]);
         if (w.cobble) L.push([w.w, 'rgb(0,255,0)', w, 0, fw]);
       }
+      // (the ground people walk on round the country's houses: its trodden fills, its bare patches, its worn paths)
+      const A = areas.filter((a) => !(a.box[2] < cx - h || a.box[0] > cx + h || a.box[3] < cz - h || a.box[1] > cz + h));
+      for (const a of A) L.push([a.w ?? 0, `rgb(${Math.round(255 * a.r)},0,0)`, a, 0, fw]);
       // (the wheels' tracks: two ruts 1.5 m apart; a street wide enough for two carts, a pair in each half, the carts
       // keeping to their side)
       if (ruts) for (const w of V) {
@@ -194,6 +201,7 @@ export function buildPaths(world, extra = []) {
         if (w.w > 9) for (const c of [w.w / 4, -w.w / 4]) { L.push([0.4, col, w, c + 0.75, fr]); L.push([0.4, col, w, c - 0.75, fr]); }
         else { L.push([0.4, col, w, 0.75, fr]); L.push([0.4, col, w, -0.75, fr]); }
       }
+      if (ruts) for (const a of A) if (a.ruts) for (const o of [0.75, -0.75]) L.push([0.4, `rgb(0,0,${Math.round(255 * a.ruts)})`, a, o, fr]);
       // (a stroke's cost to the card: the blurred layer it is drawn in, its box within the picture, and a little more)
       const cost = new Float64Array(L.length + 1);
       for (let k = 0; k < L.length; k++) {
@@ -213,6 +221,13 @@ export function buildPaths(world, extra = []) {
       for (let k = i0; k < i1; k++) {
         const [lw, col, w, off, filt] = L[k], pts = w.pts;
         if (filt !== f) g.filter = f = filt;
+        if (w.ring || w.at) {
+          g.fillStyle = col; g.beginPath();
+          if (w.at) g.arc(w.at[0], w.at[1], w.rad, 0, Math.PI * 2);
+          else w.ring.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
+          g.fill();
+          continue;
+        }
         g.lineWidth = lw; g.strokeStyle = col;
         g.beginPath();
         for (let i = 0; i < pts.length; i++) {
@@ -269,7 +284,18 @@ export function buildPaths(world, extra = []) {
   const uniforms = { uWayT: { value: N.tex }, uWayC: { value: N.c }, uWaySpan: { value: SPAN },
     uWayT2: { value: F.tex }, uWayC2: { value: F.c }, uWaySpan2: { value: 2048 } };
   const update = (pos) => { N.update(pos); F.update(pos); };
-  return { tex: N.tex, uniforms, update, near, clearance, ways };
+  /** The ground people walk on round the country's houses (pois.js): drawn into both pictures from the next frame, as
+   *  a way is - read by the land, the grass and the woods as theirs - but no way: nothing keeps off it, nothing is laid
+   *  along it. */
+  const addAreas = ({ fills = [], dots = [], lines = [] } = {}) => {
+    const boxOf = (pts, m) => { let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0 - m, z0 - m, x1 + m, z1 + m]; };
+    for (const f of fills) areas.push({ ring: f.ring, r: f.r, box: boxOf(f.ring, 3) });
+    for (const d of dots) areas.push({ at: d.at, rad: d.rad, r: d.r, box: boxOf([d.at], d.rad + 3) });
+    for (const l of lines) areas.push({ pts: l.pts, w: l.w, r: l.r, ruts: l.ruts ?? 0, box: boxOf(l.pts, l.w / 2 + 3) });
+    // (each picture begun again, whole, at the next frame: the one the card has was drawn without them)
+    for (const P of [N, F]) { P.cx = P.cz = NaN; P.L = null; }
+  };
+  return { tex: N.tex, uniforms, update, near, clearance, ways, addAreas };
 }
 
 /** The shader's side: what the ways are at p (R earth, G cobbles, B ruts; 0 outside the pictures): the near picture

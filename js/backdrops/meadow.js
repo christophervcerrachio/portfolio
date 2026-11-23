@@ -274,9 +274,9 @@ export function buildMeadow(ground, U, { tier = 'high', seed = 7, world, grass: 
 // ---- the wildflowers over the whole world ----
 // Each species has its own map of where it grows, at three sizes: whole fields of it (a hillside blue with cornflowers,
 // white with camomile), patches a few tens of metres across, and streaks along the slope; with strays everywhere. Only
-// on open meadow (not in the woods, the grain, a road, a town, on rock or in water) and never on a way. The world is cut
-// into cells; each cell's flowers are fixed (from the cell's own seed), made when the camera comes near and dropped
-// when it has gone; the nearest are drawn in full, the rest as their light copies.
+// on open meadow (not in the woods, the grain, a road, a town, on rock or in water), never on a way or in a trodden
+// yard. The world is cut into cells; each cell's flowers are fixed (from the cell's own seed), made when the camera
+// comes near and dropped when it has gone; the nearest are drawn in full, the rest as their light copies.
 const FCELL = 16;
 const smf = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 function worldFlowers(group, grass, ground, world, U, flowerMat, tier, rng, opt) {
@@ -338,6 +338,8 @@ function worldFlowers(group, grass, ground, world, U, flowerMat, tier, rng, opt)
           if (r() * dMax > S.dens(x, z)) continue;
           if (r() > world.meadowAt(x, z)) continue;
           if (world.coverAt(x, z) > 0 || world.ways.near(x, z) < 0.7) continue;
+          // (nor in a trodden yard, on its paths or the grazed street before the houses: pois.js worn)
+          if (world.yardAt?.(x, z)) continue;
           // (their full height and a little more: out in the world the grass stands knee to waist high, and a
           // meadow's flowers hold their heads above it)
           const h = r.range(...S.models.height) * 1.45, v = Math.floor(r() * 3) % 3, t = r.pick(S.models.tints), j = r.range(0.92, 1.08);

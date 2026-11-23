@@ -21,7 +21,7 @@ import { arrive } from './arrive.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
-import { makePlans, placeRing } from './plans.js';
+import { makePlans, placeRing, depthIn } from './plans.js';
 
 const lin = (hex) => new THREE.Color(hex);
 const rnd = (seed) => { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; };
@@ -431,6 +431,36 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     if (a) for (let n = 0; n < a.length; n += 3) if ((x - a[n]) ** 2 + (z - a[n + 1]) ** 2 < a[n + 2] ** 2) return true;
     return false;
   };
+  // The ground people walk on (23 Nov 2026). A yard had stood knee-high in meadow and flowers up to the porch's steps.
+  // It was trodden by its people and beasts to short grass, a path worn bare from the gate to the porch and the earth
+  // bare at the gate and before the steps; at a kulak's, his cart's ruts run from the gate to the barn's doors; the
+  // village street is grazed short between the houses; a path is worn to the post station's porch and its ruts to the
+  // stable, to the chapel's door, the church's and the fisherman's. Drawn into the ways' pictures as the ways are
+  // (paths.js addAreas): the grass grows short there or not at all, the land's earth shows, no flower stands there
+  // (world.yardAt, meadow.js). Nothing is laid out by them: every place stands where it stood (dev\tests\layouttest.js).
+  // r: how worn, as the ways' picture has it - grass at full height under 0.02, trodden short from 0.09, bare from 0.42.
+  const worn = { fills: [], dots: [], lines: [] };
+  const wornFill = (ring, r) => worn.fills.push({ ring, r });
+  const wornDot = (at, rad, r) => worn.dots.push({ at, rad, r });
+  const wornLine = (pts, w, r, ruts = 0) => worn.lines.push({ pts, w, r, ruts });
+  // (a point of a thing's own frame where it stands: +x its gable to the street, +z its long side with the door)
+  const ownAt = (it, kx, kz) => placeRing([[kx, kz]], it.x, it.z, it.ry, it.s ?? 1)[0];
+  // (how far out a thing's outline reaches on its door's side, its own +z: the model's outline where it has one)
+  const frontOf = (name, it) => {
+    const M = modelAt(name, it.x, it.z), rings = M ? M.shape.rings : kits[name].plan;
+    let z = 0; for (const r of rings) for (const q of r) z = Math.max(z, q[1]);
+    return z;
+  };
+  // (a curve from a through b's pull to c, n points: a cart's way bends, it does not turn a corner)
+  const bend = (a, b, c, n = 6) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [u * u * a[0] + 2 * u * t * b[0] + t * t * c[0], u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]]; });
+  // (where a model's door is met from outside, in its own frame: a pace beyond the foot of its porch's steps -
+  // dev\world\models\country_kit.py porch(), the steps' outer edge d/2 + r + 0.02 + dep + 0.6 from the middle at
+  // x = -w/2 + 1.2 - or before its doors: the barn's in its long side, the post station's stable's in its gable end at
+  // the kit's x 12)
+  const STEP = { izba: [-1.8, 5.3], izbaRich: [-3.05, 6.15], post: [0, 6.9], barn: [0, 3.9], stable: [12, 3.9] };
+  // (a path worn by feet as wide as the world's footpaths, a cart's as its tracks: paths.js style, so they read as one
+  // network)
+  const FOOTW = 1.3, CARTW = 2.6;
 
   // ---- the ways that pass a place: the arms that lead away from its middle
   const armsAt = (x0, z0, R = 30, L = 170) => {
@@ -539,7 +569,7 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       H.at = (u, v) => [it.x + H.ux * u - H.fx * v, it.z + H.uz * u - H.fz * v];
       for (let q = -8; q <= 24; q += 8) clear(...H.at(0, q), front / 2 + 3);
       // (the kulak's barn behind his house, its doors - on its own +z - to the yard)
-      if (rich) { const b = H.at(0, 17.2); set('barn', b[0], b[1], Math.atan2(H.fx, H.fz), 1, { reach: 6, gap: 2.0, way: 1.5 }); }
+      if (rich) { const b = H.at(0, 17.2); H.barn = set('barn', b[0], b[1], Math.atan2(H.fx, H.fz), 1, { reach: 6, gap: 2.0, way: 1.5 }); }
     }
     // the yards. Each plot's four corners in its own measures; where two plots lie side by side the corners between
     // them are one pair, halfway, and the fence between them is built once: neighbours share it (each plot had been
@@ -572,6 +602,28 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
         run(H.c.br, H.c.bl);
         if (H.mine.l) run(H.c.bl, H.c.fl);
       }
+      // the ground of each plot, worn by its people (worn, above). The yard to its fence trodden, and from a metre and a
+      // half in from the fence trodden short (the grass stands longer along a fence, where no one walks); before the
+      // house to the street's middle grazed short; the path from the street's earth in through the gate and along the
+      // house to the porch's steps bare, and the earth bare at the gate and before the steps
+      const kp = STEP[rich ? 'izbaRich' : 'izba'], ug = hz + gate / 2, vS = st.real ? -(back - st.hw) - 0.5 : vf - 2.5;
+      for (const H of homes) {
+        const c = H.c, foot = H.at(kp[1], -kp[0]);
+        wornFill([c.fl, c.fr, c.br, c.bl], 0.05);
+        wornFill([H.at(-hw + 1.5, vf + 0.6), H.at(hw - 1.5, vf + 0.6), H.at(hw - 1.5, vb - 1.5), H.at(-hw + 1.5, vb - 1.5)], 0.07);
+        if (st.real) wornFill([H.at(-hw, -back), H.at(hw, -back), H.at(hw, vf), H.at(-hw, vf)], 0.12);
+        wornLine([H.at(ug, vS), H.at(ug + 0.1, vf + 0.9), H.at((ug + kp[1]) / 2 + 0.25, (vf - kp[0]) / 2 + 0.4), foot], FOOTW, 1.0);
+        wornDot(H.at(ug, vf), 1.6, 0.6);
+        wornDot(foot, 1.4, 0.6);
+        // (the kulak's cart in through his gate and over the yard to the barn's doors, in its ruts; the earth bare
+        // before them)
+        if (H.barn) {
+          const door = ownAt(H.barn, ...STEP.barn), dx = door[0] - H.it.x, dz = door[1] - H.it.z;
+          const du = dx * H.ux + dz * H.uz, dv = -(dx * H.fx + dz * H.fz);
+          wornLine([H.at(ug, vS), ...bend(H.at(ug, vf + 1.5), H.at(ug, dv - 3.0), H.at(du, dv))], CARTW, 0.95, 0.6);
+          wornDot(door, 2.8, 0.6);
+        }
+      }
       // (a stack in the field behind each yard, well off the house)
       if (!rich) for (const H of homes) if (R() < 0.62) { const h = H.at((R() - 0.5) * 8, 22 + R() * 5); set('hay', h[0], h[1], R() * 6, 0.85 + 0.3 * R(), { reach: 8, gap: 2.5, way: 2.0 }); clear(h[0], h[1], 7); }
     }
@@ -602,11 +654,25 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
         const [sx, sz, tx, tz] = st.at(Math.max(st.lo + 1, Math.min(st.hi - 1, s))), x = sx - tz * side * (st.hw + 17), z = sz + tx * side * (st.hw + 17);
         let lo = 1e9, hi = -1e9;
         for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const g = world.heightAt(x + i * 8, z + j * 8); lo = Math.min(lo, g); hi = Math.max(hi, g); }
-        if (!wet(x, z) && (!best || hi - lo < best.r)) best = { x, z, r: hi - lo };
+        if (!wet(x, z) && (!best || hi - lo < best.r)) best = { x, z, r: hi - lo, sx, sz };
       }
-      if (best) { const it = set('church', best.x, best.z, Math.PI / 2, 1, { reach: 30, gap: 6, way: 3, fall: 0.55 }); if (it) clear(it.x, it.z, 20); }
+      if (best) {
+        const it = set('church', best.x, best.z, Math.PI / 2, 1, { reach: 30, gap: 6, way: 3, fall: 0.55 });
+        if (it) {
+          clear(it.x, it.z, 20);
+          // (a path worn from its door to the street, the earth bare before the door)
+          const f = frontOf('church', it), door = ownAt(it, 0, f + 0.6);
+          if (st.real) wornLine(bend(door, ownAt(it, 0, f + 6), [best.sx, best.sz]), FOOTW, 1.0);
+          wornDot(door, 1.8, 0.6);
+        }
+      }
       // the well: in the street, by the middle
-      { const [sx, sz, tx, tz] = st.at(4); set('well', sx - tz * (st.hw + 3.4), sz + tx * (st.hw + 3.4), Math.atan2(tx, tz) + Math.PI * 0.75, 1, { reach: 10, gap: 2.2, way: 0.9, fall: 0.5 }); }
+      {
+        const [sx, sz, tx, tz] = st.at(4), it = set('well', sx - tz * (st.hw + 3.4), sz + tx * (st.hw + 3.4), Math.atan2(tx, tz) + Math.PI * 0.75, 1, { reach: 10, gap: 2.2, way: 0.9, fall: 0.5 });
+        // (the earth trodden bare round its crib, where the village comes for its water - country_kit.py well_sweep():
+        // the crib at the kit's x 2.9, z 2.9 - and at the foot of its post)
+        if (it) { wornDot(ownAt(it, 2.9, 2.9), 2.4, 0.6); wornDot([it.x, it.z], 1.1, 0.5); }
+      }
       // the bathhouses: by the water where there is any within 160 m of the village's middle, 5 m back from it;
       // else in a row behind the plots on the lower side, well off the houses
       let bank = null;
@@ -657,7 +723,13 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
       }
       if (!lists.boat.some((b) => b.place === PLACE)) left.push({ kit: 'boat', place: PLACE, x: Math.round(bx), z: Math.round(bz), why: 'no water deep enough beside the dock' });
       set('nets', bx - tx * 4.5 - tz * 6.5, bz - tz * 4.5 + tx * 6.5, ry, 1, { reach: 10, gap: 1.2, way: 0.8, fall: 0.5 });      // (the rack along the bank)
-      if (hut) clear(hut.x, hut.z, 10);
+      if (hut) {
+        clear(hut.x, hut.z, 10);
+        // (his path from the door in the hut's gable end - country_kit.py fisher_hut(): at the kit's x 2.37, z 0.5 -
+        // round its corner to the dock's foot on the bank, the earth bare at the door)
+        wornLine([ownAt(hut, 2.95, 0.5), ownAt(hut, 3.3, 3.2), ownAt(hut, 0.6, 5.4), [dk.x, dk.z]], FOOTW, 1.0);
+        wornDot(ownAt(hut, 3.0, 0.5), 1.3, 0.6);
+      }
     } else if (P.kind === 'chapel' || P.kind === 'post_station') {
       // by its way, its door (its own +z) to it: the chapel a few steps off its path, the station across a yard from
       // the post road
@@ -680,6 +752,22 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
         const off = best.hw + (name === 'post' ? 13 : 6.5), ry = Math.atan2(-nx, -nz);
         const it = set(name, best.qx + nx * off, best.qz + nz * off, ry, 1, { reach: 16, gap: 2.5, way: name === 'post' ? 4 : 2.2, fall: 0.6 });
         if (it) clear(it.x, it.z, name === 'post' ? 16 : 9);
+        if (it && name === 'chapel') {
+          // (a path worn from its way to its door, the earth bare before the door)
+          const f = frontOf('chapel', it), door = ownAt(it, 0, f + 0.5);
+          wornLine([door, ownAt(it, 0, f + 2.0), [best.qx, best.qz]], FOOTW, 1.0);
+          wornDot(door, 1.4, 0.6);
+        }
+        if (it && name === 'post') {
+          // (its forecourt to the road trodden short by the horses; a path bare from the road to the porch's steps, the
+          // earth bare before them; the carriages' ruts from the road to the stable's doors, and the earth bare there)
+          const road = (x) => { const q = ownAt(it, x, 0), d = (q[0] - best.qx) * nx + (q[1] - best.qz) * nz; return ownAt(it, x, d + 0.5); };
+          wornFill([ownAt(it, -8, 4.3), ownAt(it, 16.5, 4.3), road(16.5), road(-8)], 0.12);
+          wornLine([road(0.4), ownAt(it, 0.3, 9.5), ownAt(it, ...STEP.post)], FOOTW, 1.0);
+          wornDot(ownAt(it, 0, STEP.post[1] - 0.2), 2.0, 0.6);
+          wornLine(bend(road(11.5), ownAt(it, 12.2, 8.5), ownAt(it, ...STEP.stable)), CARTW, 0.95, 0.6);
+          wornDot(ownAt(it, 12, STEP.stable[1] + 0.6), 3.0, 0.6);
+        }
       } else { const it = set(name, x0, z0, 0, 1, { reach: 16, gap: 2.5, fall: 0.6 }); if (it) clear(it.x, it.z, 9); }
     } else if (P.kind === 'kurgan') set('idol', x0, z0, R() * 6, 1, { reach: 4, gap: 1, way: 0.6, fall: 0.6 });
     else if (P.kind === 'haystacks') for (let k = 0; k < 7; k++) set('hay', x0 + (R() - 0.5) * P.r * 2, z0 + (R() - 0.5) * P.r * 2, R() * 6, 0.8 + 0.4 * R(), { reach: 14, gap: 3.5, way: 2.0 });
@@ -736,6 +824,32 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     }
     towers.forEach(([x, z, ry], k) => { PLACE = 't' + k; const it = set('hunt', x, z, ry, 1, { reach: 14, gap: 3, way: 2 }); if (it) clear(it.x, it.z, 6); });
   }
+  // the ground people walk on (worn, above) into the ways' pictures; and where it lies, for the flowers, which keep off
+  // it (meadow.js): a point in a worn fill or a worn patch, or within 0.7 m of a worn path's edge - as they keep off a
+  // way's, so none leans over it
+  world.ways?.addAreas?.(worn);
+  {
+    const items = [], G = new Map(), GC = 16;
+    const boxOf = (pts, m) => { let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0 - m, z0 - m, x1 + m, z1 + m]; };
+    for (const f of worn.fills) items.push({ in: (x, z) => depthIn([f.ring], [], x, z) >= 0, box: boxOf(f.ring, 0) });
+    for (const d of worn.dots) items.push({ in: (x, z) => Math.hypot(x - d.at[0], z - d.at[1]) <= d.rad, box: boxOf([d.at], d.rad) });
+    for (const l of worn.lines) items.push({
+      in: (x, z) => {
+        for (let i = 1; i < l.pts.length; i++) {
+          const [ax, az] = l.pts[i - 1], [bx, bz] = l.pts[i], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+          if (Math.hypot(x - ax - t * dx, z - az - t * dz) <= l.w / 2 + 0.7) return true;
+        }
+        return false;
+      }, box: boxOf(l.pts, l.w / 2 + 0.7) });
+    items.forEach((it, k) => {
+      for (let j = Math.floor(it.box[1] / GC); j <= Math.floor(it.box[3] / GC); j++) for (let i = Math.floor(it.box[0] / GC); i <= Math.floor(it.box[2] / GC); i++) {
+        const key = i + ',' + j; let l = G.get(key); if (!l) G.set(key, (l = [])); l.push(k);
+      }
+    });
+    world.yardAt = (x, z) => { const l = G.get(Math.floor(x / GC) + ',' + Math.floor(z / GC)); return !!l && l.some((k) => items[k].in(x, z)); };
+  }
+  group.userData.worn = worn;
   // the copies
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), fwd = new THREE.Vector3(0, 0, 1), sc = new THREE.Vector3(), p = new THREE.Vector3();
   // (a copy's placing: turned about y; a fence's panel also leaned along its own length with the ground, and drawn out
