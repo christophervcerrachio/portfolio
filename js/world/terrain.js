@@ -8,17 +8,12 @@
 import * as THREE from 'three';
 import { WAYS_GLSL } from './paths.js';
 import { WIND_GLSL } from '../backdrops/wind-glsl.js';
+import { hash12, fineTable } from './finehash.js';
 
 export const CLIP = { n: 96, s0: 1, levels: 13, nearLevels: 8 };   // cells a side, the finest spacing (m), rings, rings drawn near
 
 // ---- the same value noise as the shaders' (wind-glsl.js), for the fine relief the walker stands on ----
-const fract = (v) => v - Math.floor(v);
-function hash12(x, y) {
-  let a = fract(x * 0.1031), b = fract(y * 0.1031), c = fract(x * 0.1031);
-  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
-  a += d; b += d; c += d;
-  return fract((a + b) * c);
-}
+// (its hash in finehash.js, which also makes the tables the card reads the same numbers from: LAND_GLSL fineH)
 function vnoise(x, y) {
   const ix = Math.floor(x), iy = Math.floor(y);
   let fx = x - ix, fy = y - iy; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
@@ -60,6 +55,28 @@ function bilinear(arr, n, u, v) {
   const a = arr[k], b = arr[k + 1], c = arr[k + n], d = arr[k + n + 1];
   return a + (b - a) * fx + (c - a + (d - c - b + a) * fx) * fy;
 }
+// the fine relief's tables for the card: the CPU's own hash at every corner of each of its two lattices over the core
+// square, a byte a corner (finehash.js) - made in workers (fine-worker.js), or here where none can be made
+function fineTables(C) {
+  return Promise.all([[9, 0, 0], [23, 7.1, -3.3]].map(([m, ox, oz]) => {
+    const i0 = Math.floor(C.x0 / m + ox) - 1, j0 = Math.floor(C.z0 / m + oz) - 1, n = Math.ceil(C.span / m) + 3;
+    const here = () => ({ i0, j0, n, px: fineTable(i0, j0, n) });
+    return new Promise((res) => {
+      let w;
+      try { w = new Worker(new URL('./fine-worker.js', import.meta.url), { type: 'module' }); } catch { res(here()); return; }
+      w.onmessage = (e) => { w.terminate(); res(e.data.px ? { i0, j0, n, px: e.data.px } : here()); };
+      w.onerror = (e) => { e.preventDefault?.(); w.terminate(); res(here()); };
+      w.postMessage({ i0, j0, n });
+    });
+  }));
+}
+// (a byte a corner, read as it is: no filtering, its rows packed tight - 3,189 bytes are no whole number of words)
+function byteTex({ px, n }) {
+  const t = new THREE.DataTexture(px, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.unpackAlignment = 1;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
+  return t;
+}
 function floatTex(data, n, renderer) {
   const linear = !renderer || renderer.extensions.has('OES_texture_float_linear');
   const t = linear ? new THREE.DataTexture(data, n, n, THREE.RedFormat, THREE.FloatType)
@@ -74,6 +91,7 @@ function floatTex(data, n, renderer) {
 export async function loadWorld(base, { renderer, island } = {}) {
   const dir = base + 'assets/world/';
   const json = await (await fetch(dir + 'world.json')).json();
+  const fineIn = fineTables(json.core);      // (made while the pictures come in)
   const [hb, fb, ca, cb, fl] = await Promise.all(['height.png', 'far.png', 'cover-a.png', 'cover-b.png', 'flow.png'].map((f) => pixels(dir + f)));
   const C = json.core, F = json.far;
   const core = decode(readOpaque(hb), C.px);
@@ -183,8 +201,10 @@ export async function loadWorld(base, { renderer, island } = {}) {
     const x = ((i + 0.5) / SP.n - 0.5) * SP.span, z = ((j + 0.5) / SP.n - 0.5) * SP.span;
     spawnH[j * SP.n + i] = heightAt(x, z);
   }
+  const fine = await fineIn;
   const tex = {
     height: floatTex(core.h, C.px, renderer), far: floatTex(far.h, F.px, renderer), spawn: floatTex(spawnH, SP.n, renderer),
+    fine9: byteTex(fine[0]), fine23: byteTex(fine[1]),
     water: new THREE.DataTexture(core.w, C.px, C.px, THREE.RedFormat, THREE.UnsignedByteType),
     coverA: new THREE.Texture(ca), coverB: new THREE.Texture(cb), flow: new THREE.Texture(fl),
   };
@@ -197,6 +217,8 @@ export async function loadWorld(base, { renderer, island } = {}) {
     uH: { value: tex.height }, uCore: { value: new THREE.Vector4(C.x0, C.z0, C.span, C.px) }, uCircle: { value: new THREE.Vector4(CI.x, CI.z, CI.r, RIM) },
     uFar: { value: tex.far }, uFarR: { value: new THREE.Vector4(F.x0, F.z0, F.span, F.px) },
     uSpawn: { value: tex.spawn }, uSpawnSpan: { value: SP.span },
+    uFine9: { value: tex.fine9 }, uFine9R: { value: new THREE.Vector3(fine[0].i0, fine[0].j0, fine[0].n) },
+    uFine23: { value: tex.fine23 }, uFine23R: { value: new THREE.Vector3(fine[1].i0, fine[1].j0, fine[1].n) },
     uWater: { value: tex.water }, uCovA: { value: tex.coverA }, uCovB: { value: tex.coverB }, uFlow: { value: tex.flow },
     uMeadowR: { value: R0 - 0.5 },
     // (the Kremlin's ground inside its wall, and Red Square: paved in granite setts; kremlin.js fills these in)
@@ -236,6 +258,7 @@ export const LAND_GLSL = /* glsl */`
 #endif
 uniform sampler2D uH; uniform vec4 uCore; uniform sampler2D uFar; uniform vec4 uFarR;
 uniform sampler2D uSpawn; uniform float uSpawnSpan; uniform sampler2D uWater; uniform sampler2D uCovA; uniform sampler2D uCovB;
+uniform sampler2D uFine9; uniform vec3 uFine9R; uniform sampler2D uFine23; uniform vec3 uFine23R;
 uniform float uMeadowR;
 uniform vec3 uOpen[12];    // (the places kept open, x, z, r: no copse within r * 1.05 to r * 1.5; the CPU's openKeep)
 uniform vec2 uKrem[20]; uniform float uKremN; uniform vec2 uRed[4];
@@ -284,7 +307,17 @@ float beachAt(vec2 p, float h, int rings) {
 // (the range's finer relief, for its light only: ridged noise at 700, 260 and 95 m, sharp crests and rounded gullies)
 float mtRidge(vec2 q) { float r = 1.0 - abs(vnoise(q) * 2.0 - 1.0); return r * r; }
 float mtRelief(vec2 p) { return mtRidge(p / 700.0 + 3.1) * 120.0 + mtRidge(p / 260.0 - 1.7) * 45.0 + mtRidge(p / 95.0 + 8.3) * 15.0; }
-float fineH(vec2 p) { return (vnoise(p / 9.0) - 0.5) * 0.45 + (vnoise(p / 23.0 + vec2(7.1, -3.3)) - 0.5) * 0.7; }
+// the fine relief: its lattice's corners the CPU's own numbers, read from its tables (finehash.js, a byte a corner) -
+// worked here, the hash's last step had come out on the other side of a whole number at one corner in thirty, a hummock
+// of up to 0.7 m the CPU did not have, or one it had and this did not draw - and the shaders' own noise past the tables
+float fineCorner(sampler2D t, vec3 r, vec2 c) { return texelFetch(t, ivec2(c - r.xy), 0).r; }
+float fineNoise(sampler2D t, vec3 r, vec2 p) {
+  vec2 i = floor(p), k = i - r.xy;
+  if (k.x < 0.0 || k.y < 0.0 || k.x > r.z - 2.0 || k.y > r.z - 2.0) return vnoise(p);
+  vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(fineCorner(t, r, i), fineCorner(t, r, i + vec2(1, 0)), f.x), mix(fineCorner(t, r, i + vec2(0, 1)), fineCorner(t, r, i + vec2(1, 1)), f.x), f.y);
+}
+float fineH(vec2 p) { return (fineNoise(uFine9, uFine9R, p / 9.0) - 0.5) * 0.45 + (fineNoise(uFine23, uFine23R, p / 23.0 + vec2(7.1, -3.3)) - 0.5) * 0.7; }
 // the land's height at p: the core where it reaches, the far land beyond; the hilltop's own surface round the spawn
 float landH(vec2 p) {
   vec2 uv = coreUV(p); float e = coreEdge(uv);
