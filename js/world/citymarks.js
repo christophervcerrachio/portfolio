@@ -17,8 +17,10 @@ import { placeRing } from './plans.js';
 
 const DIR = 'assets/world/landmarks/';
 // (a small model placed many times over is drawn as copies of one, the copies of each quarter of QUARTER m together;
-// a large one - a church of 57,000 triangles - stays its own piece, shown and hidden by itself)
-const MANY = 6, SMALL = 6000, QUARTER = 900;
+// a large one - a church of 57,000 triangles - stays its own piece, shown and hidden by itself. 23 Nov 2026: the spa
+// towns' houses with their windows dressed, their doors and perrons are 4,000 to 16,000 triangles - still copies of
+// one: SMALL had been 6,000, and a house over it would have been 57 pieces of twenty meshes each)
+const MANY = 6, SMALL = 20000, QUARTER = 900;
 // The light copies (dev\world\landmarks_lod.py: <model>.lod.glb, listed in light.json - a twentieth of the triangles
 // and small pictures): a machine that draws the walk as an older console did reads these and never the full models
 // (hardware.js marks: 'light'). One list for every landmark file, asked for once.

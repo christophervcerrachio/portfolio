@@ -138,6 +138,9 @@ export async function loadWorld(base, { renderer, island } = {}) {
   // and round its church. The same circles as build_world.py's keep_open, r * 1.05 to r * 1.5; uOpen below.)
   const OPEN = (json.pois ?? []).filter((P) => P.kind !== 'nymph_pond').slice(0, 12).map((P) => [P.at[0], P.at[1], P.r ?? 20]);
   const openKeep = (x, z) => { let k = 1; for (const [ox, oz, r] of OPEN) k = Math.min(k, sm(r * 1.05, r * 1.5, Math.hypot(x - ox, z - oz))); return k; };
+  // (the spa towns, x, z, r: no farmland is added inside one - moreFields, uSpa below. Kislovodsk's open ground between
+  // its streets had been taken into fields, and the walker set down there stood in rye to the waist)
+  const SPA = (json.pois ?? []).filter((P) => P.kind === 'spa').slice(0, 2).map((P) => [P.at[0], P.at[1], P.r ?? 0]);
   const copse = (x, z) => {
     const n = cnoise(x / 170, z / 170) * 0.7 + cnoise(x / 47 + 9.1, z / 47 - 3.3) * 0.3;
     return sm(0.6, 0.72, n) * sm(220, 400, Math.hypot(x, z)) * openKeep(x, z);
@@ -225,6 +228,7 @@ export async function loadWorld(base, { renderer, island } = {}) {
     uKrem: { value: Array.from({ length: 20 }, () => new THREE.Vector2()) }, uKremN: { value: 0 },
     uRed: { value: Array.from({ length: 4 }, () => new THREE.Vector2()) },
     uOpen: { value: Array.from({ length: 12 }, (_, i) => new THREE.Vector3(...(OPEN[i] ?? [0, 0, 0]))) },
+    uSpa: { value: Array.from({ length: 2 }, (_, i) => new THREE.Vector3(...(SPA[i] ?? [0, 0, 0]))) },
   };
   const forestAt = (x, z) => Math.max(forestRaw(x, z), copse(x, z) * meadowOpen(x, z));
   // what the ground is at (x, z), for the footsteps (walk.js): the cover pictures as the land's shader reads them (A: R
@@ -261,6 +265,7 @@ uniform sampler2D uSpawn; uniform float uSpawnSpan; uniform sampler2D uWater; un
 uniform sampler2D uFine9; uniform vec3 uFine9R; uniform sampler2D uFine23; uniform vec3 uFine23R;
 uniform float uMeadowR;
 uniform vec3 uOpen[12];    // (the places kept open, x, z, r: no copse within r * 1.05 to r * 1.5; the CPU's openKeep)
+uniform vec3 uSpa[2];      // (the spa towns, x, z, r: no farmland added within r, back by 1.3 r - moreFields)
 uniform vec2 uKrem[20]; uniform float uKremN; uniform vec2 uRed[4];
 // (inside the Kremlin's wall or on Red Square: 1, else 0; a point-in-polygon test, run only where the land is town)
 float paved(vec2 p) {
@@ -410,7 +415,10 @@ float moreFields(vec2 p, vec4 A, vec4 B) {
   // (ploughed only where a plough could go: the gentle slopes. The steeper bare hillsides are grass and scrub, the
   // steepest rock (hillside()): the strips had climbed every slope in hard orange bands)
   if (bareHill > 0.0) bareHill *= 1.0 - smoothstep(0.07, 0.13, slopeAt(p));
-  return max(open * blocks, bareHill) * spawn;
+  // (and none in a spa town: its open ground is the town's own - its gardens, its yards - not a farm's)
+  float town = 1.0;
+  for (int i = 0; i < 2; i++) { if (uSpa[i].z > 0.0) town = min(town, smoothstep(uSpa[i].z, uSpa[i].z * 1.3, length(p - uSpa[i].xy))); }
+  return max(open * blocks, bareHill) * spawn * town;
 }
 vec4 fieldStrip(vec2 p) {
   vec2 q = p + 60.0 * vec2(vnoise(p / 300.0), vnoise(p / 300.0 + 5.2)) - 30.0;
