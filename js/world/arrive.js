@@ -53,6 +53,9 @@ const A = {
   // (pieces still being made, each to come in once it is - a tile of the fronts' relief, built over frames: counted as
   // waiting, so what waits for everything to be in waits for them too - facaderelief.js, makingArrival)
   making: 0,
+  // (of those, the ones whose maker counts them itself, and when they are near - the fronts' relief: facaderelief.js
+  // pendingNear - and arrivalsNear leaves them to it)
+  makingOwn: 0,
 };
 
 /** As the walk begins. scene: what everything is drawn in (the lights, the fog); camera, target and shadow: functions
@@ -343,6 +346,7 @@ function standDown(a = null) {
  *           wave from the nearest, each the later the farther it is
  *   cancel  a function: true once they are no longer wanted at all (taken out before they came in)
  *   reach   m: they come in once the walker is within this of them (else A.reach)
+ *   own     true: their maker counts them itself while they come (arrivalsNear leaves them out)
  * Returns a promise, resolved once they stand in their place.
  */
 export function arrive(objs, opts = {}) {
@@ -358,7 +362,7 @@ export function arrive(objs, opts = {}) {
     }
     A.queue.push({ list, parent: opts.parent ?? null, gate: !!opts.gate, x, z, rise: opts.rise ?? true, depth: opts.depth, dur: opts.dur,
       delay: opts.delay ?? 0, batch: opts.batch ?? null, wave: opts.wave ?? 2500, stage: 0, tex: null, bytes: -1, res, cancel: opts.cancel ?? null,
-      reach: opts.reach });
+      reach: opts.reach, own: !!opts.own });
   });
 }
 
@@ -373,17 +377,19 @@ export const arrivalsReach = () => A.reach;
 export function arrivalsNear(x, z, r = 1500) {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return arrivalsWaiting();
   const d2 = (px, pz) => { const dx = px - x, dz = pz - z; return dx * dx + dz * dz <= r * r; };
-  let n = A.making;
-  for (const a of A.queue) if (!beyond(a) && d2(a.x, a.z)) n++;
-  for (const rec of A.rising) { const a = rec.a; if (!a || d2(a.x, a.z)) n++; }   // (a thing going down has no `a`: it leaves, it does not arrive)
+  // (a piece whose maker counts it itself - arrive's `own`, makingArrival's - is the maker's to count: the fronts'
+  //  relief says which of its tiles are near enough to wait for, those drawn from where the walker stands - 22 Nov 2026)
+  let n = A.making - A.makingOwn;
+  for (const a of A.queue) if (!a.own && !beyond(a) && d2(a.x, a.z)) n++;
+  for (const rec of A.rising) { const a = rec.a; if (a?.own) continue; if (!a || d2(a.x, a.z)) n++; }   // (a thing going down has no `a`: it leaves, it does not arrive)
   return n;
 }
 /** One more piece being made, to come in (arrive) once it is: returns the function that says it is made (or no longer
  *  wanted) - until then it counts as waiting. */
-export function makingArrival() {
-  A.making++;
+export function makingArrival({ own = false } = {}) {
+  A.making++; if (own) A.makingOwn++;
   let open = true;
-  return () => { if (open) { open = false; A.making--; } };
+  return () => { if (open) { open = false; A.making--; if (own) A.makingOwn--; } };
 }
 /** Whether `a` waits for the walker to come within its reach (arrive's `reach`, else A.reach). */
 const beyond = (a) => !!A.pos && a.stage === 0 && Math.hypot(a.x - A.pos.x, a.z - A.pos.z) > (a.reach ?? A.reach);

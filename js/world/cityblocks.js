@@ -113,6 +113,8 @@ export function buildCityBlocks(U, { base = '', cities = ['spb', 'moscow'], extr
   // all of it: walk.js)
   let extrasLeft = extras.length;
   group.userData.pending = () => streams.reduce((n, st) => n + st.pending(), 0) + extrasLeft + (relief.userData.pending?.() ?? 0);
+  // (and what a place travelled to waits for: its houses within r m, and its fronts' relief where it is drawn - walk.js)
+  group.userData.nearPending = (pos, r) => streams.reduce((n, st) => n + st.pendingNear(pos.x, pos.z, r), 0) + (relief.userData.pendingNear?.(pos) ?? 0);
   for (const file of extras) loadOne(file);
   function loadOne(file) {
     loadInTurn(base + DIR + file).then((g) => {

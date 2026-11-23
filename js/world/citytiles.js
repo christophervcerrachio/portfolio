@@ -164,6 +164,19 @@ export function tileStream({ base = '', city, kind, show = Infinity, group, libr
   };
   /** How many of the tiles are not yet in and come in (the loading picture waits for none: walk.js). */
   st.pending = () => { if (!st.ready) return 1; let n = 0; for (const t of tiles.values()) if (t.state < 2 || (t.state === 2 && !t.scene.userData.risen)) n++; return n; };
+  /** How many of the tiles within `r` m of (x, z) - and within `show`, where they are drawn - are not yet in and stood in
+   *  their places: what a place travelled to waits for (walk.js). Those farther off come in after its picture has
+   *  lifted (22 Nov 2026: the picture had waited for every tile being read, 3 km round). */
+  st.pendingNear = (x, z, r) => {
+    if (!st.ready) return 1;
+    const half = T * 0.71, lim = Math.min(r, show);
+    let n = 0;
+    for (const t of tiles.values()) {
+      if (t.state === 3 || Math.hypot(t.x - x, t.z - z) - half >= lim) continue;
+      if (t.state < 2 || !t.scene.userData.risen) n++;
+    }
+    return n;
+  };
   /** Whether the tile 'i_j' is in and all of it shown. */
   st.shown = (key) => tiles.get(key)?.shown === true;
   /** Whether the tile 'i_j' is shown and stands in its place: risen out of the ground, or shown where it stood (reveal.js). */

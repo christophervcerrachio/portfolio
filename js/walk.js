@@ -140,12 +140,20 @@ export async function initWalk(container, opts = {}) {
   // ground into its place as it arrives (world/arrive.js). Until v0.0.38 the walk waited under a grey veil for every
   // file of the whole world: 114 MB, half a minute on a first visit.
   let pending = 0, quietSince = performance.now();
+  // (the cities' own files - their tiles of houses, of yards and pavements, the fronts' relief - counted apart as well:
+  //  a place travelled to waits for those near it, which the cities count themselves (citytiles.js pendingNear), not for
+  //  every one being read, 3 km round - 22 Nov 2026)
+  const cityFile = (u) => /world\/cities\/[a-z]+-(?:tiles|relief)\//.test(String(u?.url ?? u ?? ''));
+  let cityReading = 0, managerOther = 0;
   const ofetch = window.fetch.bind(window);
-  window.fetch = (...a) => { pending++; return ofetch(...a).finally(() => { if (--pending === 0) quietSince = performance.now(); }); };
+  window.fetch = (...a) => { const c = cityFile(a[0]); pending++; if (c) cityReading++; return ofetch(...a).finally(() => { if (c) cityReading--; if (--pending === 0) quietSince = performance.now(); }); };
   const LM = THREE.DefaultLoadingManager, prevStart = LM.onStart, prevLoad = LM.onLoad;
   let managerBusy = false;
   LM.onStart = (...a) => { managerBusy = true; prevStart?.(...a); };
   LM.onLoad = (...a) => { managerBusy = false; quietSince = performance.now(); prevLoad?.(...a); };
+  { const start = LM.itemStart, end = LM.itemEnd;
+    LM.itemStart = (url) => { if (!cityFile(url)) managerOther++; return start.call(LM, url); };
+    LM.itemEnd = (url) => { if (!cityFile(url)) managerOther = Math.max(0, managerOther - 1); return end.call(LM, url); }; }
   const loading = startLoading(document.querySelector('.walk-load'), { style: GFX.style ?? 'full', still, base });
   let framesSince = 0, veilUp = !still, gfxChecked = still, bench = null, benchLast = null;
   // (the look the walk was meant to open on, and the moment the loading picture is gone: nothing turns the view before it)
@@ -516,9 +524,13 @@ export async function initWalk(container, opts = {}) {
   const TRAVEL = { fade: 0.5, most: 10, near: 1500, settle: 500 };
   let trip = null;
   // (what the loading picture waits under: the ground, the arrivals that stand near the place - not the whole world's
-  // queue, which held a travel for tiles on the far side of the map - no file being read)
-  const nearWaiting = () => arrivalsNear(s.at.x, s.at.z, TRAVEL.near);
-  const placeIn = () => groundLoaded() && nearWaiting() === 0 && pending === 0 && !managerBusy;
+  // queue, which held a travel for tiles on the far side of the map - the cities' tiles within TRAVEL.near and their
+  // fronts' relief where it is drawn, and no other file being read. 22 Nov 2026, his yes to waiting only for what is
+  // near: it had waited for every file being read anywhere - the cities' tiles 3 km round among them - and a city's
+  // travel took most of its ten seconds; the farther tiles come in after it lifts)
+  const cityNear = () => (s.cityBlocks?.userData.nearPending?.(s.at, TRAVEL.near) ?? 0) + (s.cityProps?.userData.nearPending?.(s.at, TRAVEL.near) ?? 0);
+  const nearWaiting = () => arrivalsNear(s.at.x, s.at.z, TRAVEL.near) + cityNear();
+  const placeIn = () => groundLoaded() && nearWaiting() === 0 && pending - cityReading === 0 && managerOther === 0;
   function travel(p) {
     // (22 Nov 2026: `leaving` went with the change of look at v0.0.145 and this line had kept it, so every place chosen
     //  in the book threw before anything moved - the book's travel did nothing at all)

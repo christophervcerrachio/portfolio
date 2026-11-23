@@ -306,6 +306,16 @@ export function buildCityProps(U, models = {}, { base = '', cities = ['spb', 'mo
   // camera drawn)
   const todo = [];
   group.userData.pending = () => (listed < cities.length ? 1 : 0) + [...tiles.values()].filter((t) => !t.built || t.arriving).length + streams.reduce((n, st) => n + st.pending(), 0);
+  // (what a place travelled to waits for - walk.js: its yards and pavements within r m, and the furniture of the tiles
+  // near it, made and come in - every list read first; the yards' and pavements' tiles for tests)
+  group.userData.nearPending = (pos, r) => {
+    let n = streams.reduce((k, st) => k + st.pendingNear(pos.x, pos.z, r), 0);
+    if (listed < cities.length) return n + 1;
+    const lim = Math.min(r, near);
+    for (const t of tiles.values()) if ((!t.built || t.arriving) && Math.hypot(t.c[0] - pos.x, t.c[1] - pos.z) < lim) n++;
+    return n;
+  };
+  group.userData.streams = streams;
   group.userData.update = (pos) => {
     for (const st of streams) st.update(pos);
     todo.length = 0;

@@ -1113,7 +1113,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         fetch(base + DIR + T.city + '-relief/' + T.key + '.json').then((r) => r.json()).then((walls) => {
           // (while it is built it counts as coming in: what waits for everything to be in - the book's leaves, a test -
           // waits for it as for anything else on its way; arrive.js)
-          T.made = makingArrival();
+          T.made = makingArrival({ own: true });
           building.push({ T, walls, steps: buildSteps(T, walls) });
         }).catch(() => { T.state = 3; });
       }
@@ -1126,7 +1126,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           if (!housesIn || housesIn(T.city, T.key)) {
             T.fresh = false; T.arriving = true;
             const g = T.g;
-            arrive(g, { parent: group, x: T.c[0], z: T.c[1], depth: 1.2, dur: 0.7, cancel: () => T.g !== g }).then(() => { if (T.g === g) T.arriving = false; });
+            arrive(g, { parent: group, x: T.c[0], z: T.c[1], depth: 1.2, dur: 0.7, cancel: () => T.g !== g, own: true }).then(() => { if (T.g === g) T.arriving = false; });
           }
         } else if (!T.arriving) {
           if (want && !T.g.parent) group.add(T.g);
@@ -1152,6 +1152,20 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     let n = 0;
     for (const T of tiles.values()) {
       if (!(T.want)) continue;
+      if (T.state === 0 || T.state === 1 || (T.state === 2 && (T.fresh || T.arriving))) n++;
+    }
+    return n;
+  };
+  // (of those, the tiles with cells drawn from where the walker stands - a tile's nearest edge within SHOW: what a place
+  // travelled to waits for. The rest are built after its picture has lifted, out of his sight; each counts itself, and
+  // the arrivals leave it to this - arrive.js own, 22 Nov 2026)
+  let readDone = false;
+  ready.then(() => { readDone = true; });
+  group.userData.pendingNear = (pos) => {
+    if (!BAYS) return readDone ? 0 : 1;           // (its lists not read at all: none of it comes)
+    let n = 0;
+    for (const T of tiles.values()) {
+      if (!T.want || Math.max(Math.abs(T.c[0] - pos.x), Math.abs(T.c[1] - pos.z)) - T.I.tile / 2 >= SHOW) continue;
       if (T.state === 0 || T.state === 1 || (T.state === 2 && (T.fresh || T.arriving))) n++;
     }
     return n;
