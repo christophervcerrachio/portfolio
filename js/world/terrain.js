@@ -11,22 +11,31 @@ import { WIND_GLSL } from '../backdrops/wind-glsl.js';
 
 export const CLIP = { n: 96, s0: 1, levels: 13, nearLevels: 8 };   // cells a side, the finest spacing (m), rings, rings drawn near
 
-// ---- the same value noise as the shaders' (wind-glsl.js), for the fine relief the walker stands on ----
-const fract = (v) => v - Math.floor(v);
-function hash12(x, y) {
-  let a = fract(x * 0.1031), b = fract(y * 0.1031), c = fract(x * 0.1031);
-  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
-  a += d; b += d; c += d;
-  return fract((a + b) * c);
+// ---- the fine relief the walker stands on: the same numbers here as on the card (LAND_GLSL's fineH below) ----
+// (its noise's corners drawn from whole numbers by whole-number arithmetic - pcg2d, Jarzynski and Olano 2020 - which the
+// CPU and every card work alike to the bit. It had the shaders' own noise (wind-glsl.js), whose last step is the
+// fraction of a product near 20,000, where single precision keeps three decimals: worked in double on the CPU, and by
+// a card that fuses its multiplies and adds or one that does not, that fraction came out on either side of a whole
+// number at one lattice point in thirty, and there one of them had a hummock or a hollow of up to 0.7 m the other did
+// not. The walker and everything laid by this height - the ways' stones, the trees, the furniture - stood over the
+// drawn ground there or sank into it. 23 Nov 2026, measured against the land as drawn: dev\tests\groundtest.js)
+const PCG_M = 1664525, PCG_A = 1013904223, FINE_OFF = 1048576;
+function fineHash(i, j) {
+  let x = (Math.imul(i + FINE_OFF, PCG_M) + PCG_A) >>> 0, y = (Math.imul(j + FINE_OFF, PCG_M) + PCG_A) >>> 0;
+  x = (x + Math.imul(y, PCG_M)) >>> 0; y = (y + Math.imul(x, PCG_M)) >>> 0;
+  x = (x ^ (x >>> 16)) >>> 0; y = (y ^ (y >>> 16)) >>> 0;
+  x = (x + Math.imul(y, PCG_M)) >>> 0;
+  x = (x ^ (x >>> 16)) >>> 0;
+  return (x >>> 8) / 16777216;
 }
-function vnoise(x, y) {
+function fineNoise(x, y) {
   const ix = Math.floor(x), iy = Math.floor(y);
   let fx = x - ix, fy = y - iy; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
-  const a = hash12(ix, iy), b = hash12(ix + 1, iy), c = hash12(ix, iy + 1), e = hash12(ix + 1, iy + 1);
+  const a = fineHash(ix, iy), b = fineHash(ix + 1, iy), c = fineHash(ix, iy + 1), e = fineHash(ix + 1, iy + 1);
   return a + (b - a) * fx + (c + (e - c) * fx - a - (b - a) * fx) * fy;
 }
 // the fine relief over the 8 m picture: hummocks a few tens of cm high, none on water, roads or in a city
-const fineCPU = (x, z) => (vnoise(x / 9, z / 9) - 0.5) * 0.45 + (vnoise(x / 23 + 7.1, z / 23 - 3.3) - 0.5) * 0.7;
+const fineCPU = (x, z) => (fineNoise(x / 9, z / 9) - 0.5) * 0.45 + (fineNoise(x / 23 + 7.1, z / 23 - 3.3) - 0.5) * 0.7;
 
 // (read again, twice at most, if the browser could not decode it: seen once, 11 Nov 2026, on a page opened straight
 // after another copy of itself - "The source image could not be decoded", one of the five 3584 px maps, and with it no
@@ -284,7 +293,20 @@ float beachAt(vec2 p, float h, int rings) {
 // (the range's finer relief, for its light only: ridged noise at 700, 260 and 95 m, sharp crests and rounded gullies)
 float mtRidge(vec2 q) { float r = 1.0 - abs(vnoise(q) * 2.0 - 1.0); return r * r; }
 float mtRelief(vec2 p) { return mtRidge(p / 700.0 + 3.1) * 120.0 + mtRidge(p / 260.0 - 1.7) * 45.0 + mtRidge(p / 95.0 + 8.3) * 15.0; }
-float fineH(vec2 p) { return (vnoise(p / 9.0) - 0.5) * 0.45 + (vnoise(p / 23.0 + vec2(7.1, -3.3)) - 0.5) * 0.7; }
+// (the fine relief's own noise: the same numbers as the CPU's fineHash and fineNoise, its corners from whole-number
+// arithmetic that every card works alike to the bit)
+float fineHash(vec2 c) {
+  highp uvec2 v = uvec2(ivec2(c) + 1048576);
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * 1664525u; v.y += v.x * 1664525u;
+  v ^= v >> 16u;
+  v.x += v.y * 1664525u;
+  v.x ^= v.x >> 16u;
+  return float(v.x >> 8u) * (1.0 / 16777216.0);
+}
+float fineNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(fineHash(i), fineHash(i + vec2(1, 0)), f.x), mix(fineHash(i + vec2(0, 1)), fineHash(i + vec2(1, 1)), f.x), f.y); }
+float fineH(vec2 p) { return (fineNoise(p / 9.0) - 0.5) * 0.45 + (fineNoise(p / 23.0 + vec2(7.1, -3.3)) - 0.5) * 0.7; }
 // the land's height at p: the core where it reaches, the far land beyond; the hilltop's own surface round the spawn
 float landH(vec2 p) {
   vec2 uv = coreUV(p); float e = coreEdge(uv);
