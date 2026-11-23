@@ -61,6 +61,27 @@ function smoothLine(pts) {
 
 /** world: loadWorld()'s. Returns { tex, uniforms, update(cameraPos), near(x, z) }: near is metres to the nearest way's
  *  edge (negative inside it), for the woods and the walker. */
+/** A footpath that runs to a pond or a lake ends at its shore: the builder led the path to the water's middle (the
+ *  rusalka pond's path began there), and a bridge had been laid from the bank to that middle, ending in the water, the
+ *  way's earth and its stones under the water with it (19 Nov 2026). Each end walked in a metre at a time while the
+ *  water there is more than a hand deep (as the bridges count it: bridges.js), and cut at the first dry ground. */
+function dryEnds(world, pts) {
+  if (!world.waterAt || !world.landAt || pts.length < 2) return pts;
+  const wet = (x, z) => { const s = world.waterAt(x, z); return s !== null && s - world.landAt(x, z) > 0.15; };
+  const cut = (P) => {
+    for (let i = 1; i < P.length; i++) {
+      const [ax, az] = P[i - 1], [bx, bz] = P[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az)));
+      for (let k = 0; k <= n; k++) {
+        const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n;
+        if (!wet(x, z)) return k === 0 && i === 1 ? P : [[x, z], ...P.slice(i)];
+      }
+    }
+    return [];
+  };
+  const a = cut(pts);
+  return a.length > 1 ? cut(a.slice().reverse()).reverse() : a;
+}
+
 export function buildPaths(world, extra = []) {
   const J = world.json, ways = [];
   for (const e of extra) ways.push({ kind: e.kind, ...style(e.kind, e.w), pts: e.pts });
@@ -70,7 +91,7 @@ export function buildPaths(world, extra = []) {
     const kind = /track/.test(name) ? 'track' : 'road';
     ways.push({ kind, ...style(kind), pts: smoothLine(at0) });
   }
-  for (const p of J.paths ?? []) ways.push({ kind: p.kind, ...style(p.kind, p.w), pts: smoothLine(p.pts) });
+  for (const p of J.paths ?? []) { const pts = dryEnds(world, p.pts); if (pts.length > 1) ways.push({ kind: p.kind, ...style(p.kind, p.w), pts: smoothLine(pts) }); }
   // (every street of a city paved, the lanes too: a lane's earth had run as a strip of dirt down the middle of the brick
   // street)
   // (Moscow's streets, beaten earth (terrain.js), carry the cart wheels' ruts as its period pictures show them; Petersburg's

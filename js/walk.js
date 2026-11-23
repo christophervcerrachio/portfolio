@@ -474,7 +474,9 @@ export async function initWalk(container, opts = {}) {
   const nearWaiting = () => arrivalsNear(s.at.x, s.at.z, TRAVEL.near);
   const placeIn = () => groundLoaded() && nearWaiting() === 0 && pending === 0 && !managerBusy;
   function travel(p) {
-    if (travelUp || leaving || !p) return;
+    // (22 Nov 2026: `leaving` went with the change of look at v0.0.145 and this line had kept it, so every place chosen
+    //  in the book threw before anything moved - the book's travel did nothing at all)
+    if (travelUp || !p) return;
     travelUp = true; held.clear(); vel.x = 0; vel.z = 0;
     controls?.show(false); mouseState();
     const look = GFX.style ?? 'full', html = window.__walkLoadHTML;
