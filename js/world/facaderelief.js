@@ -23,13 +23,32 @@ const DIR = 'assets/world/cities/';
 // (a growing list of floats kept as 32-bit floats from the first - a tile's positions, normals, uvs and colours: a tile
 // of the centre's relief is millions of them, and kept as plain numbers they had been twice the memory, and copied
 // again into 32-bit floats for the card once the tile was done)
+// (22 Nov 2026: its values taken as they are passed, not gathered into a list first - a list a call, five or six calls
+// a corner, had been a good part of a tile's building - and a model's corners, thousands at a time, written straight
+// into it: take, below. The same numbers in the same places)
 class Floats {
   constructor() { this.a = new Float32Array(1024); this.length = 0; }
-  push(...v) {
-    const n = this.length + v.length;
-    if (n > this.a.length) { const b = new Float32Array(Math.max(n, this.a.length * 2)); b.set(this.a); this.a = b; }
-    for (let i = 0; i < v.length; i++) this.a[this.length + i] = v[i];
-    this.length = n; return n;
+  push(a, b, c) {
+    const m = arguments.length; if (m === 0) return this.length;
+    const A = this.a.length < this.length + m ? this.grow(m) : this.a, i = this.length;
+    A[i] = a; if (m > 1) { A[i + 1] = b; if (m > 2) { A[i + 2] = c; for (let j = 3; j < m; j++) A[i + j] = arguments[j]; } }
+    return (this.length = i + m);
+  }
+  /** an array's values added at the end, in one copy */
+  pushAll(v) {
+    const A = this.a.length < this.length + v.length ? this.grow(v.length) : this.a;
+    A.set(v, this.length);
+    return (this.length += v.length);
+  }
+  /** room for m more at the end: the index they start at, the caller writing them into `.a` (read after this call) */
+  take(m) {
+    if (this.a.length < this.length + m) this.grow(m);
+    const at = this.length; this.length += m; return at;
+  }
+  /** (the list made larger: twice its size, or as large as m more need) */
+  grow(m) {
+    const b = new Float32Array(Math.max(this.length + m, this.a.length * 2)); b.set(this.a);
+    return (this.a = b);
   }
   /** the floats as an attribute of `size` (its array the list's own: nothing copied) */
   attr(size) { return new THREE.BufferAttribute(this.a.subarray(0, this.length), size); }
@@ -208,7 +227,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   // (a painted window's own edges inside the rectangle measured for it: the dark of the reveal's shadow painted beside
   // the frame trimmed off each side - columns of the middle rows much darker than the frame's paint, at most a quarter of
   // the width a side - so the glass's picture starts at the frame, not at a dark board beside it)
-  const trimDark = (name, H, [x0, y0, x1, y1]) => {
+  const trimRead = (name, H, [x0, y0, x1, y1]) => {
     const P = pixOf(name); if (!P) return [x0, x1];
     const fx = P.w / 1024, fy = P.h / H, i0 = Math.round(x0 * fx), i1 = Math.round(x1 * fx) - 1;
     const j0 = Math.round((y0 + (y1 - y0) * 0.3) * fy), j1 = Math.round((y0 + (y1 - y0) * 0.7) * fy);
@@ -221,7 +240,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     let b = 0; while (b < lim && dark(col[col.length - 1 - b])) b++;
     return [x0 + a / fx, x1 - b / fx];
   };
-  const paintAt = (name, H, [x0, y0, x1, y1]) => {
+  const paintRead = (name, H, [x0, y0, x1, y1]) => {
     const P = pixOf(name); if (!P) return null;
     const fx = P.w / 1024, fy = P.h / H;
     const i0 = Math.max(0, Math.floor(Math.min(x0, x1) * fx)), i1 = Math.min(P.w - 1, Math.max(i0, Math.ceil(Math.max(x0, x1) * fx) - 1));
@@ -232,6 +251,25 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
     const a = Math.floor(px.length * 0.55), b = Math.max(a + 1, Math.ceil(px.length * 0.92)); let r = 0, g = 0, bl = 0;
     for (let q = a; q < b; q++) { r += px[q][0]; g += px[q][1]; bl += px[q][2]; }
     const n = b - a; return [lin(r / n) / MOULD_MEAN, lin(g / n) / MOULD_MEAN, lin(bl / n) / MOULD_MEAN];
+  };
+  // (each read once: a front's windows, doors and hoods stand at the same places of its picture on every house it is on,
+  // and the paint of every moulding round them had been read again for each - every pixel of its rectangle sorted, some
+  // 43,000 rectangles a tile of Petersburg's centre, three quarters of the tile's building and the most of a travel's
+  // wait there, 22 Nov 2026. Kept by the picture, its height and the rectangle once the picture is in - not before, so
+  // a picture still coming is read again next time; no caller changes what it is given back)
+  const READ = new Map();
+  const readKey = (name, H, r) => name + '|' + H + '|' + r[0] + ',' + r[1] + ',' + r[2] + ',' + r[3];
+  const paintAt = (name, H, r) => {
+    const k = readKey(name, H, r);
+    let v = READ.get(k);
+    if (v === undefined) { v = paintRead(name, H, r); if (v) READ.set(k, v); }
+    return v;
+  };
+  const trimDark = (name, H, r) => {
+    const k = 't|' + readKey(name, H, r);
+    let v = READ.get(k);
+    if (v === undefined) { v = trimRead(name, H, r); if (pixOf(name)) READ.set(k, v); }
+    return v;
   };
   // (a carved casing's boards cut to their own outline: the wall's picture on them, fronts/<front>-cut.png the carving's
   // shape in it - white where the board is, black where the logs show through - so a crest's curve, an apron's scallops
@@ -502,13 +540,14 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           const AF = get('fit-' + pt.kind + (pt.kind === 'fix' || pt.kind === 'wall' ? ':' + fname : ''), ckF);
           AF.mat ??= pt.kind.startsWith('paint:') ? paintMat(pt.kind.slice(6)) : pt.kind === 'dglass' ? DGLASS : pt.kind === 'iron' ? IRON : pt.kind === 'glass' ? PANES : pt.kind === 'brass' ? BRASS : pt.kind === 'wall' ? doorMat(fname) : picMat(fname, '-fixtures');
           const { p: fp, n: fn, u: fu } = pt;
+          const np_ = Math.ceil(fp.length / 3) * 3, jp = AF.p.take(np_), Pa = AF.p.a, jn = AF.n.take(np_), Na = AF.n.a;
           for (let i = 0; i < fp.length; i += 3) {
             const s_ = f0 + fp[i] * sx, h_ = f1 + fp[i + 1] * sy, o_ = o0 + fp[i + 2];
-            AF.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
+            Pa[jp + i] = ax + tx * s_ + nx * o_; Pa[jp + i + 1] = h_; Pa[jp + i + 2] = az + tz * s_ + nz * o_;
             let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
-            AF.n.push(tx * q0 + nx * q2, q1, tz * q0 + nz * q2);
+            Na[jn + i] = tx * q0 + nx * q2; Na[jn + i + 1] = q1; Na[jn + i + 2] = tz * q0 + nz * q2;
           }
-          for (let i = 0; i < fu.length; i++) AF.u.push(fu[i]);
+          AF.u.pushAll(fu);
         }
       };
       const FT = FITS[key];
@@ -760,14 +799,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 const mid = V((u0 + u1) / 2, (v0 + v1) / 2, 0), AF = get(fm.mat.name, Math.floor(mid[0] / FCELL) + ',' + Math.floor(mid[2] / FCELL), FCELL);
                 AF.mat = fm.mat;
                 const { p: fp, n: fn, u: fu } = fm;
+                const np_ = Math.ceil(fp.length / 3) * 3, jp = AF.p.take(np_), Pa = AF.p.a, jn = AF.n.take(np_), Na = AF.n.a;
                 for (let i = 0; i < fp.length; i += 3) {
                   const s_ = u0 + fp[i] * sx, h_ = v0 + fp[i + 1] * sy, o_ = -Dw + fp[i + 2];
-                  AF.p.push(ax + tx * s_ + nx * o_, h_, az + tz * s_ + nz * o_);
+                  Pa[jp + i] = ax + tx * s_ + nx * o_; Pa[jp + i + 1] = h_; Pa[jp + i + 2] = az + tz * s_ + nz * o_;
                   // (a normal stretched the other way to the shape)
                   let q0 = fn[i] / sx, q1 = fn[i + 1] / sy, q2 = fn[i + 2]; const ql = Math.hypot(q0, q1, q2) || 1; q0 /= ql; q1 /= ql; q2 /= ql;
-                  AF.n.push(tx * q0 + nx * q2, q1, tz * q0 + nz * q2);
+                  Na[jn + i] = tx * q0 + nx * q2; Na[jn + i + 1] = q1; Na[jn + i + 2] = tz * q0 + nz * q2;
                 }
-                for (let i = 0; i < fu.length; i++) AF.u.push(fu[i]);
+                AF.u.pushAll(fu);
               }
               // a window box of flowers on the sill now and then: one window in six on the lower two storeys, never a
               // shop's

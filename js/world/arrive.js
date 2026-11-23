@@ -444,7 +444,11 @@ export function pumpArrivals(pos, now = performance.now()) {
       // each material's shader written out: no more begun once this frame's time is spent)
       const cap = A.bulk ? Math.max(1, Math.round(B.compiles * k)) : Math.min(1, Math.floor(A.compileAllow));
       if (cap < 1 || (!A.bulk && dt > 33) || began >= cap || (began > 0 && performance.now() - t0 > B.ms)) continue;
-      began++; A.compileAllow -= 1; a.stage = 1;
+      // (the walk's programs a second are its own: what the loading picture's bulk begins, hundreds in a frame, is not
+      //  taken from them. It had been, since v0.0.154 began a travel's place under its picture in bulk: the allowance
+      //  went hundreds below nothing and filled again at six a second, and for minutes after the picture lifted nothing
+      //  came in at all - at Kazan ten tiles of the fronts' mouldings, built after the lift, stood waiting, 22 Nov 2026)
+      began++; if (!A.bulk) A.compileAllow -= 1; a.stage = 1;
       Promise.all(a.list.flatMap((o) => [compileView(o), compileShadow(o)])).then(() => { a.stage = 2; }, () => { a.stage = 2; });
       continue;
     }
