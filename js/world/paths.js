@@ -4,10 +4,12 @@
 // lays its ground tiles by it (beaten earth, cobbles, the ruts of the cart wheels), the grass leaves it bare, the woods
 // stand back from it. Far off, the land's own road cover (8 m a texel) carries them.
 //   R  beaten earth (a road, a track, a footpath, an earth street); faintly, its verge; and the ground people walk
-//      on round the country's houses, as worn as each is (addAreas: the yards, the paths to their doors)
+//      on round the country's houses, as worn as each is (addAreas: the yards, the paths to their doors, the estate's
+//      lawns)
 //   G  cobbles (a city's paved street)
 //   B  wheel ruts (in the roads and tracks, two to a way)
 import * as THREE from 'three';
+import { depthIn } from './plans.js';
 
 const SPAN = 512, PX = 2048, STEP = 96;
 
@@ -83,16 +85,65 @@ function dryEnds(world, pts) {
   return a.length > 1 ? cut(a.slice().reverse()).reverse() : a;
 }
 
-export function buildPaths(world, extra = []) {
+/** The parts of a way that lie outside a ring (world [x, z]), each ending where it meets the ring. The world's builder
+ *  had led its footpaths to points of its own inside a place's grounds - five of them up Yasnaya Polyana's avenue side
+ *  by side, to its middle, and one across its park to the house's porch (23 Nov 2026): the estate's own ways
+ *  (estate-grounds.json) run round the ring of its park, so a footpath that meets the ring goes on along them. */
+function outside(pts, ring) {
+  if (!ring || ring.length < 3 || pts.length < 2) return [pts];
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const [x, z] of ring) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const inR = (x, z) => {
+    if (x < x0 || x > x1 || z < z0 || z > z1) return false;
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i], b = ring[j];
+      if ((a[1] > z) !== (b[1] > z) && x < a[0] + (z - a[1]) * (b[0] - a[0]) / (b[1] - a[1])) c = !c;
+    }
+    return c;
+  };
+  // (where a-b meets the ring's edge: going in, the first meeting from a; coming out, the last)
+  const meet = (a, b, last) => {
+    let best = null, bt = last ? -1 : 2;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const p = ring[j], q = ring[i];
+      const rx = b[0] - a[0], rz = b[1] - a[1], sx = q[0] - p[0], sz = q[1] - p[1], den = rx * sz - rz * sx;
+      if (Math.abs(den) < 1e-12) continue;
+      const t = ((p[0] - a[0]) * sz - (p[1] - a[1]) * sx) / den, u = ((p[0] - a[0]) * rz - (p[1] - a[1]) * rx) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && (last ? t > bt : t < bt)) { bt = t; best = [a[0] + rx * t, a[1] + rz * t]; }
+    }
+    return best;
+  };
+  if (!pts.some(([x, z]) => inR(x, z))) return [pts];         // (the most: nowhere near)
+  const out = [];
+  let cur = [], was = inR(pts[0][0], pts[0][1]);
+  if (!was) cur.push(pts[0]);
+  for (let k = 1; k < pts.length; k++) {
+    const p = pts[k], now = inR(p[0], p[1]);
+    if (now !== was) {
+      const c = meet(pts[k - 1], p, was) ?? (was ? pts[k - 1] : p);
+      if (was) cur = [c]; else { cur.push(c); out.push(cur); cur = []; }
+    }
+    if (!now) cur.push(p);
+    was = now;
+  }
+  if (cur.length) out.push(cur);
+  // (a stub of a few metres left between two meetings is no way)
+  return out.filter((q) => q.length > 1 && q.reduce((s, p, i) => s + (i ? Math.hypot(p[0] - q[i - 1][0], p[1] - q[i - 1][1]) : 0), 0) > 3);
+}
+
+/** extra: ways of their own ({ kind, w?, pts, name? }: the hilltop's, a place's grounds'), as they are; clip: a ring
+ *  no footpath of the world's goes into (outside(), above). */
+export function buildPaths(world, extra = [], { clip } = {}) {
   const J = world.json, ways = [];
-  for (const e of extra) ways.push({ kind: e.kind, ...style(e.kind, e.w), pts: e.pts });
+  for (const e of extra) ways.push({ kind: e.kind, ...style(e.kind, e.w), pts: e.pts, ...(e.name ? { name: e.name } : {}) });
   for (const [name, pts] of Object.entries(J.roads ?? {})) {
     // (a road that starts by the spawn starts at the spawn itself, so the walker's own way out is the road)
     const p0 = pts[0], at0 = Math.hypot(p0[0], p0[1]) < 80 ? [[0, 0], ...pts] : pts;
     const kind = /track/.test(name) ? 'track' : 'road';
     ways.push({ kind, ...style(kind), pts: smoothLine(at0) });
   }
-  for (const p of J.paths ?? []) { const pts = dryEnds(world, p.pts); if (pts.length > 1) ways.push({ kind: p.kind, ...style(p.kind, p.w), pts: smoothLine(pts) }); }
+  for (const p of J.paths ?? []) for (const part of outside(p.pts, clip)) { const pts = dryEnds(world, part); if (pts.length > 1) ways.push({ kind: p.kind, ...style(p.kind, p.w), pts: smoothLine(pts) }); }
   // (every street of a city paved, the lanes too: a lane's earth had run as a strip of dirt down the middle of the brick
   // street)
   // (Moscow's streets, beaten earth (terrain.js), carry the cart wheels' ruts as its period pictures show them; Petersburg's
@@ -284,18 +335,39 @@ export function buildPaths(world, extra = []) {
   const uniforms = { uWayT: { value: N.tex }, uWayC: { value: N.c }, uWaySpan: { value: SPAN },
     uWayT2: { value: F.tex }, uWayC2: { value: F.c }, uWaySpan2: { value: 2048 } };
   const update = (pos) => { N.update(pos); F.update(pos); };
-  /** The ground people walk on round the country's houses (pois.js): drawn into both pictures from the next frame, as
-   *  a way is - read by the land, the grass and the woods as theirs - but no way: nothing keeps off it, nothing is laid
-   *  along it. */
+  /** The ground people walk on round the country's houses (pois.js) and the estate's lawns (estate-grounds.json):
+   *  drawn into both pictures from the next frame, as a way is - read by the land, the grass and the woods as theirs -
+   *  but no way: nothing keeps off it, nothing is laid along it. */
+  // (and where it lies, for the flowers, which keep off it (meadow.js world.yardAt): a point in a fill or a patch, or
+  // within 0.7 m of a worn path's edge - as they keep off a way's, so none leans over it; found by 16 m cells. pois.js
+  // had kept its own, of the villages' alone)
+  const AG = new Map(), AC = 16, inArea = [];
   const addAreas = ({ fills = [], dots = [], lines = [] } = {}) => {
     const boxOf = (pts, m) => { let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0 - m, z0 - m, x1 + m, z1 + m]; };
-    for (const f of fills) areas.push({ ring: f.ring, r: f.r, box: boxOf(f.ring, 3) });
-    for (const d of dots) areas.push({ at: d.at, rad: d.rad, r: d.r, box: boxOf([d.at], d.rad + 3) });
-    for (const l of lines) areas.push({ pts: l.pts, w: l.w, r: l.r, ruts: l.ruts ?? 0, box: boxOf(l.pts, l.w / 2 + 3) });
+    const index = (test, box) => {
+      const k = inArea.push(test) - 1;
+      for (let j = Math.floor(box[1] / AC); j <= Math.floor(box[3] / AC); j++) for (let i = Math.floor(box[0] / AC); i <= Math.floor(box[2] / AC); i++) {
+        const key = i + ',' + j; let l = AG.get(key); if (!l) AG.set(key, (l = [])); l.push(k);
+      }
+    };
+    for (const f of fills) { areas.push({ ring: f.ring, r: f.r, box: boxOf(f.ring, 3) }); index((x, z) => depthIn([f.ring], [], x, z) >= 0, boxOf(f.ring, 0)); }
+    for (const d of dots) { areas.push({ at: d.at, rad: d.rad, r: d.r, box: boxOf([d.at], d.rad + 3) }); index((x, z) => Math.hypot(x - d.at[0], z - d.at[1]) <= d.rad, boxOf([d.at], d.rad)); }
+    for (const l of lines) {
+      areas.push({ pts: l.pts, w: l.w, r: l.r, ruts: l.ruts ?? 0, box: boxOf(l.pts, l.w / 2 + 3) });
+      index((x, z) => {
+        for (let i = 1; i < l.pts.length; i++) {
+          const [ax, az] = l.pts[i - 1], [bx, bz] = l.pts[i], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+          if (Math.hypot(x - ax - t * dx, z - az - t * dz) <= l.w / 2 + 0.7) return true;
+        }
+        return false;
+      }, boxOf(l.pts, l.w / 2 + 0.7));
+    }
     // (each picture begun again, whole, at the next frame: the one the card has was drawn without them)
     for (const P of [N, F]) { P.cx = P.cz = NaN; P.L = null; }
   };
-  return { tex: N.tex, uniforms, update, near, clearance, ways, addAreas };
+  const areaAt = (x, z) => { const l = AG.get(Math.floor(x / AC) + ',' + Math.floor(z / AC)); return !!l && l.some((k) => inArea[k](x, z)); };
+  return { tex: N.tex, uniforms, update, near, clearance, ways, addAreas, areaAt };
 }
 
 /** The shader's side: what the ways are at p (R earth, G cobbles, B ruts; 0 outside the pictures): the near picture

@@ -442,8 +442,11 @@ export class CountrysideScene {
     const lm = (f) => fetch(base + 'assets/world/landmarks/' + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     const worldIn = Promise.all([loadWorld(base, { island: ground.heightAt }), loadPlanShapes(base), lm('kremlin.json'), ...Object.values(MARKS).map(lm)])
       .then((r) => { tl('scene load: world'); return r; });
+    // (Yasnaya Polyana's grounds: its drives and paths, the ring of its park, its lawns - dev\world\estate\
+    // estate_grounds.py)
+    const groundsIn = fetch(base + 'assets/world/cities/estate-grounds.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
     preloadGround(base);
-    const [, [world, shapes, kremlinList, ...markLists]] = await Promise.all([modelsIn, worldIn]);
+    const [, [world, shapes, kremlinList, ...markLists], grounds] = await Promise.all([modelsIn, worldIn, groundsIn]);
     this.models = models;
     this.sky = new Sky(this.U, { tier, eye: EYE });
     this.skyScene.add(this.sky.mesh);
@@ -456,7 +459,10 @@ export class CountrysideScene {
     if (kremlinList) planKremlin(this.plans, shapes, kremlinList);
     // the ways through it, sharp near the camera (paths.js): the land, the grass and the woods all read them
     setHillLines(world.json.roads);                 // (the hilltop's ways are the world's roads out of the spawn)
-    world.ways = buildPaths(world, hillWays());
+    // (and the estate's own, from its plan: the world's footpaths stop at the ring of its park, on its bottom road; its
+    // lawns mown short round its houses, the forecourt and the ground before its doors worn bare)
+    world.ways = buildPaths(world, [...hillWays(), ...(grounds?.ways ?? [])], { clip: grounds?.ring });
+    if (grounds?.areas) world.ways.addAreas(grounds.areas);
     Object.assign(world.uniforms, world.ways.uniforms);
     this.world = world;
     // (the woods' mist reads the land's heights and the woods' cover: the show's shader, above)

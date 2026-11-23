@@ -21,7 +21,7 @@ import { arrive } from './arrive.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { gltfLoader } from '../gltf.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
-import { makePlans, placeRing, depthIn } from './plans.js';
+import { makePlans, placeRing } from './plans.js';
 
 const lin = (hex) => new THREE.Color(hex);
 const rnd = (seed) => { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; };
@@ -826,29 +826,9 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
   }
   // the ground people walk on (worn, above) into the ways' pictures; and where it lies, for the flowers, which keep off
   // it (meadow.js): a point in a worn fill or a worn patch, or within 0.7 m of a worn path's edge - as they keep off a
-  // way's, so none leans over it
+  // way's, so none leans over it. The ways keep it, with the estate's lawns (paths.js addAreas, areaAt)
   world.ways?.addAreas?.(worn);
-  {
-    const items = [], G = new Map(), GC = 16;
-    const boxOf = (pts, m) => { let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0 - m, z0 - m, x1 + m, z1 + m]; };
-    for (const f of worn.fills) items.push({ in: (x, z) => depthIn([f.ring], [], x, z) >= 0, box: boxOf(f.ring, 0) });
-    for (const d of worn.dots) items.push({ in: (x, z) => Math.hypot(x - d.at[0], z - d.at[1]) <= d.rad, box: boxOf([d.at], d.rad) });
-    for (const l of worn.lines) items.push({
-      in: (x, z) => {
-        for (let i = 1; i < l.pts.length; i++) {
-          const [ax, az] = l.pts[i - 1], [bx, bz] = l.pts[i], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
-          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
-          if (Math.hypot(x - ax - t * dx, z - az - t * dz) <= l.w / 2 + 0.7) return true;
-        }
-        return false;
-      }, box: boxOf(l.pts, l.w / 2 + 0.7) });
-    items.forEach((it, k) => {
-      for (let j = Math.floor(it.box[1] / GC); j <= Math.floor(it.box[3] / GC); j++) for (let i = Math.floor(it.box[0] / GC); i <= Math.floor(it.box[2] / GC); i++) {
-        const key = i + ',' + j; let l = G.get(key); if (!l) G.set(key, (l = [])); l.push(k);
-      }
-    });
-    world.yardAt = (x, z) => { const l = G.get(Math.floor(x / GC) + ',' + Math.floor(z / GC)); return !!l && l.some((k) => items[k].in(x, z)); };
-  }
+  world.yardAt = (x, z) => !!world.ways?.areaAt?.(x, z);
   group.userData.worn = worn;
   // the copies
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), fwd = new THREE.Vector3(0, 0, 1), sc = new THREE.Vector3(), p = new THREE.Vector3();
