@@ -19,7 +19,7 @@ import { CountrysideScene } from './backdrops/countryside.js';
 import { windSound } from './sound.js';
 import { makeFootsteps } from './footsteps.js';
 import { groundLoaded } from './world/terrain.js';
-import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsNear, arrivalsState, lastPump, arrive } from './world/arrive.js';
+import { setupArrivals, openArrivals, quietArrivals, compileView, compileShadow, arrivalsWaiting, arrivalsNear, arrivalsState, lastPump, arrive, bulkArrivals } from './world/arrive.js';
 import { startLoading, makeLoading } from './loading.js';
 import { makeBook } from './book.js';
 import { makeBookOver } from './bookover.js';
@@ -467,7 +467,7 @@ export async function initWalk(container, opts = {}) {
   // it the book is lowered and the walker carried there, and it lifts once the place is in - its ground, everything
   // waiting to come in come, no file being read - or after TRAVEL.most s, the rest rising as it comes (18 Nov 2026: the
   // book's leaves had turned while he was carried there, the place coming in behind the book)
-  const TRAVEL = { fade: 0.5, most: 10, near: 1500 };
+  const TRAVEL = { fade: 0.5, most: 10, near: 1500, settle: 500 };
   let trip = null;
   // (what the loading picture waits under: the ground, the arrivals that stand near the place - not the whole world's
   // queue, which held a travel for tiles on the far side of the map - no file being read)
@@ -505,6 +505,10 @@ export async function initWalk(container, opts = {}) {
       const L = s.look; L.anchor = null; L.yaw = p.yaw / DEG; L.pitch = p.pitch / DEG; L.goal = [L.yaw, L.pitch]; L.zoom = L.zoomGoal = 1; s._lens();
       console.info('[book] to', p.id, p.at);
       trip.at = performance.now();
+      // (22 Nov 2026: no one sees the frames under the picture, so the place comes in at the loading picture's own
+      //  pace - its programs, pictures and triangles let through many a frame, each piece shown in its place - and not
+      //  at the walk's six a second, which had left Petersburg's 351 near pieces a minute to come in, in view)
+      bulkArrivals(true);
     };
     if (!el) { carry(); return; }
     const t0 = performance.now(), opaque = () => getComputedStyle(el).opacity === '1';
@@ -517,7 +521,12 @@ export async function initWalk(container, opts = {}) {
     // (how far the place has come in: its ground first, then what waits to come in, against the most that waited)
     const w = nearWaiting(); trip.near = w; trip.most = Math.max(trip.most, w);
     trip.pic?.progress(groundLoaded() ? 0.5 + 0.45 * (1 - w / Math.max(1, trip.most)) : 0.3 * Math.min(1, (now - trip.at) / 3000));
-    if (!placeIn() && now - trip.at < TRAVEL.most * 1000) return;
+    // (22 Nov 2026: in for half a second running before the picture lifts - a place's own pieces are asked for a moment
+    //  after the walker is set down, and at the first frames there nothing yet waited: the picture had lifted 0.7 s
+    //  after the jump with every one of Petersburg's 351 still to come)
+    trip.inSince = placeIn() ? (trip.inSince ?? now) : null;
+    if (!(trip.inSince !== null && now - trip.inSince >= TRAVEL.settle) && now - trip.at < TRAVEL.most * 1000) return;
+    bulkArrivals(false);
     // (lifted as the first picture lifts: faded over the walk, nothing turning the view until it has gone - loading.js)
     if (trip.el) { trip.el.style.opacity = ''; trip.el.style.transition = ''; }
     trip.pic?.done();
