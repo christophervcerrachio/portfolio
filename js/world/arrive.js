@@ -364,6 +364,8 @@ export function arrive(objs, opts = {}) {
 
 /** How many are waiting to come in or still rising (tests: everything in once this is 0). */
 export const arrivalsWaiting = () => A.queue.filter((a) => !beyond(a)).length + A.rising.length + A.making;
+/** How far from the walker anything comes in (m): what lies farther waits for him to come within it (Infinity: all). */
+export const arrivalsReach = () => A.reach;
 /** How many of those stand within `r` metres of (x, z): what a place travelled to waits for. The whole world's queue
  *  (arrivalsWaiting) made every travel wait for tiles on the far side of the map - the world is 40 km across, a
  *  place's own arrivals are a few hundred metres off (the performance research of 19 Nov 2026, item 3). A piece being

@@ -8,6 +8,7 @@
 // shown. A tile is drawn within `show` m (the machine's setting; everywhere on the full tiers).
 import { gltfLoader } from '../gltf.js';
 import { gate, allowed } from './reveal.js';
+import { arrivalsReach } from './arrive.js';
 import { SPAN, superTile, superKeep, superBuild } from './supertiles.js';
 
 const DIR = 'assets/world/cities/';
@@ -18,11 +19,20 @@ let running = 0, eye = { x: 0, z: 0 };
 // city's tiles are some gigabytes - so no more are read while AHEAD of them wait to go up)
 const AHEAD = 48, up = new Set();
 
+// (a tile is read once the walker is within the arrivals' reach of it - nearer, it can come in; farther, it waits there,
+// arrive.js - and only the tiles read within that reach count against AHEAD. Since v0.0.142 capped the reach at 3 km,
+// the first 48 tiles read from where the walk began had waited beyond it for good, ahead of every other, and no tile was
+// read again wherever the walker went: after the book's travel the Kremlin's and Petersburg's houses never came, their
+// fronts' mouldings built and kept waiting for them, 22 Nov 2026)
 function next() {
   for (const t of up) if (!t.scene || t.scene.userData.risen) up.delete(t);
-  while (running < MAX && wanted.size && up.size + running < AHEAD) {
+  const reach = arrivalsReach(), within = (t) => Math.hypot(t.x - eye.x, t.z - eye.z) <= reach;
+  let ahead = 0;
+  for (const t of up) if (within(t)) ahead++;
+  while (running < MAX && wanted.size && ahead + running < AHEAD) {
     let best = null, bd = Infinity;
     for (const t of wanted) { const d = Math.hypot(t.x - eye.x, t.z - eye.z); if (d < bd) { bd = d; best = t; } }
+    if (bd > reach) break;                // (the nearest still wanted lies beyond the reach: none is read yet)
     wanted.delete(best);
     if (best.state !== 1) continue;       // (no longer wanted: the walker went another way)
     running++;
