@@ -14,19 +14,28 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# (22 Nov 2026: the upload and the publish were one job, and three runs in five that evening failed inside
+#  deploy-pages - it looked for the site's artifact half a second after the upload was finalized and found none yet.
+#  As two jobs the publish starts on a runner of its own once the upload's job has finished, seconds later, and a
+#  publish that fails can be run again by itself without uploading the site again)
 jobs:
-  deploy:
+  upload:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+  deploy:
+    needs: upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
