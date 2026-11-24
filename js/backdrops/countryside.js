@@ -15,7 +15,7 @@ import { placeStones } from './stones.js';
 import { Sky, skyUniforms, skyEnvironment } from './clouds.js';
 import { makeEvening } from './evening.js';
 import { makeWeather } from './weather.js';
-import { makeDrizzle, drizzleAt } from './drizzle.js';
+import { makeDrizzle, drizzleAt, wetAt } from './drizzle.js';
 import { SunShadow, SHADOW_GLSL, shadowUniforms } from './sunshadow.js';
 import { makeUpscale } from './upscale.js';
 import { loadBark, loadSpecies, loadLateSpecies } from './birchlook.js';
@@ -28,7 +28,8 @@ import { buildCityMarks, planMarks } from '../world/citymarks.js';
 import { makePlans, loadPlanShapes } from '../world/plans.js';
 import { farCull } from '../world/farcull.js';
 import { buildCityBlocks } from '../world/cityblocks.js';
-import { pumpArrivals } from '../world/arrive.js';
+import { pumpArrivals, compileView } from '../world/arrive.js';
+import { loadQuays } from '../world/quays.js';
 import { buildCityBridges } from '../world/citybridges.js';
 import { buildBridges } from '../world/bridges.js';
 import { hillWays, setHillLines } from './paths.js';
@@ -496,6 +497,10 @@ export class CountrysideScene {
     tl('scene load: meadow, trees, stones');
     this.landRings = buildLand(world, this.U, { base, canopyAt: G.canopyAt, n: G.landN });
     this.land.add(this.landRings.near);
+    // (the near rings' water in a scene of its own, drawn after the near world over a copy of its picture and depth, so
+    // that it sees what lies under and behind its surface and mirrors what stands over it: _drawWater, world/terrain.js)
+    this.waterScene = new THREE.Scene();
+    this.waterScene.add(this.landRings.nearWater);
     // the woods everywhere the world has them, near the camera (world/woods.js)
     this.woods = buildWoods(world, models, this.U, { far: G.woodsFar, ladder: G.woods });
     this.land.add(this.woods);
@@ -595,6 +600,40 @@ export class CountrysideScene {
     for (const g of [this.bridges, this.kremlin, this.spbMarks, this.kmvMarks, this.mskMarks]) timed('later: ' + (g?.name || 'landmarks') + ' asked', () => g?.userData.load?.());
   }
 
+  /** The near water, after the near world (v0.0.179): the picture and its depth copied (each pixel's colour, and its
+   *  distance from the eye in metres), then the water drawn over the picture with the copy to read - its depth along the
+   *  view to whatever the picture shows under the surface (a bed, a wall's or a pier's face), and the world over it to
+   *  mirror (world/terrain.js). Where the card cannot draw into a picture of half floats, the water as before: its depth
+   *  to the bed's height, the sky in it. */
+  _drawWater(renderer) {
+    const rt = this.rt, S = this.landRings.sceneU;
+    if (!rt?.depthTexture || !(this.hdr || renderer.extensions.has('EXT_color_buffer_half_float'))) {
+      S.uSceneOn.value = 0; renderer.render(this.waterScene, this.cam); return;
+    }
+    if (!this.waterCopy) {
+      this.waterCopy = new THREE.WebGLRenderTarget(rt.width, rt.height, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
+      this.waterCopyU = { tColor: { value: null }, tDepth: { value: null }, uInvProj: { value: new THREE.Matrix4() }, uRevZ: { value: DEPTH.reversed ? 1 : 0 } };
+      const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: this.waterCopyU, depthTest: false, depthWrite: false,
+        vertexShader: 'varying vec2 vUv;\nvoid main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        // (the distance as the show pass reads it from the depth: the view's depth is drawn reversed - depthmode.js)
+        fragmentShader: 'uniform sampler2D tColor; uniform sampler2D tDepth; uniform mat4 uInvProj; uniform float uRevZ;\nvarying vec2 vUv;\n' +
+          'void main() {\n  float dz = texture2D(tDepth, vUv).r; dz = mix(dz, 1.0 - dz, uRevZ);\n' +
+          '  vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, dz * 2.0 - 1.0, 1.0); vp /= vp.w;\n' +
+          '  gl_FragColor = vec4(texture2D(tColor, vUv).rgb, dz >= 0.99999 ? 60000.0 : length(vp.xyz));\n}' }));
+      q.frustumCulled = false;
+      this.waterCopyScene = new THREE.Scene(); this.waterCopyScene.add(q);
+      this.waterCopyCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+    if (this.waterCopy.width !== rt.width || this.waterCopy.height !== rt.height) this.waterCopy.setSize(rt.width, rt.height);
+    const C = this.waterCopyU;
+    C.tColor.value = rt.texture; C.tDepth.value = rt.depthTexture; C.uInvProj.value.copy(this.cam.projectionMatrixInverse);
+    renderer.setRenderTarget(this.waterCopy);
+    renderer.render(this.waterCopyScene, this.waterCopyCam);
+    renderer.setRenderTarget(rt);
+    S.uScene.value = this.waterCopy.texture; S.uSceneTexel.value.set(1 / rt.width, 1 / rt.height); S.uSceneOn.value = 1;
+    renderer.render(this.waterScene, this.cam);
+  }
+
   /** The cities' houses, bridges and furniture (see load): made now, out of the scene; addLater() puts them in. */
   loadLater() {
     if (this._later || !this._laterArgs) return this._later?.groups ?? [];
@@ -619,6 +658,21 @@ export class CountrysideScene {
       world.heightAt = (x, z) => h0(x, z) + g(x, z);
       if (this.ground && this.ground.heightAt === h0) this.ground.heightAt = world.heightAt;
     });
+    // (the quays' streets and footways: the walker stands on them, the street drawn with the land's own look - the land
+    // under it dips behind every wall - world/quays.js; drawn as far off as the houses, their program made before they go
+    // in)
+    loadQuays(base, ['spb', 'moscow'], this.landRings).then(async (q) => {
+      if (!q) return;
+      const h0 = world.heightAt;
+      world.heightAt = (x, z) => { const h = h0(x, z), f = q.floorAt(x, z); return f !== null && f > h ? f : h; };
+      if (this.ground && this.ground.heightAt === h0) this.ground.heightAt = world.heightAt;
+      if (q.group.children.length) {
+        const one = new THREE.Scene(); one.add(q.group.children[0].clone()); one.updateMatrixWorld(true);
+        await compileView(one).catch(() => {});
+      }
+      this.quays = q;
+      if (this._later?.added) this._addQuays();
+    });
     const lateModels = Promise.all([loadLateSpecies(base), ...PARK_MODELS.map(async (n) => { const m = await loadModel(dir, n).catch(() => null); if (m) models[n] = m; })]).catch(() => {});
     const props = timed('later: furniture made', () => buildCityProps(this.U, models, { base, lateModels, cities: ['spb', 'moscow', 'estate', 'kmv'], heightAt: (x, z) => world.heightAt(x, z), near: G.propsNear, footNear: G.footNear, yardNear: G.yardNear, full: G.propsFull ?? 130,
       addTrees: this.woods?.userData.addTrees ? (items) => timed('later: trees added', () => this.woods.userData.addTrees(items)) : null, changed, ground }));
@@ -641,6 +695,13 @@ export class CountrysideScene {
     if (this.shadowFar) for (const g of L.groups) this.shadowFar.add(g);
     // (a city's bridges not drawn from another city: citybridges.js cuts them into pieces by where they stand)
     this._culls?.push(farCull(L.bridges, this.gfx.placesFar ?? Infinity));
+    if (this.quays) this._addQuays();
+  }
+  _addQuays() {
+    if (!this.quays || this.quays.added) return;
+    this.quays.added = true;
+    this.land.add(this.quays.group);
+    this._culls?.push(farCull(this.quays.group, this.gfx.blocksFar ?? Infinity));
   }
 
   /** (Once the painted ring loaded here; the solid world is all built at load now. Kept so stills and tests can still
@@ -975,6 +1036,7 @@ export class CountrysideScene {
     }
     // (the parts of the land out of the view left out whole: world/landparts.js)
     timed('frame: the land drawn', () => { this.parts.hide(this.cam); renderer.render(this.land, this.cam); this.parts.show(); });
+    if (this.waterScene) timed('frame: the water drawn', () => this._drawWater(renderer));
     // (what the walker holds - the book, js/book.js - drawn last into the same picture, nearest of all, so the look's
     // own finishing falls on it as on everything else)
     if (this.viewmodel) timed('frame: the book', () => this.viewmodel(renderer, this.dt ?? 0));
@@ -1047,6 +1109,9 @@ export class CountrysideScene {
     }
     // (nor with the eye through a wall: a step clear of every wall near, measured on the walls themselves - the houses'
     // picture above is 2 m a pixel)
+    // (nor through a stone bridge's parapet, from its deck or from beside it: citybridges.js)
+    const PB = this.cityBridges?.userData.parapetStop;
+    if (PB) { const q = PB(this.at.x, this.at.z, px, pz); if (q) { px = q[0]; pz = q[1]; } }
     const WP = this.cityBlocks?.userData.wallPush;
     if (WP) { const q = WP(px, pz, 0.45); if (!BA || !BA(q[0], q[1]) || BA(px, pz)) { px = q[0]; pz = q[1]; } }
     // not into water deeper than the knees: stop at its edge
@@ -1158,7 +1223,7 @@ export class CountrysideScene {
       // (the drizzle's spell: its grey cover in every shader under the weather, its rain falling round the walker and
       // heard - sound.js's hiss and patter ride on light.rain; drizzle.js)
       const sp = drizzleAt(t);
-      this.U.uOvercast.value = sp.overcast; this.U.uRain.value = sp.rain;
+      this.U.uOvercast.value = sp.overcast; this.U.uRain.value = sp.rain; this.U.uWet.value = wetAt(t);
       this.weather.spell.overcast = sp.overcast; this.weather.spell.rain = sp.rain;
       this.light.rain = sp.rain;
       if (this.drizzle && this.cam) {

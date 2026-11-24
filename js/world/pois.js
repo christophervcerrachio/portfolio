@@ -991,7 +991,10 @@ export function buildPOIs(world, U, { plans = makePlans(), shapes = {} } = {}) {
     }
   };
   group.userData.update = (cam, t) => {
-    for (const m of sails) m.rotation.z = -t * 0.6;
+    // (turning the way the old mills turned, against the clock as one faces the sails: the leading board of each, at its
+    // left as it stands up, ahead and the sail behind; until 24 Nov 2026 they had turned the other way, as a wind engine
+    // of today does, the sail first)
+    for (const m of sails) m.rotation.z = t * 0.6;
     for (const a of animate) if (a.update) a.update(cam, t);
   };
   return group;

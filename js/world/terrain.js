@@ -487,6 +487,53 @@ ${WIND_GLSL}
 //@LAND
 uniform vec3 uGrassA; uniform vec3 uGrassB; uniform vec3 uField; uniform vec3 uFieldB; uniform vec3 uWood; uniform vec3 uRoad; uniform vec3 uTown; uniform vec3 uRoof;
 uniform vec3 uRock; uniform vec3 uMud; uniform vec3 uBloom; uniform vec3 uFieldC; uniform vec3 uFallow; uniform vec3 uWoodB;
+// rings spreading where the drops fall, as the slope (x, z) of the surface at p: a grid of cells sz m across, a drop in
+// each at a place and a moment of its own, its ring running out over about a second and fading; two grids, shifted
+vec2 rainRings(vec2 p, float t, float sz) {
+  vec2 g = vec2(0.0);
+  for (int k = 0; k < 2; k++) {
+    vec2 q = p / sz + float(k) * vec2(0.37, 0.61), i = floor(q);
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 c = i + vec2(float(x), float(y)) + float(k) * 17.3;
+      float h = hash12(c);
+      vec2 dv = q - (floor(q) + vec2(float(x), float(y)) + vec2(hash12(c + 3.1), hash12(c + 7.7)));
+      float r = length(dv) + 1e-4, ph = fract(t * (0.8 + 0.5 * h) + h);
+      float wv = (r - ph * 0.95) * 24.0;
+      float amp = (1.0 - ph) * (1.0 - ph) * smoothstep(0.0, 0.06, ph) * step(r, 1.0);
+      g += dv / r * cos(wv) * exp(-wv * wv * 0.04) * amp;
+    }
+  }
+  return g;
+}
+// (the rain's puddles: the sky and the near world mirrored in them - the near world's last picture and its distances,
+// countryside.js's water pass, a frame old; uSceneOn 0 on the far rings)
+uniform vec3 uSkyTop; uniform mat4 projectionMatrix; uniform sampler2D uScene; uniform vec2 uSceneTexel; uniform float uSceneOn;
+vec2 pudScreen(vec3 q, out float ok) {
+  vec4 c = projectionMatrix * (viewMatrix * vec4(q, 1.0));
+  ok = c.w > 0.05 ? 1.0 : 0.0;
+  return c.xy / max(c.w, 0.05) * 0.5 + 0.5;
+}
+vec4 pudMirror(vec3 p, vec3 r) {
+  float t = 0.0, tPrev = 0.0, st = 0.3, hit = 0.0; vec2 uvHit = vec2(0.0);
+  for (int i = 0; i < 24; i++) {
+    t += st; st *= 1.25;
+    vec3 q = p + r * t; float ok; vec2 uv = pudScreen(q, ok);
+    if (ok < 0.5 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
+    float sd = texture2D(uScene, uv).a, qd = length(q - cameraPosition);
+    if (qd > sd + 0.05 && qd - sd < max((t - tPrev) * 1.5, 0.6)) {
+      float a = tPrev, b = t;
+      for (int k = 0; k < 4; k++) {
+        float m = (a + b) * 0.5; vec3 qm = p + r * m; float okm; vec2 um = pudScreen(qm, okm);
+        if (length(qm - cameraPosition) > texture2D(uScene, um).a + 0.05) b = m; else a = m;
+      }
+      float okh; uvHit = pudScreen(p + r * b, okh); hit = 1.0; break;
+    }
+    tPrev = t;
+  }
+  if (hit < 0.5) return vec4(0.0);
+  vec2 e = smoothstep(0.0, 0.08, uvHit) * smoothstep(0.0, 0.08, 1.0 - uvHit);
+  return vec4(texture2D(uScene, uvHit).rgb, e.x * e.y);
+}
 // the ground up close: ComfyUI's tiles of each ground (meadow, ploughed soil, forest floor, cart road, river bank, rock;
 // GROUND below), each at its true size, two takes of it turned and shifted in patches so its repeats never line up;
 // tinted to the land's colour there (the tile's own colour over its average), so near and far agree
@@ -539,6 +586,7 @@ void main() {
   float hx = landH(p + ex) + canopyH(p + ex, cd) - landH(p - ex) - canopyH(p - ex, cd);
   float hz = landH(p + ez) + canopyH(p + ez, cd) - landH(p - ez) - canopyH(p - ez, cd);
   vec3 n = normalize(vec3(-hx, 2.0 * e, -hz));
+  float flatY = n.y;               // (how level the ground lies here, before the tiles' relief: the puddles')
   vec2 uv = coreUV(p);
   vec4 A = vec4(0.0), B = vec4(0.0);
   if (coreEdge(uv) > 0.0) { A = textureLod(uCovA, uv, 0.0); B = textureLod(uCovB, uv, 0.0); }
@@ -613,6 +661,8 @@ void main() {
   float wc = waterCode(p);
   float under = wc > 0.5 ? smoothstep(0.0, 1.5, wc * 0.5 - 20.0 - vW.y + 0.4) : 0.0;
   c = mix(c, uMud, max(under, wet > 0.95 ? 0.6 : 0.0));
+  // (a canal's or a river's bed: silt in drifts, darker in its hollows, under the shingle near the banks)
+  if (under > 0.0) { float silt = vnoise(p * 0.13 + 2.2) * 0.6 + vnoise(p * 0.55 - 1.7) * 0.4; c *= mix(vec3(1.0), vec3(0.7, 0.73, 0.68), under * smoothstep(0.42, 0.72, silt)); }
   // the beach: sand and pebbles a few metres up from the water's edge, the wet line darker; the shallows sandy too
   float beach = cd < 450.0 ? beachAt(p, vW.y, 3) * (1.0 - smoothstep(300.0, 450.0, cd)) : 0.0;
   float shallow = under * (1.0 - smoothstep(0.2, 1.2, wc * 0.5 - 20.0 - vW.y));
@@ -813,6 +863,9 @@ void main() {
   // (the cities' setts, near and far, a warm grey stone: the photograph's cool granite, under the evening sky's light in
   // the houses' shade, read as water from a distance)
   c *= mix(vec3(1.0), vec3(1.07, 1.0, 0.86), townW);
+  // (rain: the ground darker as it soaks - stone most, grass least; drizzle.js wetAt)
+  float pave = clamp(max(townW, cobV), 0.0, 1.0);
+  c *= 1.0 - uWet * mix(0.16, 0.38, pave);
   vec3 lit = lightUp(c, n, 1.0, 0.0, vSun * treeShade(vW + n * 0.2 + uSunDir * 0.1));
   // (and the towns' ground in shade lit by the sky's light drawn half way to a warm grey of its own brightness - the
   // light thrown back off the fronts across the street, as the walls' own shade has it (sunshadow.js streetHemi): by the
@@ -820,6 +873,27 @@ void main() {
   if (townW > 0.0) {
     vec3 skyT = mix(uSkyColor, dot(uSkyColor, vec3(0.2126, 0.7152, 0.0722)) * vec3(1.05, 1.0, 0.93), 0.5);
     lit += c * (skyT - uSkyColor) * (0.6 + 0.4 * n.y) * townW;
+  }
+  // (and the rain's puddles on the paving: in its low places - the stones' own unevenness, a noise over a few metres -
+  // none in the first minute of rain, most of them after five, filling as it goes on; level ground only. Each holds the
+  // sky and the world over it (the near world's last picture, marched along the reflected ray, as the water does),
+  // rings spreading on it where the drops fall; the stones under it darker. Between them a wet film on the stones, the
+  // sky's light off it at a low angle)
+  if (uWet > 0.02 && pave > 0.05 && d < 220.0 && flatY > 0.9) {
+    float lowP = vnoise(p * 0.19 + 3.7) * 0.55 + vnoise(p * 0.61 + 9.2) * 0.3 + vnoise(p * 2.1 + 1.3) * 0.15;
+    float fill = 0.78 - 0.2 * smoothstep(0.15, 1.0, uWet);
+    float pud = smoothstep(fill, fill + 0.035, lowP) * pave * smoothstep(0.95, 0.99, flatY) * (1.0 - smoothstep(150.0, 220.0, d));
+    float sheen = 0.35 * uWet * pave * (1.0 - pud);
+    vec3 v = normalize(cameraPosition - vW);
+    vec2 rg = rainRings(p, uTime, 0.45) * 0.16 * uRain * (1.0 - smoothstep(15.0, 45.0, d));
+    vec3 nP = normalize(vec3(-rg.x, 1.0, -rg.y));
+    vec3 rf = reflect(-v, nP);
+    float fres = 0.02 + 0.98 * pow(1.0 - max(dot(nP, v), 0.0), 5.0);
+    vec3 sky = mix(uHaze, uSkyTop, pow(clamp(max(rf.y, 0.0) * 1.4, 0.0, 1.0), 0.6)) * (0.75 + 0.25 * vSun);
+    if (uSceneOn > 0.5 && pud > 0.15 && d < 90.0) { vec4 mr = pudMirror(vW + vec3(0.0, 0.03, 0.0), rf); sky = mix(sky, mr.rgb, mr.a * (1.0 - smoothstep(60.0, 90.0, d))); }
+    vec3 glint = uSunColor * pow(max(dot(nP, normalize(uSunDir + v)), 0.0), 180.0) * 2.0 * vSun;
+    lit = mix(lit, lit * mix(0.55, 0.3, fres) + sky * fres + glint, pud);
+    lit += (sky * fres * 0.6 + glint * 0.4) * sheen;
   }
   // (tens of kilometres off nothing is brighter than the air in front of it: rock faces catching the sun out there came
   // out as white dashes along the horizon under the clear day's light haze)
@@ -832,12 +906,68 @@ void main() {
 // water absorbs over its depth (the bed shows through the shallows, so the shore has no hard edge); the sky reflected
 // by the Fresnel law; small waves carried along the river's flow (flow.png), roughened where it runs fast; a line of
 // foam where it laps the shore, and white water through the rapids and below each fall.
+// Near (the rings drawn with the near world: v0.0.179) it sees the world under and behind it: the near world is drawn
+// first, its picture and depth copied (countryside.js), and the water drawn over the copy - its depth along the view
+// read off the picture's depth, to the bed or to the face of a wall or a pier standing in it (the bed's height alone had
+// hidden every pier and wall below the surface, so the bridges stood on the water, not in it); what lies there let
+// through colour by colour (red goes first), bent a little by the waves; and the world over it mirrored, the picture
+// marched along the reflected ray (the walls, the bridges and their arches, the houses: it had mirrored the sky alone,
+// and a bright sheet ran up into every arch). Far off, as before: the bed's height, the sky.
 const WATER_FRAG = /* glsl */`
 uniform vec4 uInner;
 varying vec3 vW; varying float vDist; varying float vSun;
 ${WIND_GLSL}
 //@LAND
 uniform vec3 uDeep; uniform vec3 uSkyTop; uniform sampler2D uFlow;
+// rings spreading where the drops fall, as the slope (x, z) of the surface at p: a grid of cells sz m across, a drop in
+// each at a place and a moment of its own, its ring running out over about a second and fading; two grids, shifted
+vec2 rainRings(vec2 p, float t, float sz) {
+  vec2 g = vec2(0.0);
+  for (int k = 0; k < 2; k++) {
+    vec2 q = p / sz + float(k) * vec2(0.37, 0.61), i = floor(q);
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 c = i + vec2(float(x), float(y)) + float(k) * 17.3;
+      float h = hash12(c);
+      vec2 dv = q - (floor(q) + vec2(float(x), float(y)) + vec2(hash12(c + 3.1), hash12(c + 7.7)));
+      float r = length(dv) + 1e-4, ph = fract(t * (0.8 + 0.5 * h) + h);
+      float wv = (r - ph * 0.95) * 24.0;
+      float amp = (1.0 - ph) * (1.0 - ph) * smoothstep(0.0, 0.06, ph) * step(r, 1.0);
+      g += dv / r * cos(wv) * exp(-wv * wv * 0.04) * amp;
+    }
+  }
+  return g;
+}
+// (the near world's picture under the water: rgb its colour, a its distance from the eye, m; uSceneOn 0 on the far rings)
+uniform mat4 projectionMatrix; uniform sampler2D uScene; uniform vec2 uSceneTexel; uniform float uSceneOn;
+vec2 screenOf(vec3 q, out float ok) {
+  vec4 c = projectionMatrix * (viewMatrix * vec4(q, 1.0));
+  ok = c.w > 0.05 ? 1.0 : 0.0;
+  return c.xy / max(c.w, 0.05) * 0.5 + 0.5;
+}
+// the world mirrored at p along r: the ray marched in growing steps through the picture until it passes behind what
+// the picture shows there, the crossing found by halving; rgb its colour, a how far to trust it (0 where nothing is met,
+// faded at the picture's edges, beyond which it knows nothing)
+vec4 mirrored(vec3 p, vec3 r) {
+  float t = 0.0, tPrev = 0.0, st = 0.25, hit = 0.0; vec2 uvHit = vec2(0.0);
+  for (int i = 0; i < 30; i++) {
+    t += st; st *= 1.22;
+    vec3 q = p + r * t; float ok; vec2 uv = screenOf(q, ok);
+    if (ok < 0.5 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
+    float sd = texture2D(uScene, uv).a, qd = length(q - cameraPosition);
+    if (qd > sd + 0.03 && qd - sd < max((t - tPrev) * 1.5, 0.5)) {
+      float a = tPrev, b = t;
+      for (int k = 0; k < 5; k++) {
+        float m = (a + b) * 0.5; vec3 qm = p + r * m; float okm; vec2 um = screenOf(qm, okm);
+        if (length(qm - cameraPosition) > texture2D(uScene, um).a + 0.03) b = m; else a = m;
+      }
+      float okh; uvHit = screenOf(p + r * b, okh); hit = 1.0; break;
+    }
+    tPrev = t;
+  }
+  if (hit < 0.5) return vec4(0.0);
+  vec2 e = smoothstep(0.0, 0.06, uvHit) * smoothstep(0.0, 0.06, 1.0 - uvHit);
+  return vec4(texture2D(uScene, uvHit).rgb, e.x * e.y);
+}
 vec2 waveGrad(vec2 q) {
   float e = 0.35, c0 = vnoise(q);
   return vec2(c0 - vnoise(q + vec2(e, 0.0)), c0 - vnoise(q + vec2(0.0, e))) / e;
@@ -866,6 +996,8 @@ void main() {
   vec2 w = 0.6 * waveGrad(p * 0.37 - wd * uTime * 0.45) * 0.37 + 0.4 * waveGrad(p * 1.3 - wd * uTime * 0.8 + 13.1) * 1.3 * 0.45;
   w *= 0.35 + 0.65 * smoothstep(0.25, 0.65, vnoise(p / 60.0 - wd * uTime * 0.05));
   w += flowWaves(p, vel, 0.6) * (0.15 + 0.5 * smoothstep(0.3, 2.0, speed)) + flowWaves(p, vel, 2.1) * 0.25 * smoothstep(0.8, 2.5, speed);
+  // (in the rain: rings spreading on it where the drops fall)
+  w += rainRings(p, uTime, 0.55) * 0.55 * uRain * (1.0 - smoothstep(25.0, 80.0, d));
   // (far off the ripples still break the mirror a little: a river kilometres away is not a sheet of glass)
   float fadeN = 0.25 + 0.75 * fade;
   vec3 n = normalize(vec3(w.x * 0.34 * fadeN, 1.0, w.y * 0.34 * fadeN));
@@ -873,7 +1005,11 @@ void main() {
   float cosv = max(dot(n, v), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
   // what the water lets through over its depth along the view (red first, then green): a peaty, green-brown river
-  float path = depth / max(v.y, 0.2);
+  vec2 suv = gl_FragCoord.xy * uSceneTexel;
+  vec4 scn = uSceneOn > 0.5 ? texture2D(uScene, suv) : vec4(0.0);
+  float wdist = length(cameraPosition - vW);
+  // (near: to whatever the picture shows behind the surface - the bed, or a wall's or a pier's face under it)
+  float path = uSceneOn > 0.5 ? clamp(scn.a - wdist, 0.0, 80.0) : depth / max(v.y, 0.2);
   vec3 through = exp(-path * vec3(0.95, 0.32, 0.38));
   vec3 body = uDeep * (0.6 + 0.4 * vSun);
   // (the sky it mirrors: seen across the water at a low angle that is the sky near the horizon, the haze's colour, not
@@ -887,6 +1023,13 @@ void main() {
   float sd = max(dot(normalize(rfl), uSunDir), 0.0);
   sky += uSunColor * (0.55 * pow(sd, 6.0) + 0.9 * pow(sd, 48.0)) * (0.6 + 0.4 * vSun);
   sky = mix(sky, uHaze * vec3(0.42, 0.47, 0.40), (1.0 - smoothstep(0.0, 0.045, ry)) * 0.75);
+  // (near: the world over the water mirrored where the march meets it, on the waves calmed by half - their full slope
+  // broke the walls' and the bridges' images into scattered flecks)
+  if (uSceneOn > 0.5 && d < 1500.0) {
+    vec3 nS = normalize(vec3(n.x * 0.5, 1.0, n.z * 0.5));
+    vec4 mr = mirrored(vW + vec3(0.0, 0.02, 0.0), reflect(-v, nS));
+    sky = mix(sky, mr.rgb, mr.a * (1.0 - smoothstep(900.0, 1500.0, d)));
+  }
   vec3 hlf = normalize(uSunDir + v);
   float nh = max(dot(n, hlf), 0.0);
   // (the sun's path across the water: a sharp glitter on the ripples' faces and a broad sheen under it)
@@ -901,14 +1044,20 @@ void main() {
   // dashes along the horizon)
   float foam = clamp(max(shoreFoam, white * smoothstep(0.55 - 0.35 * white, 0.9, froth) * 1.3), 0.0, 1.0) * (1.0 - smoothstep(600.0, 2500.0, d));
   float a = 1.0 - through.g;                                    // (how much of the bed is hidden)
-  vec3 c = body * a * (1.0 - fres) + sky * fres + spec;
+  vec3 c = (uSceneOn > 0.5 ? body * (1.0 - through) : body * a) * (1.0 - fres) + sky * fres + spec;
   float alpha = clamp(a * (1.0 - fres) + fres, 0.0, 1.0);
   vec3 foamCol = vec3(0.92, 0.94, 0.93) * (0.55 + 0.45 * vSun);
   c = mix(c, foamCol, foam); alpha = mix(alpha, 1.0, foam);
   // the haze over it, as over the land (premultiplied: the haze takes the water's share)
   float hz = 1.0 - exp(-d / uHazeDist);
   c = mix(c, uHaze * alpha, hz);
-  gl_FragColor = vec4(c, alpha);
+  if (uSceneOn > 0.5) {
+    // (what lies under it, seen through it - its own picture, moved a little by the waves where that is still under the
+    // water, not something standing in front of it - and lit through the water's depth, colour by colour)
+    vec2 ruv = suv + n.xz * 0.035 * clamp(path, 0.0, 1.5) / max(1.0, wdist * 0.04);
+    vec4 sb = texture2D(uScene, ruv); if (sb.a < wdist) sb = scn;
+    gl_FragColor = vec4(c + sb.rgb * through * (1.0 - fres) * (1.0 - foam), 1.0);
+  } else gl_FragColor = vec4(c, alpha);
 }`;
 
 const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
@@ -955,8 +1104,10 @@ async function loadGround(base) {
   } catch (e) { /* (not there: the land as its cover colours alone) */ }
 }
 
-/** The land and its water, as rings round the camera. Returns { near, far, update(camPos) }: near (rings to 6 km) goes
- *  in the near world's scene, far (the rest) in the far pass. U: the landscape's uniforms (wind-glsl.js). */
+/** The land and its water, as rings round the camera. Returns { near, far, nearWater, sceneU, update(camPos) }: near
+ *  (rings to 6 km) goes in the near world's scene, far (the rest) in the far pass, nearWater (the near rings' water) is
+ *  drawn after the near world, over a copy of its picture and depth given in sceneU (countryside.js). U: the
+ *  landscape's uniforms (wind-glsl.js). */
 export function buildLand(world, U, opts = {}) {
   // (a machine's coarser rings - hardware.js landN: fewer cells a side and one more ring, so they reach as far)
   const n = opts.n ?? CLIP.n, s0 = CLIP.s0, more = Math.round(Math.log2(CLIP.n / n));
@@ -972,15 +1123,18 @@ export function buildLand(world, U, opts = {}) {
     uRock: { value: lin('#8a8070') }, uMud: { value: lin('#5c5640') }, uBloom: { value: lin('#e8e0f0') },
     uDeep: { value: lin('#2c4a44') }, uSkyTop: { value: lin('#aab8c6') },
   };
-  const near = new THREE.Group(), far = new THREE.Group();
-  near.name = 'land-near'; far.name = 'land-far';
+  const near = new THREE.Group(), far = new THREE.Group(), nearWater = new THREE.Group();
+  near.name = 'land-near'; far.name = 'land-far'; nearWater.name = 'water-near';
+  // (the near world's picture and depth under the near water, shared by its rings; the far rings' water has none)
+  const sceneU = { uScene: { value: null }, uSceneTexel: { value: new THREE.Vector2(1, 1) }, uSceneOn: { value: 0 } };
+  const sceneOff = { uScene: { value: null }, uSceneTexel: { value: new THREE.Vector2(1, 1) }, uSceneOn: { value: 0 } };
   const rings = [];
   for (let l = 0; l < levels; l++) {
     const scale = s0 * 2 ** l;
     const own = { uScale: { value: scale }, uCenter: { value: new THREE.Vector2() }, uHalf: { value: n / 2 }, uInner: { value: new THREE.Vector4(0, 0, 0, 0) } };
-    const mk = (mode, frag) => {
+    const mk = (mode, frag, seen = {}) => {
       const mat = new THREE.ShaderMaterial({
-        uniforms: { ...U, ...(world.uniforms.uWayT ? {} : WAYS_OFF), ...world.uniforms, ...looks, ...own, ...(mode ? {} : groundU), uMode: { value: mode } },
+        uniforms: { ...U, ...(world.uniforms.uWayT ? {} : WAYS_OFF), ...world.uniforms, ...looks, ...own, ...(mode ? {} : groundU), ...seen, uMode: { value: mode } },
         // (where the land's painted crowns take over from the trees: as far as the machine draws them, hardware.js)
         vertexShader: CLIP_VERT.replace('//@LAND', CANOPY_DEF + LAND_GLSL),
         fragmentShader: frag.replace('//@LAND', CANOPY_DEF + LAND_GLSL),
@@ -994,10 +1148,10 @@ export function buildLand(world, U, opts = {}) {
       mesh.renderOrder = mode ? 1 : 0;
       return mesh;
     };
-    const land = mk(0, LAND_FRAG);
-    const water = l <= waterTo ? mk(1, WATER_FRAG) : null;
+    const land = mk(0, LAND_FRAG, l < nearLevels ? sceneU : sceneOff);
+    const water = l <= waterTo ? mk(1, WATER_FRAG, l < nearLevels ? sceneU : sceneOff) : null;
     const g = l < nearLevels ? near : far;
-    g.add(land); if (water) g.add(water);
+    g.add(land); if (water) (l < nearLevels ? nearWater : far).add(water);
     rings.push({ l, scale, own, land, water });
   }
   // (a ring's water is drawn only where it has some: its mesh lay 3 m under dry ground, every triangle of it sent to
@@ -1030,5 +1184,5 @@ export function buildLand(world, U, opts = {}) {
       inner = [cx, cz, (n / 2) * r.scale, r.scale];
     }
   };
-  return { near, far, update, rings };
+  return { near, far, nearWater, sceneU, update, rings };
 }

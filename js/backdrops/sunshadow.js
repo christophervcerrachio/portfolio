@@ -291,6 +291,29 @@ export class SunShadow {
  *  the head of every window's opening, the underside of every ledge and awning came out olive. With `street` the more
  *  a face looks down the more that light is drawn to a warm grey of its own brightness, and a little dimmed - the
  *  ledge's own shade; a wall, which looks at the horizon, is lit as it was. */
+// (rain on what the sun lights - receiveSun below: how wet, drizzle.js wetAt; a small noise of its own for the runs
+// down the walls)
+const WET_OFF = { value: 0 };
+const WET_GLSL = /* glsl */`
+uniform float uWetS;
+float wetHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+float wetNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(wetHash(i), wetHash(i + vec2(1.0, 0.0)), f.x), mix(wetHash(i + vec2(0.0, 1.0)), wetHash(i + vec2(1.0, 1.0)), f.x), f.y); }`;
+// (stone, plaster, timber and iron darker and glossier wet: what faces the sky all over, as soon as it is wet; a wall
+// in long, uneven runs from its ledges down, more of it the longer it rains; under an eave, a sill or a cornice dry)
+const WET_FRAG = /* glsl */`
+  if (uWetS > 0.001) {
+    vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
+    float wUp = smoothstep(0.35, 0.85, nW.y), wUnder = smoothstep(-0.1, -0.45, nW.y);
+    vec2 wTg = vec2(-nW.z, nW.x); float wTl = length(wTg); wTg = wTl > 1e-4 ? wTg / wTl : vec2(1.0, 0.0);
+    float wAl = dot(vShW.xz, wTg);
+    float wRuns = wetNoise(vec2(wAl * 2.9, vShW.y * 0.23)) * 0.55 + wetNoise(vec2(wAl * 9.7 + 3.1, vShW.y * 0.6)) * 0.45;
+    float wWall = smoothstep(0.8 - 0.55 * uWetS, 0.95 - 0.45 * uWetS, wRuns);
+    float wetK = uWetS * max(wUp, wWall * 0.9) * (1.0 - wUnder);
+    diffuseColor.rgb *= 1.0 - 0.4 * wetK;
+    roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.3 + 0.06, wetK);
+  }`;
+
 export function receiveSun(mat, U, { street = false, wide = false } = {}) {
   if (!mat || mat.userData.sunRecv || mat.isShaderMaterial) return mat;
   mat.userData.sunRecv = true;
@@ -300,6 +323,7 @@ export function receiveSun(mat, U, { street = false, wide = false } = {}) {
     prev?.call(mat, sh, r);
     for (const k of Object.keys(shadowUniforms())) sh.uniforms[k] = U[k];
     sh.uniforms.uSunDir = U.uSunDir;
+    sh.uniforms.uWetS = U.uWet ?? WET_OFF;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vShW;')
       .replace('#include <project_vertex>', `#include <project_vertex>
   { vec4 shw = vec4(transformed, 1.0);
@@ -310,7 +334,8 @@ export function receiveSun(mat, U, { street = false, wide = false } = {}) {
     // (wide: a thing held in the hands, whose whole surface is a few texels of these pictures wide - read the pictures
     //  with a footprint that grows as the sun gets low, so a shadow crosses it as a ramp rather than in blocks)
     const shad = wide ? 'treeShadeWide(vShW + uSunDir * 0.15, 1.0 - clamp(abs(uSunDir.y) * 2.2, 0.0, 1.0))' : 'treeShade(vShW + uSunDir * 0.15)';
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vShW;\n#ifndef SUN_DIR_DECL\nuniform vec3 uSunDir;\n#endif\n${SHADOW_GLSL}`)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vShW;\n#ifndef SUN_DIR_DECL\nuniform vec3 uSunDir;\n#endif\n${SHADOW_GLSL}\n${WET_GLSL}`)
+      .replace('#include <lights_physical_fragment>', `${mat.transparent ? '' : WET_FRAG}\n#include <lights_physical_fragment>`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   { float shS = ${shad}; reflectedLight.directDiffuse *= shS; reflectedLight.directSpecular *= shS; }`);
     if (street) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_pars_begin>', `#include <lights_pars_begin>

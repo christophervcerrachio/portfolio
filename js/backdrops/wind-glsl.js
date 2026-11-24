@@ -27,6 +27,8 @@ export function landscapeUniforms() {
     uDeckBase: { value: 720 }, uDeckDepth: { value: 1050 }, uStorm: { value: new THREE.Vector4(0, 0, 1, 0) },
     // the drizzle's spell (drizzle.js): its cover and its rain
     uOvercast: { value: 0 }, uRain: { value: 0 },
+    // how wet the world is (drizzle.js wetAt): the ground's and the walls' darkening, the puddles
+    uWet: { value: 0 },
     // the birches' shadows on the hilltop (sunshadow.js)
     ...shadowUniforms(),
   };

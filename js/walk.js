@@ -288,6 +288,8 @@ export async function initWalk(container, opts = {}) {
         compileView(s.skyScene, { camera: s.cam, scene: s.skyScene }),
         compileView(s.farScene, { camera: s.farCam ?? s.cam, scene: s.farScene }),
         compileView(s.land), compileShadow(s.land),
+        // (the near water, drawn after the land over a copy of its picture: countryside.js _drawWater)
+        s.waterScene ? compileView(s.waterScene) : null,
         renderer.compileAsync(stage, camera).catch(() => {}),
       ]);
     } catch (e) { console.warn('programs', e); }
@@ -296,7 +298,7 @@ export async function initWalk(container, opts = {}) {
     // sent to the card now, one by one under the picture: they had gone up in a look all the way round, 3 s of the wait)
     try {
       const seen = new Set();
-      for (const root of [s.land, s.skyScene, s.farScene]) root?.traverse((o) => {
+      for (const root of [s.land, s.skyScene, s.farScene, s.waterScene]) root?.traverse((o) => {
         for (const m of [].concat(o.material ?? [])) for (const v of Object.values(m)) {
           if (v?.isTexture && !seen.has(v) && v.image) { seen.add(v); renderer.initTexture(v); }
         }
@@ -744,7 +746,7 @@ export async function initWalk(container, opts = {}) {
   function underfoot() {
     const W = s.world, x = s.at.x, z = s.at.z;
     if (!W) return 'grass';
-    if (s.bridges?.userData.deckAt(x, z) != null) return 'wood';
+    if (s.bridges?.userData.deckAt(x, z) != null) return s.cityBridges?.userData.stoneAt?.(x, z) ? 'cobble' : 'wood';
     const g = W.groundAt?.(x, z) ?? 'grass';
     if (g === 'water') return 'water';
     if (W.ways && W.ways.near(x, z) < 0.15) return g === 'town' ? 'cobble' : 'dirt';

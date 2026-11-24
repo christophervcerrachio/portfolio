@@ -4,8 +4,12 @@
 // horizon and the sky's flash round it taken out, the thunder kept).
 //
 //   drizzleAt(t)   the weather's spell at the walk's clock t (s): { overcast, rain } each 0..1 - the cover comes first
-//                  and goes last, the rain within it. The first spell a minute into the walk, then one in every ten.
+//                  and goes last, the rain within it. The first spell a minute into the walk, then one in every twenty
+//                  minutes, eight of them rain (24 Nov 2026: the rain had lasted three and a half minutes in ten).
 //                  ?rain=1 holds a drizzle, ?rain=0 none.
+//   wetAt(t)       how wet the world is at t (0 dry .. 1 soaked): the rain so far, soaked in over a few minutes and
+//                  dried out slower once it stops - the ground darkens and its puddles fill, the walls darken in runs
+//                  (terrain.js, sunshadow.js receiveSun). ?rain=1 soaked, ?rain=0 dry.
 //   makeDrizzle    the streaks round the camera (one draw: a few thousand short lines, each drop's place wrapped into
 //                  a box that moves with the camera, so the rain is anchored in the world and the walker moves through
 //                  it): makeDrizzle(U).update(t, dt, { cam, rain, storm, wind, light }) each frame. The far storm's
@@ -20,7 +24,7 @@ const LIGHT = 0.7;                                // (a drizzle at its heaviest:
 // overcast than it is without it, the sun and the sunset still through it; closed all the way, an evening sky went
 // flat and dark rust - seen 15 Nov 2026)
 const COVER = 0.25;
-export const SPELL = { start: 60, cycle: 600, cover: 300, rain: 210 };    // s: the first, how often, how long the cover and the rain last
+export const SPELL = { start: 60, cycle: 1200, cover: 600, rain: 480 };    // s: the first, how often, how long the cover and the rain last
 
 /** The weather's spell at the walk's clock t (s): how overcast (0..1), how hard it drizzles (0..1), and how far into
  *  its spell the weather is (spell: 0..1, the storm far off only near its height). */
@@ -34,6 +38,19 @@ export function drizzleAt(t) {
   const spell = ss(-60, 0, q) * (1 - ss(S.cover - 90, S.cover, q)), overcast = COVER * spell;
   const rain = LIGHT * ss(5, 50, q) * (1 - ss(S.rain - 50, S.rain, q));
   return { overcast, rain, spell };
+}
+
+/** How wet the world is at the walk's clock t: 0 dry .. 1 soaked. The rain of the last 25 minutes, in steps of 10 s:
+ *  while it rains the wet grows toward soaked over some two and a half minutes (as hard as it rains), after it dries
+ *  over some seven - a whole spell's rain soaks it, and the next spell comes before it is quite dry again. */
+export function wetAt(t) {
+  if (HOLD !== null) return HOLD > 0 ? 1 : 0;
+  let w = 0;
+  for (let k = 150; k >= 0; k--) {
+    const r = drizzleAt(t - k * 10).rain / LIGHT;
+    w = r > 0.02 ? w + r * (1 - w) * (10 / 150) : w * (1 - 10 / 420);
+  }
+  return Math.min(1, Math.max(0, w));
 }
 
 const N = 5200, BOX = 34, HIGH = 22;              // drops; the box round the camera (m across, m high)

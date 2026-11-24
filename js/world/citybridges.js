@@ -1,6 +1,8 @@
 // The cities' bridges (dev\world\citybridges.py, built in Blender): the Neva's floating bridges, decks of timber on
 // moored boats; the granite arches over the canals, some with their chain towers; the timber bridges on piles; the
-// Ioannovsky bridge into the fortress. userData.deckAt(x, z): the deck's height there for the walker, or null.
+// Ioannovsky bridge into the fortress. userData.deckAt(x, z): the deck's height there for the walker (on a stone
+// bridge's footways their kerb's height over the roadway), or null; stoneAt(x, z): whether that deck is stone;
+// parapetStop(x0, z0, x1, z1): where a step from x0, z0 to x1, z1 stops at a stone bridge's parapet, or null.
 import * as THREE from 'three';
 import { loadInTurn, breathe } from './reveal.js';
 import { arrive } from './arrive.js';
@@ -12,12 +14,30 @@ const DIR = 'assets/world/cities/';
 export function buildCityBridges(U, { base = '' } = {}) {
   const group = new THREE.Group(); group.name = 'citybridges';
   let decks = [];
-  group.userData.deckAt = (x, z) => {
+  const deckOf = (x, z) => {
     for (const d of decks) {
-      const rx = x - d.a[0], rz = z - d.a[1], s = rx * d.ux + rz * d.uz;
-      if (s < 0 || s > d.L || Math.abs(-rx * d.uz + rz * d.ux) > d.w / 2) continue;
+      const rx = x - d.a[0], rz = z - d.a[1], s = rx * d.ux + rz * d.uz, o = -rx * d.uz + rz * d.ux;
+      if (s < 0 || s > d.L || Math.abs(o) > d.w / 2) continue;
       const k = Math.min(d.deck.length - 2, Math.floor(s / d.step)), t = (s - k * d.step) / Math.max(1e-3, Math.min(d.step, d.L - k * d.step));
-      return d.deck[k] + (d.deck[k + 1] - d.deck[k]) * Math.min(1, t);
+      return [d, d.deck[k] + (d.deck[k + 1] - d.deck[k]) * Math.min(1, t) + (d.kerb !== undefined && Math.abs(o) > d.kerb ? d.up : 0)];
+    }
+    return null;
+  };
+  group.userData.deckAt = (x, z) => deckOf(x, z)?.[1] ?? null;
+  group.userData.stoneAt = (x, z) => { const q = deckOf(x, z); return !!q && q[0].inner !== undefined; };
+  // (a stone bridge's parapets (inner: their inner faces from the deck's middle, m): a step from its deck stops a body's
+  // half-width short of them, a step from beside it at their outer faces)
+  group.userData.parapetStop = (x0, z0, x1, z1) => {
+    for (const d of decks) {
+      if (d.inner === undefined) continue;
+      const s1 = (x1 - d.a[0]) * d.ux + (z1 - d.a[1]) * d.uz;
+      if (s1 < -0.3 || s1 > d.L + 0.3) continue;
+      const o0 = -(x0 - d.a[0]) * d.uz + (z0 - d.a[1]) * d.ux, o1 = -(x1 - d.a[0]) * d.uz + (z1 - d.a[1]) * d.ux;
+      const lim = d.inner - 0.3, out = d.w / 2 + 0.3;
+      let to = null;
+      if (Math.abs(o0) <= lim + 1e-3 && Math.abs(o1) > lim) to = Math.sign(o1) * lim;
+      else if (Math.abs(o0) >= out - 1e-3 && Math.abs(o1) < out && Math.sign(o0) === Math.sign(o1)) to = Math.sign(o1) * out;
+      if (to !== null) { const k = to - o1; return [x1 - d.uz * k, z1 + d.ux * k]; }
     }
     return null;
   };
@@ -33,6 +53,8 @@ export function buildCityBridges(U, { base = '' } = {}) {
         o.material.side = THREE.FrontSide;
         const nm = (o.material.name || '').toLowerCase();
         if (o.material.map && /granite/.test(nm)) parallax(o.material, { depth: 0.012, scale: 2.774 });
+        // (the gilded balls on the Politseysky's obelisks and the Anichkov's towers: as the Kremlin's gilt)
+        if (o.material.metalness > 0.5) { o.material.metalness = 0.72; o.material.envMapIntensity = 2.4; }
         else if (o.material.map && /timber|log/.test(nm)) parallax(o.material, { depth: 0.01, scale: 1.5 });
         receiveSun(o.material, U);
       });

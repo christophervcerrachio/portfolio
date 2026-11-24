@@ -19,6 +19,7 @@ export const WEATHER_GLSL = /* glsl */`
 uniform sampler2D uWeather; uniform vec2 uWeatherOff; uniform float uTile; uniform float uDeckBase; uniform float uDeckDepth;
 uniform vec4 uStorm;        // a storm that never leaves one place: its middle (x, z, m), its reach (m), how strong
 uniform float uOvercast; uniform float uRain;   // the drizzle's spell (drizzle.js): a grey cover over all of it, and its rain
+uniform float uWet;     // how wet the world is (drizzle.js wetAt)
 vec4 weatherAt(vec2 xz) {
   vec4 w = texture2D(uWeather, (xz + uWeatherOff) / uTile);
   // (the cover closing over the gaps, a little thicker and lower: a grey day's, not a storm's)

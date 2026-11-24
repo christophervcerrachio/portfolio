@@ -508,8 +508,12 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
         quad(a, b, c, d, m(a), m(b), m(c), m(d), n);
         A = A1; raw = r1; colK = null;
       };
-      const fit = (parts, [fx0, fy0, fx1, fy1], S, Z, o0 = 0) => {
-        const f0 = S(fx0), sx = (S(fx1) - f0) / ((fx1 - fx0) * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / ((fy1 - fy0) * fb.my);
+      // (ref: the box the model was built to - a model standing at several places is built to the first of its boxes, or
+      // to bays.json 'built' where its boxes were set to their openings since: stretched from that to this box, so it fills
+      // the box exactly; stretched by each box's own size, the basement bars had stood wider or narrower than their holes)
+      const fit = (parts, [fx0, fy0, fx1, fy1], S, Z, o0 = 0, ref = null) => {
+        const rw = ref ? ref[2] - ref[0] : fx1 - fx0, rh = ref ? ref[3] - ref[1] : fy1 - fy0;
+        const f0 = S(fx0), sx = (S(fx1) - f0) / (rw * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / (rh * fb.my);
         const mid = V((f0 + S(fx1)) / 2, f1, 0), ckF = Math.floor(mid[0] / CELL) + ',' + Math.floor(mid[2] / CELL);
         for (const pt of parts) {
           if (pt.kind === 'fix' && pixOf(fname + '#fix')) {
@@ -1011,7 +1015,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
             for (const box of boxes) {
               if (box[0] < b[0] - 1 || box[2] > b[1] + 1 || box[1] < by0 - 1 || box[1] >= by1) continue;
               if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }
-              fit(parts, box, S, Z);
+              fit(parts, box, S, Z, 0, fb.built?.[mk] ?? boxes[0]);
             }
           }
           zb += hm;

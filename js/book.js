@@ -70,7 +70,40 @@ export function makeBook(o) {
   function canvasTex(w = pageW, h = pageH) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const t = full(new THREE.CanvasTexture(c)); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace;
-    return { c, g: c.getContext('2d'), t };
+    return { c, g: c.getContext('2d'), t, dirty: [] };
+  }
+  // (a page's picture goes to the card in bands of rows, only where it changed, at most BAND rows a frame: sent whole into
+  // its sRGB texture it stalled the frame 25 to 40 ms in Chrome, and the line under the hand had sent the whole page at
+  // every change, so the walk caught at each line the hand passed over; measured on the live site, 24 Nov 2026: a band of
+  // 96 rows a frame costs nothing seen)
+  const BAND = 96;
+  function dirty(page, y0, y1, first = false) {
+    let a = Math.max(0, Math.floor(y0)), b = Math.min(page.c.height, Math.ceil(y1));
+    if (b <= a) return;
+    const keep = [];
+    for (const [c0, c1] of page.dirty) { if (c1 < a || c0 > b) keep.push([c0, c1]); else { a = Math.min(a, c0); b = Math.max(b, c1); } }
+    page.dirty = first ? [[a, b], ...keep] : [...keep, [a, b]];
+  }
+  function send(renderer, page) {
+    if (!page?.dirty.length) return;
+    const p = renderer.properties.get(page.t), gl = renderer.getContext();
+    // (not on the card yet, or going up whole at its next draw: that carries every change)
+    if (!p.__webglTexture || p.__version !== page.t.version) { if (!p.__webglTexture) page.t.needsUpdate = true; page.dirty = []; return; }
+    renderer.state.bindTexture(gl.TEXTURE_2D, p.__webglTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0); gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0); gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+    let rows = BAND;
+    while (rows > 0 && page.dirty.length) {
+      const [y0, y1] = page.dirty[0], h = Math.min(y1 - y0, rows);
+      if (!page.band) { page.band = document.createElement('canvas'); page.band.width = page.c.width; }
+      if (page.band.height !== h) { page.band.height = h; page.bandG = page.band.getContext('2d'); page.bandG.globalCompositeOperation = 'copy'; }
+      page.bandG.drawImage(page.c, 0, y0, page.c.width, h, 0, 0, page.c.width, h);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y0, gl.RGBA, gl.UNSIGNED_BYTE, page.band);
+      rows -= h;
+      if (y0 + h >= y1) page.dirty.shift(); else page.dirty[0] = [y0 + h, y1];
+    }
+    if (page.t.generateMipmaps) gl.generateMipmap(gl.TEXTURE_2D);
   }
 
   async function load() {
@@ -141,6 +174,7 @@ export function makeBook(o) {
     parts['page-r'].material.map = P.r.t; parts['page-l'].material.map = P.l.t;
     parts['page-r'].material.needsUpdate = parts['page-l'].material.needsUpdate = true;
     drawRight(); drawLeft();
+    P.r.dirty = []; P.l.dirty = [];                 // (new pictures: each goes up whole at its first draw)
     // the cursor: the manicule's ink lying on the paper, its fingertip the point
     if (T.cursor) {
       T.cursor.wrapS = T.cursor.wrapT = THREE.ClampToEdgeWrapping;
@@ -223,16 +257,21 @@ export function makeBook(o) {
   function dists() {
     const at = s.at; return places.map((p) => ({ ...p, dist: Math.hypot(p.at[0] - at.x, p.at[1] - at.z) }));
   }
-  // (the place under the printer's hand red, as a look is on the left page)
-  function drawRight(hover = st.hover.r) {
+  // (the place under the printer's hand red, as a look is on the left page. lines: the ids of the lines that changed -
+  // the hand moved from one to another: only those go to the card again, the new one first, and the page is drawn with
+  // the distances it was drawn with, so nothing else on it changes; none given: the whole page, its distances anew)
+  function drawRight(hover = st.hover.r, lines = null) {
     if (!P.r) return;
-    P.boxR = drawPlaces(P.r.g, pageW, pageH, { places: dists(), hover }, { tile: T.paper?.image, coarse });
-    P.r.t.needsUpdate = true; st.distAt = { x: s.at.x, z: s.at.z };
+    if (!lines || !P.rPlaces) { P.rPlaces = dists(); st.distAt = { x: s.at.x, z: s.at.z }; }
+    P.boxR = drawPlaces(P.r.g, pageW, pageH, { places: P.rPlaces, hover }, { tile: T.paper?.image, coarse });
+    const k = pageW / PAGE.w, boxes = lines && P.boxR.filter((b) => lines.includes(b.id));
+    if (boxes?.length) for (const id of lines) { const b = boxes.find((q) => q.id === id); if (b) dirty(P.r, b.box[1] * k - 2, b.box[3] * k + 2, id === hover); }
+    else dirty(P.r, 0, pageH);
   }
   function drawLeft() {
     if (!P.l) return;
     P.boxL = drawGraphics(P.l.g, pageW, pageH, { vignette, plate }, { tile: T.paper?.image, coarse });
-    P.l.t.needsUpdate = true;
+    dirty(P.l, 0, pageH);
   }
 
   // ---- where the book is held: low at the right (0) or up before the face (1), in the eye's frame
@@ -333,7 +372,7 @@ export function makeBook(o) {
     ride();
     const u = st.goal === 1 ? underCursor() : null;
     const r = u?.side === 'r' ? hit(P.boxR, u.x, u.y) : null, l = u?.side === 'l' ? hit(P.boxL, u.x, u.y) : null;
-    if (r !== st.hover.r) { st.hover.r = r; drawRight(); }
+    if (r !== st.hover.r) { const was = st.hover.r; st.hover.r = r; drawRight(r, [r, was].filter((id) => id !== null)); }
     if (l !== st.hover.l) { st.hover.l = l; drawLeft(); }
     if (cursor) {
       // (on the page: where the mouse points; off it, on the page carried on past its edge - where only the part of it
@@ -482,6 +521,7 @@ export function makeBook(o) {
       // (not drawn until it is made ready: made ready here if the walk has not asked - its first frames wait, not stall)
       if (!st.primed) { api.prime(renderer); return; }
       fitUp(); place(dt); aim(); hover();
+      send(renderer, P.r); send(renderer, P.l);
       const gl = renderer.getContext(), rev = DEPTH.reversed;
       gl.depthRange(rev ? 0.982 : 0.0, rev ? 1.0 : 0.018);
       // the book
