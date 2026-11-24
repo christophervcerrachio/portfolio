@@ -814,6 +814,13 @@ void main() {
   // the houses' shade, read as water from a distance)
   c *= mix(vec3(1.0), vec3(1.07, 1.0, 0.86), townW);
   vec3 lit = lightUp(c, n, 1.0, 0.0, vSun * treeShade(vW + n * 0.2 + uSunDir * 0.1));
+  // (and the towns' ground in shade lit by the sky's light drawn half way to a warm grey of its own brightness - the
+  // light thrown back off the fronts across the street, as the walls' own shade has it (sunshadow.js streetHemi): by the
+  // sky alone, at dusk, the setts in shade had read a saturated blue beside the warm walls - 23 Nov 2026)
+  if (townW > 0.0) {
+    vec3 skyT = mix(uSkyColor, dot(uSkyColor, vec3(0.2126, 0.7152, 0.0722)) * vec3(1.05, 1.0, 0.93), 0.5);
+    lit += c * (skyT - uSkyColor) * (0.6 + 0.4 * n.y) * townW;
+  }
   // (tens of kilometres off nothing is brighter than the air in front of it: rock faces catching the sun out there came
   // out as white dashes along the horizon under the clear day's light haze)
   lit = mix(lit, min(lit, uHaze * 1.04), smoothstep(18000.0, 60000.0, d));
