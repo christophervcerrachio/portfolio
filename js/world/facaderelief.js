@@ -527,7 +527,8 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       };
       // (ref: the box the model was built to - a model standing at several places is built to the first of its boxes, or
       // to bays.json 'built' where its boxes were set to their openings since: stretched from that to this box, so it fills
-      // the box exactly; stretched by each box's own size, the basement bars had stood wider or narrower than their holes)
+      // the box exactly; stretched by each box's own size, the basement bars had stood wider or narrower than their holes,
+      // and once the storey grid had laid the pictures again a door stood a quarter short of its opening or over it)
       const fit = (parts, [fx0, fy0, fx1, fy1], S, Z, o0 = 0, ref = null) => {
         const rw = ref ? ref[2] - ref[0] : fx1 - fx0, rh = ref ? ref[3] - ref[1] : fy1 - fy0;
         const f0 = S(fx0), sx = (S(fx1) - f0) / (rw * fb.mx), f1 = Z(fy1), sy = (Z(fy0) - f1) / (rh * fb.my);
@@ -827,7 +828,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // the glass and its frame at the back: the picture's window - from its painted frame's place where the window
               // was measured to its hole
               const fm0 = FM?.['c' + ci];          // (a window with its frame modelled keeps its measure: the model is the frame)
-              if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -Dw);   // (a balcony's door, its own model)
+              if (fb.doorCols?.includes(ci) && FT?.bdoor && fb.models?.bdoor) fit(FT.bdoor, fb.models.bdoor, S, Z, -Dw, fb.built?.bdoor);   // (a balcony's door, its own model)
               else {
                 const A0 = A; A = AG; winC = V((u0 + u1) / 2, (v0 + v1) / 2, -Dw);
                 const [tg0, tg1] = fm0 ? [gx0, gx1] : trimDark(fname, H, [gx0, gy0, gx1, gy1]);
@@ -889,7 +890,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               }
               const A1 = A; A = AD;
               quad(B0, B1, R1, R0, [dx0, dy1 - 3], [dx1, dy1 - 3], [dx1, dy1 - 1], [dx0, dy1 - 1], up);   // (the threshold)
-              if (FT?.door && fb.models?.door) fit(FT.door, fb.models.door, S, Z, -DR);                   // (the door, its own model)
+              if (FT?.door && fb.models?.door) fit(FT.door, fb.models.door, S, Z, -DR, fb.built?.door);   // (the door, its own model)
               else quad(B0, B1, B2, B3, [dx0, dy1], [dx1, dy1], [dx1, dy0], [dx0, dy0], out);             // (the door)
               A = A1;
               // The steps: from the threshold down to the pavement before the door - the level the city's ground was
@@ -923,8 +924,10 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               }
               // the door's hood: what the picture paints over the door - a gabled timber canopy on its brackets, a
               // pediment, a flat hood on consoles, the columns of a porch - built out from the wall in the picture's own
-              // paint, each face cut from where the picture has it (windows/bays.json 'hood': px of the picture). The
-              // painted one behind it is covered with a piece of the plain wall beside it ('wall').
+              // paint, each face cut from where the picture has it (windows/bays.json 'hood': px of the picture). A
+              // picture that paints the hood has it covered with a piece of the plain wall beside it ('wall'); the
+              // fronts' pictures are the wall alone there now and have none (the piece, moved with the hood by the storey
+              // grid, had taken in a casing's crest and stood stretched across the courses).
               if (fb.hood) {
                 const h = fb.hood, D = h.depth, xl = S(h.x0), xr = S(h.x1), zt = Z(h.y0), zb_ = Z(h.y1);
                 // (the hood's gable, beam, slopes and brackets in the mouldings' material and the hood's own paint, by
