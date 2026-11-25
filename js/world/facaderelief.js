@@ -18,6 +18,7 @@ import { gltfLoader } from '../gltf.js';
 import { timed } from '../loadreport.js';
 import { receiveSun } from '../backdrops/sunshadow.js';
 import { styleNow } from '../retro.js';
+import { segments, layoutOf } from './facademods.js';
 
 const DIR = 'assets/world/cities/';
 // (a growing list of floats kept as 32-bit floats from the first - a tile's positions, normals, uvs and colours: a tile
@@ -125,9 +126,19 @@ function borrowed(fb, ci, ry0, ry1, kind = 'side') {
   return (cache[key] = best);
 }
 
-/** Each front's storey bands from the street up, st storeys high: [[y0 px, y1 px, metres], ...] (city_blender.py bands_for). */
+/** Each front's storey bands from the street up, st storeys high: [[y0 px, y1 px, metres], ...] (dev\world\facade_bays.py
+ *  bands_for). A front laid to its city's storey grid (bays.json 'grid', 24 Nov 2026: grid180.py) has its bands at the
+ *  grid's lengths - the ground band G m, each middle one U, the top one T, a one-storey wall's cornice band C - never
+ *  stretched to the house, so the windows of houses joined in a row stand in line. */
 function bandsFor(fb, st, storey) {
-  const B = fb.bands;
+  const B = fb.bands, gr = fb.grid;
+  if (gr) {
+    if (st <= 1) return [[B.ground[0], B.ground[1], gr.G], [B.top[0], fb.eaves, gr.C]];
+    const out = [[B.ground[0], B.ground[1], gr.G]];
+    for (let i = 0; i < st - 2; i++) out.push([B.mid[0], B.mid[1], gr.U]);
+    out.push([B.top[0], B.top[1], gr.T]);
+    return out;
+  }
   let seq;
   if (st <= 1) {
     // (a one-storey wall's top band ends at the front's 'eaves' where it was measured: facade_bays.py)
@@ -299,7 +310,13 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
   // (the window boxes' models: each mesh's geometry in the model's own frame, its material; null if not there)
   const BOXES = Promise.all([0, 1].map((v) => gltfLoader().loadAsync(base + 'assets/world/props/prop-window-box-' + v + '.glb').then((g) => {
     g.scene.updateMatrixWorld(true); const parts = [];
-    g.scene.traverse((o) => { if (o.isMesh) { const m = o.material; receiveSun(m, U); parts.push({ geo: o.geometry.clone().applyMatrix4(o.matrixWorld), mat: m }); } });
+    g.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material; receiveSun(m, U);
+      const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); geo.computeBoundingBox();
+      // (its width as made, and how much of the window's it spans: the box nine tenths, its flowers all but a hair)
+      parts.push({ geo, mat: m, w: Math.max(0.05, geo.boundingBox.max.x - geo.boundingBox.min.x), span: /planks/.test(m.name) ? 0.9 : 0.98 });
+    });
     return parts;
   }).catch(() => null)));
   // (the windows' frames: each front's models, { c<column>: { p, n, u: its triangles' points, normals and texture
@@ -426,7 +443,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       // (lev: for each of the wall's doors, in their order along it, [the pavement's top before it, how far out the
       // pavement reaches (m)] - dev/world/door_levels.py; room: [from, to] along the wall (m), the room between a
       // portico's two middle columns' pedestals, which its door's steps keep to - dev/world/city_blender.py)
-      const [px, py, qx, qy, y0, st, fi, sh0, sh1, bix, k0 = 0, , lev = null, room = null, shopName = null] = w;
+      const [px, py, qx, qy, y0, st, fi, sh0, sh1, lay, k0 = 0, , lev = null, room = null, shopName = null] = w;
       let dix = 0;
       const fname = T.I.fronts[fi], key = 'facade-' + fname.slice(6), fb = BAYS[key], fr = FRONTS[key], FM = frOK ? FRAMES[key] : null;
       if (!fb || !fr) continue;
@@ -556,21 +573,24 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
       };
       const FT = FITS[key];
       const bands = bandsFor(fb, st, T.I.storey);
-      const top = y0 + st * T.I.storey;
-      if (!bix.length) continue;
+      // (the wall's eaves: its bands' metres together - on the city's grid, not the storeys' count times a storey)
+      const top = y0 + bands.reduce((a, b_) => a + b_[2], 0);
+      if (!lay?.length || !fb.mod) continue;
       const tb = bands[bands.length - 1];
       const cpx = Math.max(10, Math.round(CORN / fb.my)), cp = Math.max(6, Math.round(0.16 / fb.my));
       const zc = y0 + bands[0][2];
-      // the bays along the wall: their picture's px stretched to the wall
-      const bl = bix.map((i) => fb.bays[Math.max(0, i)]);
-      const tot = bl.reduce((s, b) => s + (b[1] - b[0]) * fb.mx, 0), sc = L / tot;
+      // the wall's strips of its front's picture, band by band, as the city was built (24 Nov 2026: every window of a
+      // storey one size, evenly spaced, none near a corner, none with anything before it - js/world/facademods.js,
+      // dev\world\facade_mods.py): its window bays, its door bays, its two plain ends, the bays kept blind
+      const LY = layoutOf(fb, lay), NONE = new Set();
+      const SG = bands.map((band, kk) => segments(fb, LY, band, kk, LY.blind.get(kk) ?? NONE, sh0 >= 0 ? [sh0, sh1] : null));
       // (a shop's display windows and its door as openings (15 Nov 2026): the shopfront stands 0.08 m proud of the wall
       // over its bays, its picture its joinery alone, and each opening in it - shops.json, fractions of its picture - is
       // a hole near the walker (openings.js cut) with its reveals, head and sill 0.16 m deep in the frame's paint and,
       // at the back, its glass: the goods behind it, from the shop's picture of its openings)
       if (frOK && shopName && sh0 >= 0 && SHOPS?.[shopName]) {
         let s_ = 0, sA = null, sB = null;
-        bl.forEach((b, bi) => { const wm = (b[1] - b[0]) * fb.mx * sc; if (bi === sh0) sA = s_; s_ += wm; if (bi === sh1 - 1) sB = s_; });
+        for (const [, , wm, kind] of SG[0]) { if (kind === 'S') { if (sA === null) sA = s_; sB = s_ + wm; } s_ += wm; }
         const hg = bandsFor(fb, st, T.I.storey)[0][2], SP = SHOPS[shopName];
         if (sA !== null && sB !== null && hg > 1) {
           const OF = 0.08, BK = -0.08, ckS = Math.floor((ax + tx * (sA + sB) / 2) / CELL) + ',' + Math.floor((az + tz * (sA + sB) / 2) / CELL);
@@ -592,54 +612,69 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           }
         }
       }
-      let s = 0;
-      // (a bay at a time: a wall of a dozen bays and their balconies' ironwork had been one step of tens of ms)
-      for (let bi = 0; bi < bl.length; bi++) {
-        yield;
-        const b = bl[bi];
-        const wpx = b[1] - b[0], wm = wpx * fb.mx * sc, sa = s; s += wm;
-        const S = (x) => sa + (x - b[0]) / wpx * wm;
-        // (the cornice along the top of the bay, from the picture's top rows over it; its ends closed at the wall's)
-        box(sa, s, top - CORN, top, CORN, [b[0], tb[0], b[1], tb[0] + cpx], 'fb' + (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : ''));
-        // (the string course over the ground floor: the picture's rows where the ground band meets the next)
-        // (a front measured for it ('course': its rows in the ground band's top) has its own course where the picture
-        // paints it; a front whose picture paints none has none modelled - the plain band across its wall had stood over
-        // nothing; the others as before)
-        const ends = (bi === 0 ? 'l' : '') + (bi === bl.length - 1 ? 'r' : '');
-        // (none across a shop's bays: its front and its sign stand up past the course, which had cut across the sign's
-        // top - seen live, 13 Nov 2026)
-        if (sh0 >= 0 && bi >= sh0 && bi < sh1) { /* the shop's front */ }
-        else if (fb.course) {
-          if (bands.length > 1 && k0 === 0) {
-            const [g0, g1, gh] = bands[0], Zg = (y) => y0 + (g1 - y) / (g1 - g0) * gh;
-            box(sa, s, Zg(fb.course[1]), Zg(fb.course[0]), COURSE, [b[0], fb.course[0], b[1], fb.course[1]], 'ftb' + ends);
-          }
-        } else if (fb.eaves === undefined && bands.length > 1 && k0 === 0) box(sa, s, zc - 0.08, zc + 0.08, COURSE, [b[0], bands[0][0] - cp / 2, b[1], bands[0][0] + cp / 2], 'ftb' + ends);
-        // (the pilasters (bays.json 'pilasters'): one at every joint of the bays, each bay's two halves of it standing out
-        // of the wall from capital to base in every band it crosses - all cut from the one pilaster of the picture, so they
-        // stand alike and in line; their sides closed only at the wall's ends)
-        const PL = fb.pilasters;
-        if (PL) {
-          const hw = PL.half, src = PL.src, [r0, r1] = PL.rows, dp = PL.depth;
-          let zp = y0;
-          bands.forEach(([py0, py1, phm], kk) => {
-            const lo = Math.max(py0, r0), hi = Math.min(py1, r1);
-            const shopB = kk === 0 && sh0 >= 0 && bi >= sh0 && bi < sh1;
-            if (kk >= k0 && hi - lo > 1 && !shopB) {
-              const Zp = (y) => zp + (py1 - y) / (py1 - py0) * phm, hl = hw * fb.mx * sc;
-              const fc = 'f' + (lo === r0 ? 't' : '') + (hi === r1 ? 'b' : '');            // (its top at the capital, its foot at the base)
-              // (the bay's left: the right half of the pilaster on its joint; its right: the left half)
-              if (PL.at.some((x) => Math.abs(x - b[0]) < 2)) box(sa, sa + hl, Zp(hi), Zp(lo), dp, [src, lo, src + hw, hi], fc + 'r' + (bi === 0 ? 'l' : ''));
-              if (PL.at.some((x) => Math.abs(x - b[1]) < 2)) box(s - hl, s, Zp(hi), Zp(lo), dp, [src - hw, lo, src, hi], fc + 'l' + (bi === bl.length - 1 ? 'r' : ''));
+      // (a strip at a time, band by band: a wall of a dozen bays and their balconies' ironwork had been one step of tens of
+      // ms)
+      let zb = y0;
+      for (let k = 0; k < bands.length; k++) {
+        const [by0, by1, hm] = bands[k];
+        if (k < k0) { zb += hm; continue; }                          // (behind the next house: nothing to model)
+        const Z = (y) => zb + (by1 - y) / (by1 - by0) * hm;
+        const strips = SG[k];
+        let s = 0;
+        for (let si = 0; si < strips.length; si++) {
+          yield;
+          const [sx0, sx1, wm, kind] = strips[si], sa = s; s += wm;
+          if (wm <= 1e-4) continue;
+          // (the strip's own px stretched to its metres: a window bay at the house's width, a door bay to its window
+          // bays, a plain strip to the room it fills)
+          const b = [sx0, sx1, kind === 'D' ? 'door' : kind], wpx = sx1 - sx0, sc = wm / (wpx * fb.mx);
+          const S = (x) => sa + (x - b[0]) / wpx * wm;
+          const ends = (si === 0 ? 'l' : '') + (si === strips.length - 1 ? 'r' : '');
+          // (the cornice along the top of the strip, from the picture's top rows over it; its ends closed at the wall's -
+          // over any strip but a window bay, the window bay's own cornice, bay after bay in step with the wall's windows
+          // from its first window bay, as the city was built (city_blender.py seg_wall): a strip's own stretched to it
+          // had put a cornice's brackets in pairs or a gap where a door bay met a window bay, and pressed them together
+          // at the wall's ends)
+          if (k === bands.length - 1) {
+            if (kind === 'W') box(sa, s, top - CORN, top, CORN, [b[0], tb[0], b[1], tb[0] + cpx], 'fb' + ends);
+            else {
+              const [w0, w1] = LY.crop?.W ?? fb.mod.W, M = LY.M;
+              for (let t = sa; t < s - 1e-6;) {
+                let ph = (((t - LY.e) % M) + M) % M, take = Math.min(s - t, M - ph);
+                if (take < 1e-6) { ph = 0; take = Math.min(s - t, M); }
+                const f = (t === sa && si === 0 ? 'l' : '') + (t + take >= s - 1e-6 && si === strips.length - 1 ? 'r' : '');
+                box(t, t + take, top - CORN, top, CORN, [w0 + ph / M * (w1 - w0), tb[0], w0 + (ph + take) / M * (w1 - w0), tb[0] + cpx], 'fb' + f);
+                t += take;
+              }
             }
-            zp += phm;
-          });
-        }
-        let zb = y0;
-        bands.forEach(([by0, by1, hm], k) => {
-          if (k < k0) { zb += hm; return; }                          // (behind the next house: nothing to model)
-          const Z = (y) => zb + (by1 - y) / (by1 - by0) * hm;
-          const shop = k === 0 && sh0 >= 0 && bi >= sh0 && bi < sh1;
+          }
+          // (the string course over the ground floor: the picture's rows where the ground band meets the next)
+          // (a front measured for it ('course': its rows in the ground band's top) has its own course where the picture
+          // paints it; a front whose picture paints none has none modelled - the plain band across its wall had stood
+          // over nothing; none across a shop's bays: its front and its sign stand up past the course)
+          if (k === 0 && kind !== 'S') {
+            if (fb.course) {
+              if (bands.length > 1 && k0 === 0) {
+                const [g0, g1, gh] = bands[0], Zg = (y) => y0 + (g1 - y) / (g1 - g0) * gh;
+                box(sa, s, Zg(fb.course[1]), Zg(fb.course[0]), COURSE, [b[0], fb.course[0], b[1], fb.course[1]], 'ftb' + ends);
+              }
+            } else if (fb.eaves === undefined && bands.length > 1 && k0 === 0) box(sa, s, zc - 0.08, zc + 0.08, COURSE, [b[0], bands[0][0] - cp / 2, b[1], bands[0][0] + cp / 2], 'ftb' + ends);
+          }
+          // (the pilasters (bays.json 'pilasters'): one at every cut of the picture's bays, each strip's halves of it
+          // standing out of the wall from capital to base in the band - all cut from the one pilaster of the picture, so
+          // they stand alike and in line; their sides closed only at the wall's ends)
+          const PL = fb.pilasters;
+          if (PL && kind !== 'S') {
+            const hw = PL.half, src = PL.src, [r0, r1] = PL.rows, dp = PL.depth;
+            const lo = Math.max(by0, r0), hi = Math.min(by1, r1);
+            if (hi - lo > 1) {
+              const hl = hw * fb.mx * sc;
+              const fc = 'f' + (lo === r0 ? 't' : '') + (hi === r1 ? 'b' : '');            // (its top at the capital, its foot at the base)
+              if (PL.at.some((x) => Math.abs(x - b[0]) < 2)) box(sa, sa + hl, Z(hi), Z(lo), dp, [src, lo, src + hw, hi], fc + 'r' + (si === 0 ? 'l' : ''));
+              if (PL.at.some((x) => Math.abs(x - b[1]) < 2)) box(s - hl, s, Z(hi), Z(lo), dp, [src - hw, lo, src, hi], fc + 'l' + (si === strips.length - 1 ? 'r' : ''));
+            }
+          }
+          const shop = kind === 'S';
           // An arched opening (windows/bays.json: a row's fourth number, the door's doorArch - the arch's rise as a
           // share of half the opening's width): its jambs' surrounds up to where the arch springs, its archivolt
           // standing proud of the wall in segments, and the hole's sides and head back D m to the glass or the door -
@@ -719,7 +754,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
               // (one hangs on this window where its inner edge is at the frame or within the casing's breadth of it)
               // (by the painted frame's edges where the window was measured to its hole: the shutters were measured to them)
               const ex0 = gf ? gx0 : cx0, ex1 = gf ? gx1 : cx1;
-              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q) => (q[4] < 0 ? q[2] <= ex0 + 1.5 && ex0 - q[2] <= mpx + 2 + (ex0 - cx0) : q[0] >= ex1 - 1.5 && q[0] - ex1 <= mpx + 2 + (cx1 - ex1)) && q[1] < ry1 && q[3] > ry0) : [];
+              const sh = (!(af > 0) && fb.shutters) ? fb.shutters.filter((q, qi) => !fb.mod?.drop?.includes('shutter-' + qi) && (q[4] < 0 ? q[2] <= ex0 + 1.5 && ex0 - q[2] <= mpx + 2 + (ex0 - cx0) : q[0] >= ex1 - 1.5 && q[0] - ex1 <= mpx + 2 + (cx1 - ex1)) && q[1] < ry1 && q[3] > ry0) : [];
               const shL = sh.some((q) => q[4] < 0), shR = sh.some((q) => q[4] > 0);
               // (only the faces that show: the jambs' inner sides are a few cm deep, left to the window's recess)
               // (a front whose casings are carved boards (bays.json 'cut'): the head, sides and apron cut to the carving)
@@ -738,12 +773,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 if (!shR) box(u1, u1 + um, v0, v1, PROUD, [cx1, ry0, cx1 + mpx, ry1], 'fr', 0, colR);            // (right)
                 A = AC_;
               }
-              // the sill: a stone ledge under the window, a little wider than its surround
-              const sp = Math.max(5, Math.round(0.08 / fb.my));
-              box(u0 - um - 0.04, u1 + um + 0.04, v0 - 0.08, v0, SILL, [cx0 - mpx, ry1 + 1, cx1 + mpx, ry1 + 1 + sp], 'ftblr');
+              // the sill: a stone ledge under the window, as wide as its surround - its ends in line with the surround's
+              // sides, as the wall's picture paints it (surrounds180.py); 4 cm wider either side, it had stood out past
+              // the window's edges
+              // (none under a balcony's door ('doorCols'): its threshold is the balcony's slab - surrounds180.py)
+              const sp = Math.max(5, Math.round(0.08 / fb.my)), bdoor = fb.doorCols?.includes(ci);
+              if (!bdoor) box(u0 - um, u1 + um, v0 - 0.08, v0, SILL, [cx0 - mpx, ry1 + 1, cx1 + mpx, ry1 + 1 + sp], 'ftblr');
               // (and the casing's apron under the sill, where the front has one)
               if (cut) A = get(fname + '#cut', ck_);
-              if (tr && tr[2]) box(u0 - um, u1 + um, Z(ry1 + sp + tr[2]), v0 - 0.08, PROUD, [cx0 - mpx, ry1 + sp + 1, cx1 + mpx, ry1 + sp + tr[2]], 'fblr');
+              if (tr && tr[2] && !bdoor) box(u0 - um, u1 + um, Z(ry1 + sp + tr[2]), v0 - 0.08, PROUD, [cx0 - mpx, ry1 + sp + 1, cx1 + mpx, ry1 + sp + tr[2]], 'fblr');
               A = AC_;
               // (each open shutter: a board 4 cm thick standing just out from the casing, the picture's whole shutter on
               // it, its foot at the sill)
@@ -813,12 +851,13 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
                 }
                 AF.u.pushAll(fu);
               }
-              // a window box of flowers on the sill now and then: one window in six on the lower two storeys, never a
-              // shop's
+              // a window box of flowers on the sill now and then: one window in six on the two storeys over the ground
+              // floor, never a shop's (24 Nov 2026: on the ground floor's they had stood at the pavement's height, and
+              // been as wide as the window and a hand more - its flowers half as wide again as its box)
               const hsh = Math.abs(Math.sin((ax + bx) * 12.9898 + u0 * 78.233 + v0 * 37.719) * 43758.5453) % 1;
-              if (k <= 1 && hsh < 0.17) {
+              if (k >= 1 && k <= 2 && hsh < 0.17) {
                 const c_ = V((u0 + u1) / 2, v0, SILL - 0.02);
-                boxes.push([c_[0], c_[1], c_[2], Math.atan2(nx, nz), (u1 - u0 + 0.1) / 1.0, hsh < 0.085 ? 0 : 1]);
+                boxes.push([c_[0], c_[1], c_[2], Math.atan2(nx, nz), u1 - u0, hsh < 0.085 ? 0 : 1]);
               }
             }
           }
@@ -1011,15 +1050,15 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           if (FT && fb.models && k >= k0) for (const mk in fb.models) {
             // (a model may stand at several places - a pediment over every window: a list of boxes)
             const parts = FT[mk], boxes = Array.isArray(fb.models[mk][0]) ? fb.models[mk] : [fb.models[mk]];
-            if (!parts || fb.doorParts?.[mk] || fb.doorSpec?.[mk] || shop) continue;
+            if (!parts || fb.doorParts?.[mk] || fb.doorSpec?.[mk] || shop || fb.mod?.drop?.includes(mk)) continue;
             for (const box of boxes) {
               if (box[0] < b[0] - 1 || box[2] > b[1] + 1 || box[1] < by0 - 1 || box[1] >= by1) continue;
               if (mk === 'plaque-st') { if (w.stDone) continue; w.stDone = true; }
               fit(parts, box, S, Z, 0, fb.built?.[mk] ?? boxes[0]);
             }
           }
-          zb += hm;
-        });
+        }
+        zb += hm;
       }
     }
     const g = new THREE.Group(); g.userData.cells = [];
@@ -1058,7 +1097,7 @@ export function buildFacadeRelief(U, { base = '', cities = ['spb', 'moscow'], ma
           const mine = list.filter((b) => b[5] === v); if (!mine.length || !models[v]) continue;
           for (const part of models[v]) {
             const im = new THREE.InstancedMesh(part.geo, part.mat, mine.length);
-            mine.forEach((b, i) => im.setMatrixAt(i, m4.compose(pv.set(b[0], b[1], b[2]), q.setFromAxisAngle(up, b[3]), sv.set(b[4], 1, 1))));
+            mine.forEach((b, i) => im.setMatrixAt(i, m4.compose(pv.set(b[0], b[1], b[2]), q.setFromAxisAngle(up, b[3]), sv.set(b[4] * part.span / part.w, 1, 1))));
             im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.matrixAutoUpdate = false; im.name = 'relief.window-box';
             im.userData.noCastFar = true;
             g.userData.cells.push({ m: im, x: (ci + 0.5) * CELL, z: (cj + 0.5) * CELL });
